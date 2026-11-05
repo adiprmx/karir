@@ -5,18 +5,21 @@
 <p align="center">
   <a href="https://github.com/adiprmx/karir/actions/workflows/validate.yml"><img src="https://github.com/adiprmx/karir/actions/workflows/validate.yml/badge.svg" alt="Validasi data"></a>
   <a href="https://github.com/adiprmx/karir/blob/main/LICENSE"><img src="https://img.shields.io/github/license/adiprmx/karir" alt="Lisensi MIT"></a>
-  <img src="https://img.shields.io/badge/perusahaan-405-black" alt="405 perusahaan">
+  <img src="https://img.shields.io/badge/perusahaan-406-black" alt="406 perusahaan">
 </p>
 
-<p align="center">Kanal karir resmi 405 perusahaan Indonesia. Masing-masing dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026.</p>
+<p align="center">Kanal karir resmi 406 perusahaan Indonesia, masing-masing dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026.</p>
+
+<p align="center"><a href="https://adiprmx.github.io/karir/">Cari loker di aplikasi web</a> — masukkan domisili dan posisi yang kamu mau, lalu lihat rekomendasinya.</p>
 
 ## Daftar isi
 
 - [Sekilas](#sekilas)
+- [Aplikasi web](#aplikasi-web)
 - [Cara pakai](#cara-pakai)
 - [Skema data](#skema-data)
 - [Status](#status)
-- [Lowongan di Bogor dan sekitarnya](#lowongan-di-bogor-dan-sekitarnya)
+- [Contoh lowongan target](#contoh-lowongan-target)
 - [Metode](#metode)
 - [Berkontribusi](#berkontribusi)
 - [Lisensi](#lisensi)
@@ -24,20 +27,35 @@
 ## Sekilas
 
 <p align="center">
-  <img src="assets/status-bar.svg" alt="Sebaran status 405 perusahaan" width="100%">
+  <img src="assets/status-bar.svg" alt="Sebaran status 406 perusahaan" width="100%">
 </p>
 
 | Perusahaan | Lowongan target | Syarat tidak cocok | Terakhir dicek |
 | --- | --- | --- | --- |
-| 405 | 22 | 5 | 5 Nov 2026 |
+| 406 | 22 | 5 | 5 Nov 2026 |
 
-Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, dan Crew Store. Lokasi yang diutamakan: Bogor, Depok, Cibinong, dan sekitarnya.
+Repo ini buat siapa pun yang cari loker. Kamu berdomisili di mana dan mau posisi apa, aplikasi webnya yang mencarikan kanal karir yang relevan dari 406 perusahaan ini. Link di sini mengarah ke halaman karir perusahaan. Halaman itu belum tentu sedang menampilkan lowongan, dan statusnya ditulis sesuai tanggal cek.
 
-Link di sini mengarah ke halaman karir perusahaan. Halaman itu belum tentu sedang menampilkan lowongan, dan statusnya ditulis sesuai tanggal cek.
+## Aplikasi web
+
+Aplikasi webnya ada di repo ini juga, di folder `docs/`, dan berjalan tanpa server. Buka https://adiprmx.github.io/karir/, isi domisili dan posisi atau perusahaan yang dicari, lalu hasilnya diurutkan berdasarkan skor rekomendasi:
+
+| Kecocokan | Skor |
+| --- | --- |
+| Posisi cocok dengan data | +50 |
+| Domisili cocok dengan data | +30 |
+| Lowongan terverifikasi | +20 |
+| Lowongan target, syarat tidak cocok | +10 |
+| Portal tidak bisa dibuka | −20 |
+| Tidak dapat diverifikasi | −10 |
+
+Skor bukan janji lowongan. Aplikasi hanya merekomendasikan kanal karir berdasarkan data yang tercatat. Kalau posisi yang kamu cari tidak tercatat di data sebuah perusahaan, kartu perusahaannya tetap tampil dengan label "Peran ini belum terverifikasi di data kami — cek langsung di portalnya". Kalimat penyangkalan di data, misalnya "tidak ada penyebutan Bogor/Depok", tidak dihitung sebagai kecocokan.
+
+Aplikasi tidak memakai akun, tidak mengumpulkan data pribadi, tidak mengirim apa pun ke mana pun, dan tidak memakai layanan pihak ketiga. Satu-satunya yang dimuat adalah data perusahaan dari situs ini. Kendali atas data dan kode ada di repo ini.
 
 ## Cara pakai
 
-Buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar. Lamar hanya lewat kanal resmi di daftar ini. Rekrutmen yang sah tidak memungut biaya.
+Pakai aplikasi web di https://adiprmx.github.io/karir/ untuk mencari. Kalau mau mengolah datanya sendiri, buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar. Lamar hanya lewat kanal resmi di daftar ini. Rekrutmen yang sah tidak memungut biaya.
 
 Dengan Python:
 
@@ -74,14 +92,16 @@ File `data/daftar-link-karir.xlsx` isinya sama, ditambah sheet Petunjuk. Daftar 
 | --- | --- |
 | Tidak ada lowongan target | 152 |
 | Tidak ada lowongan terlihat | 77 |
-| Tidak dapat diverifikasi | 83 |
+| Tidak dapat diverifikasi | 84 |
 | Portal tidak bisa dibuka | 66 |
 | Ada lowongan target | 22 |
 | Ada lowongan target (tidak cocok) | 5 |
 
-Portal tidak bisa dibuka berarti situs atau portal karirnya tidak bisa diakses saat dicek. Itu kegagalan akses, bukan bukti perusahaan tidak membuka lowongan. Tidak dapat diverifikasi berarti tidak ada kanal karir yang ditemukan lewat navigasi resmi perusahaan.
+Portal tidak bisa dibuka berarti situs atau portal karirnya tidak bisa diakses saat dicek. Itu kegagalan akses, bukan bukti perusahaan tidak membuka lowongan. Tidak dapat diverifikasi berarti tidak ada kanal karir yang ditemukan lewat navigasi resmi perusahaan, atau daftar lowongannya hanya terlihat setelah login.
 
-## Lowongan di Bogor dan sekitarnya
+## Contoh lowongan target
+
+Lowongan target yang terverifikasi dan lokasinya di Bogor dan sekitarnya:
 
 | Perusahaan | Peran | Lokasi | Catatan |
 | --- | --- | --- | --- |
@@ -94,7 +114,9 @@ Portal tidak bisa dibuka berarti situs atau portal karirnya tidak bisa diakses s
 
 ## Metode
 
-Setiap kanal dibuka langsung di browser lewat navigasi situs resmi perusahaan. Cuplikan pencarian, postingan pihak ketiga, dan tautan pemendek tidak dipakai sebagai bukti. Pengecekan ini hanya membuka halaman: tidak ada yang dilamar, tidak ada akun yang dibuat, tidak ada login, dan tidak ada data pribadi yang dimasukkan. Penjelasan lengkap ada di `docs/METODE.md`.
+Setiap kanal dibuka langsung di browser lewat navigasi situs resmi perusahaan. Cuplikan pencarian, postingan pihak ketiga, dan tautan pemendek tidak dipakai sebagai bukti. Pengecekan ini hanya membuka halaman: tidak ada yang dilamar, tidak ada akun yang dibuat, tidak ada login, dan tidak ada data pribadi yang dimasukkan.
+
+Pengecekan lowongan di data ini difokuskan ke peran gudang, produksi, cleaning, office boy, packing, dan crew store. Peran lain belum tentu tercatat, jadi aplikasi web merekomendasikan kanal berdasarkan data yang ada dan menandai peran yang belum terverifikasi. Penjelasan lengkap ada di `docs/METODE.md`.
 
 ## Berkontribusi
 

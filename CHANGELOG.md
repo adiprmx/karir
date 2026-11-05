@@ -2,6 +2,15 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 1.2.0 — 2026-11-05
+
+Repo dirombak total dari daftar gudang Bogor menjadi alat cari loker untuk semua orang.
+
+- Aplikasi web baru di `docs/`: cari berdasarkan domisili dan posisi atau perusahaan, dengan rekomendasi berdasarkan skor (posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, syarat tidak cocok +10, portal tidak bisa dibuka −20, tidak dapat diverifikasi −10). Berjalan tanpa server, tanpa akun, tanpa data pribadi, dan tanpa layanan pihak ketiga. Diterbitkan lewat GitHub Pages dari folder `docs/`.
+- Aturan kejujuran aplikasi: kalimat penyangkalan di data tidak dihitung sebagai kecocokan; peran yang tidak cocok tetap tampil sebagai rekomendasi kanal dengan label belum terverifikasi; pencarian nama perusahaan hanya menampilkan perusahaan itu.
+- PGN masuk sebagai No. 406 (PT Perusahaan Gas Negara Tbk, BUMN): kanal rekrutmennya lewat E-Recruitment Pertamina dan minta login, jadi statusnya Tidak dapat diverifikasi. Total jadi 406 perusahaan.
+- README ditulis ulang untuk cakupan universal, dengan bagian aplikasi web dan penjelasan skor rekomendasi. `docs/METODE.md` diperbarui: cakupan universal, arti status Tidak dapat diverifikasi mencakup portal yang minta login, dan empat baris tanpa tautan dicatat dengan benar.
+
 ## 1.1.0 — 2026-11-05
 
 Ronde H: 106 perusahaan tambahan, semuanya dicek langsung di browser pada 5 November 2026. Total jadi 405 perusahaan.

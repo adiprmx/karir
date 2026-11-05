@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <meta name="description" content="Cari kanal karir resmi 406 perusahaan Indonesia berdasarkan domisili dan posisi yang kamu mau.">
+  <title>Karir — Cari Kanal Lowongan Kerja</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1>Karir</h1>
+      <p class="tagline">Kanal karir resmi 406 perusahaan Indonesia, dicek langsung di browser.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero" aria-label="Ringkasan data">
+      <ul class="stats">
+        <li><strong id="stat-total">405</strong><span>perusahaan</span></li>
+        <li><strong id="stat-target">22</strong><span>lowongan target</span></li>
+        <li><strong>Dicek</strong><span>4–5 Nov 2026</span></li>
+      </ul>
+      <p class="scope-note">Data ini dicek pada 4–5 November 2026 dengan fokus peran gudang, produksi, cleaning, office boy, packing, dan crew store. Peran lain belum tentu tercatat di data kami — selalu periksa langsung di portal perusahaan sebelum melamar.</p>
+    </section>
+
+    <section class="search" aria-label="Pencarian">
+      <form id="search-form" action="#" method="get">
+        <div class="field">
+          <label for="domisili">Domisili</label>
+          <input type="search" id="domisili" name="domisili" placeholder="Misal: Depok" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="posisi">Posisi atau perusahaan</label>
+          <input type="search" id="posisi" name="posisi" placeholder="Misal: Administrasi atau PGN" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="kategori">Kategori</label>
+          <select id="kategori" name="kategori">
+            <option value="">Semua kategori</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            <option value="">Semua status</option>
+            <option value="Ada lowongan target">Ada lowongan target</option>
+            <option value="Ada lowongan target (tidak cocok)">Ada lowongan target (tidak cocok)</option>
+            <option value="Tidak ada lowongan target">Tidak ada lowongan target</option>
+            <option value="Tidak ada lowongan terlihat">Tidak ada lowongan terlihat</option>
+            <option value="Tidak dapat diverifikasi">Tidak dapat diverifikasi</option>
+            <option value="Portal tidak bisa dibuka">Portal tidak bisa dibuka</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="urutan">Urutan</label>
+          <select id="urutan" name="urutan">
+            <option value="relevansi">Relevansi</option>
+            <option value="nama">Nama A–Z</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn-primary">Cari</button>
+          <button type="button" id="reset" class="btn-secondary">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <p id="result-count" class="result-count" aria-live="polite">Memuat data…</p>
+    <p id="search-note" class="search-note" hidden></p>
+
+    <section id="results" class="results" aria-label="Hasil pencarian"></section>
+
+    <div class="more-wrap">
+      <button type="button" id="load-more" class="btn-secondary" hidden>Tampilkan lebih banyak</button>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Data: <a href="companies.json">companies.json</a> (406 perusahaan, dicek 4–5 November 2026). Cara pengecekan: <a href="METODE.md">METODE.md</a>. Lowongan target yang terverifikasi: <a href="TEMUAN.md">TEMUAN.md</a>.</p>
+      <p>Aplikasi ini tidak mengumpulkan data pribadi dan tidak mengirim apa pun ke mana pun. Satu-satunya yang dimuat adalah data perusahaan dari situs ini.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
