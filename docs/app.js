@@ -1,46 +1,31 @@
 "use strict";
 
-/*
- * Karir — logika pencarian dan rekomendasi.
- *
- * Data: companies.json (405 perusahaan). Satu-satunya request jaringan
- * adalah fetch file itu dari origin yang sama. Tidak ada data pribadi
- * yang dikumpulkan, disimpan, atau dikirim ke mana pun.
- *
- * KEJUJURAN DATA — aturan terpenting di file ini:
- * Pengecekan lowongan di data ini dulu difokuskan ke peran gudang,
- * produksi, cleaning, office boy, packing, dan crew store. Aplikasi
- * TIDAK BOLEH mengklaim ada lowongan untuk peran lain kalau data tidak
- * mencatatnya. Karena itu:
- * - Kata kunci posisi cocok dengan kolom posisi/catatan -> kecocokan
- *   terverifikasi (chip "Posisi cocok").
- * - Kata kunci posisi TIDAK cocok -> perusahaan tetap tampil sebagai
- *   rekomendasi kanal, dengan label jelas "Peran ini belum terverifikasi
- *   di data kami — cek langsung di portalnya". Jangan pernah mengarang
- *   lowongan.
- *
- * Mode pencarian:
- * - Kalau kata kunci cocok dengan NAMA perusahaan mana pun, pencarian
- *   dianggap pencarian perusahaan: hanya perusahaan yang namanya cocok
- *   yang tampil (misal mengetik "PGN" mencari perusahaan bernama PGN).
- * - Kalau tidak ada nama yang cocok, pencarian dianggap pencarian
- *   posisi: semua perusahaan dirangking berdasarkan skor di bawah.
- *   Yang cocok tampil di atas, yang tidak cocok tetap tampil di bawah
- *   sebagai rekomendasi kanal dengan label di atas.
- */
+/* ============================================================
+ * Karir — aplikasi web statis.
+ * Semua data berasal dari companies.json di situs yang sama.
+ * Tidak ada akun, tidak ada data pribadi, tidak ada layanan
+ * pihak ketiga. Satu-satunya request adalah fetch data ini.
+ * ============================================================ */
 
+var DATA_URL = "companies.json";
 var PAGE_SIZE = 20;
 
-/* ---------- Fungsi murni (tanpa akses DOM, bisa diuji di Node) ---------- */
+/* ---------- Normalisasi dan pencocokan ---------- */
 
-/* Huruf kecil, spasi dirapikan. Dipakai agar "Depok" cocok dengan "depok". */
+/* Huruf kecil, tanpa diakritik, spasi dirapikan. */
 function normalizeText(value) {
-  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!value) { return ""; }
+  return String(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /* Pecah kata kunci menjadi token. Semua token harus cocok (AND). */
-function tokenize(query) {
-  return normalizeText(query).split(" ").filter(function (t) { return t.length > 0; });
+function tokenize(value) {
+  return normalizeText(value).split(" ").filter(function (t) { return t.length > 0; });
 }
 
 /* True kalau semua token muncul di dalam field (pencocokan substring). */
@@ -86,10 +71,13 @@ function fieldMatchesAffirmative(field, tokens) {
   return tokens.every(function (t) { return tokenHasAffirmativeOccurrence(text, t); });
 }
 
+/* ---------- Skor rekomendasi ---------- */
+
 /*
- * Skor rekomendasi satu perusahaan terhadap kata kunci.
- * query = { domisiliTokens: [], posisiTokens: [] }
- * Mengembalikan { score, reasons, positionMatched, nameMatched }.
+ * Skor: posisi cocok +50, domisili cocok +30,
+ * "Ada lowongan target" +20, "(tidak cocok)" +10,
+ * "Portal tidak bisa dibuka" -20, "Tidak dapat diverifikasi" -10.
+ * Angka ini hanya urutan rekomendasi, bukan janji lowongan.
  */
 function scoreCompany(company, query) {
   var score = 0;
@@ -126,6 +114,7 @@ function scoreCompany(company, query) {
     reasons.push("Lowongan terverifikasi");
   } else if (company.status === "Ada lowongan target (tidak cocok)") {
     score += 10;
+    reasons.push("Lowongan terverifikasi, syarat tidak cocok");
   } else if (company.status === "Portal tidak bisa dibuka") {
     score -= 20;
   } else if (company.status === "Tidak dapat diverifikasi") {
@@ -136,10 +125,14 @@ function scoreCompany(company, query) {
     reasons.push("Portal terbuka");
   }
 
-  return { score: score, reasons: reasons, positionMatched: positionMatched, nameMatched: nameMatched };
+  return {
+    score: score,
+    reasons: reasons,
+    positionMatched: positionMatched,
+    nameMatched: nameMatched
+  };
 }
 
-/* Urutkan: skor tertinggi dulu, lalu nama A-Z. */
 function compareByScore(a, b) {
   if (b.score !== a.score) { return b.score - a.score; }
   return a.company.perusahaan.localeCompare(b.company.perusahaan, "id");
@@ -149,7 +142,24 @@ function compareByName(a, b) {
   return a.company.perusahaan.localeCompare(b.company.perusahaan, "id");
 }
 
-/* Diekspos agar logika ini bisa diuji langsung dari Node tanpa browser. */
+/* ---------- Hitung dari data (dipakai Dasbor) ---------- */
+
+function countBy(list, key) {
+  var out = {};
+  list.forEach(function (item) {
+    var k = item[key] || "Tidak tercatat";
+    out[k] = (out[k] || 0) + 1;
+  });
+  return out;
+}
+
+function topEntries(counts, n) {
+  return Object.keys(counts)
+    .map(function (k) { return { label: k, count: counts[k] }; })
+    .sort(function (a, b) { return b.count - a.count || a.label.localeCompare(b.label, "id"); })
+    .slice(0, n);
+}
+
 if (typeof window !== "undefined") {
   window.KarirSearch = {
     normalizeText: normalizeText,
@@ -158,264 +168,435 @@ if (typeof window !== "undefined") {
     fieldMatchesAffirmative: fieldMatchesAffirmative,
     scoreCompany: scoreCompany,
     compareByScore: compareByScore,
-    compareByName: compareByName
+    compareByName: compareByName,
+    countBy: countBy,
+    topEntries: topEntries
   };
 }
 
-/* ---------- Aplikasi (DOM) — hanya jalan di browser ---------- */
+/* ---------- DOM ---------- */
 
 if (typeof document !== "undefined") {
-  document.addEventListener("DOMContentLoaded", function () {
-    var form = document.getElementById("search-form");
-    var domisiliInput = document.getElementById("domisili");
-    var posisiInput = document.getElementById("posisi");
-    var kategoriSelect = document.getElementById("kategori");
-    var statusSelect = document.getElementById("status");
-    var urutanSelect = document.getElementById("urutan");
-    var resetButton = document.getElementById("reset");
-    var resultsEl = document.getElementById("results");
-    var countEl = document.getElementById("result-count");
-    var noteEl = document.getElementById("search-note");
-    var loadMoreButton = document.getElementById("load-more");
-    var statTotal = document.getElementById("stat-total");
-    var statTarget = document.getElementById("stat-target");
+  (function () {
+    var DATA = [];
+    var currentResults = [];
+    var currentQuery = { domisiliTokens: [], posisiTokens: [] };
+    var currentMode = "semua";
+    var visibleCount = PAGE_SIZE;
+    var dataFailed = false;
 
-    var companies = [];
-    var current = []; /* daftar hasil {company, score, reasons, positionMatched, nameMatched} */
-    var shown = 0;
-    var lastQuery = { domisiliTokens: [], posisiTokens: [] };
+    var $ = function (id) { return document.getElementById(id); };
 
-    /* Semua teks dari data dirender dengan textContent / createElement.
-       Tidak pernah innerHTML dengan data atau input pengguna. */
-    function el(tag, text, className) {
+    /* ----- Router tiga tampilan ----- */
+    var VIEWS = ["beranda", "cari", "dasbor"];
+
+    function showView(name, focusTitle) {
+      if (VIEWS.indexOf(name) === -1) { name = "beranda"; }
+      VIEWS.forEach(function (v) {
+        var el = $("view-" + v);
+        if (el) { el.hidden = (v !== name); }
+        var link = document.querySelector('[data-view-link="' + v + '"]');
+        if (link) {
+          if (v === name) { link.setAttribute("aria-current", "page"); }
+          else { link.removeAttribute("aria-current"); }
+        }
+      });
+      if (focusTitle) {
+        var title = document.querySelector("#view-" + name + " .page-title");
+        if (title) { title.focus(); }
+      }
+      window.scrollTo(0, 0);
+    }
+
+    function viewFromHash() {
+      var hash = (window.location.hash || "").replace(/^#\/?/, "");
+      return VIEWS.indexOf(hash) !== -1 ? hash : "beranda";
+    }
+
+    window.addEventListener("hashchange", function () {
+      showView(viewFromHash(), false);
+    });
+
+    /* ----- Util DOM ----- */
+    function el(tag, cls, text) {
       var node = document.createElement(tag);
-      if (className) { node.className = className; }
+      if (cls) { node.className = cls; }
       if (text !== undefined && text !== null) { node.textContent = text; }
       return node;
     }
 
-    function statusBadgeClass(status) {
-      if (status === "Ada lowongan target") { return "badge badge-ok"; }
-      if (status === "Ada lowongan target (tidak cocok)") { return "badge badge-warn"; }
-      return "badge badge-muted";
-    }
-
-    /* Hanya tautan http/https yang dirender sebagai link. */
     function safeLink(url) {
-      if (typeof url !== "string") { return ""; }
-      var trimmed = url.trim();
-      if (/^https?:\/\//i.test(trimmed)) { return trimmed; }
-      return "";
+      return typeof url === "string" && /^https?:\/\//.test(url);
     }
 
-    function buildCard(entry, showUnverifiedNotice) {
-      var c = entry.company;
-      var card = el("article", null, "card");
+    function statusBadge(status) {
+      var badge = el("span", "badge");
+      if (status === "Ada lowongan target") {
+        badge.className += " badge-ok";
+      } else if (status === "Ada lowongan target (tidak cocok)") {
+        badge.className += " badge-warn";
+      } else {
+        badge.className += " badge-muted";
+      }
+      badge.textContent = status;
+      return badge;
+    }
 
-      card.appendChild(el("h2", c.perusahaan));
+    /* ----- Kartu hasil pencarian ----- */
+    function createCard(company, scored) {
+      var card = el("article", "card");
+      var title = el("h2", null, company.perusahaan);
+      card.appendChild(title);
 
-      var chips = el("div", null, "chips");
-      chips.appendChild(el("span", c.kategori, "chip"));
-      chips.appendChild(el("span", c.status, statusBadgeClass(c.status)));
-      /* Alasan kecocokan: chip hijau hanya untuk lowongan terverifikasi.
-         Chip lain hanya tampil saat ada kata kunci yang memicunya. */
-      entry.reasons.forEach(function (reason) {
-        var cls = reason === "Lowongan terverifikasi" ? "chip chip-match" : "chip";
-        if (reason === "Portal terbuka" &&
-            lastQuery.domisiliTokens.length === 0 && lastQuery.posisiTokens.length === 0) {
-          return; /* tanpa kata kunci, "Portal terbuka" tidak menambah info */
-        }
-        chips.appendChild(el("span", reason, cls));
+      var chips = el("div", "chips");
+      chips.appendChild(el("span", "chip", company.kategori));
+      chips.appendChild(statusBadge(company.status));
+      (scored.reasons || []).forEach(function (reason) {
+        var cls = "chip";
+        if (reason === "Posisi cocok" || reason === "Lokasi cocok") { cls += " chip-match"; }
+        chips.appendChild(el("span", cls, reason));
       });
       card.appendChild(chips);
 
       var dl = el("dl");
-      dl.appendChild(el("dt", "Lokasi"));
-      dl.appendChild(el("dd", c.lokasi || "-"));
-      dl.appendChild(el("dt", "Posisi tercatat"));
-      dl.appendChild(el("dd", c.posisi || "-"));
-      dl.appendChild(el("dt", "Tanggal cek"));
-      dl.appendChild(el("dd", c.tanggal_cek || "-"));
+      dl.appendChild(el("dt", null, "Lokasi"));
+      dl.appendChild(el("dd", null, company.lokasi || "Tidak tercantum"));
+      dl.appendChild(el("dt", null, "Posisi tercatat"));
+      dl.appendChild(el("dd", null, company.posisi || "Tidak ada posisi terlihat"));
+      dl.appendChild(el("dt", null, "Tanggal cek"));
+      dl.appendChild(el("dd", null, company.tanggal_cek || "-"));
       card.appendChild(dl);
 
-      if (c.catatan) {
-        var note = c.catatan.length > 220 ? c.catatan.slice(0, 220).replace(/\s+\S*$/, "") + "…" : c.catatan;
-        card.appendChild(el("p", note, "catatan"));
+      if (company.catatan) {
+        card.appendChild(el("p", "catatan", company.catatan));
       }
 
-      /* Label kejujuran: posisi dicari tapi tidak ada di data perusahaan ini. */
-      if (showUnverifiedNotice) {
-        card.appendChild(el("p", "Peran ini belum terverifikasi di data kami — cek langsung di portalnya.", "notice"));
+      if (currentQuery.posisiTokens.length > 0 && !scored.positionMatched &&
+          !scored.nameMatched && currentMode !== "perusahaan") {
+        var notice = el("p", "notice",
+          "Peran ini belum terverifikasi di data kami — cek langsung di portalnya.");
+        card.appendChild(notice);
       }
 
-      var href = safeLink(c.link_karir);
-      if (href) {
-        var a = el("a", "Buka kanal karir", "card-link");
-        a.href = href;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        card.appendChild(a);
+      if (safeLink(company.link_karir)) {
+        var link = el("a", "card-link", "Buka kanal karir");
+        link.href = company.link_karir;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        card.appendChild(link);
       } else {
-        card.appendChild(el("p", "Tidak ada kanal resmi yang ditemukan untuk perusahaan ini.", "no-link"));
+        card.appendChild(el("p", "no-link", "Tidak ditemukan kanal karir resmi."));
       }
+
       return card;
     }
 
-    function renderState(title, text) {
-      var div = el("div", null, "state");
-      div.appendChild(el("strong", title));
-      div.appendChild(el("p", text));
-      return div;
+    function renderResults() {
+      var box = $("results");
+      box.textContent = "";
+      var shown = currentResults.slice(0, visibleCount);
+      shown.forEach(function (entry) {
+        box.appendChild(createCard(entry.company, entry));
+      });
+      if (currentResults.length === 0) {
+        var state = el("div", "state");
+        state.appendChild(el("strong", null, "Tidak ada perusahaan yang cocok."));
+        state.appendChild(document.createTextNode(
+          "Coba kata kunci lain, atau kosongkan kolom dan tekan Cari untuk melihat semua perusahaan."));
+        box.appendChild(state);
+      }
+      var count = $("result-count");
+      count.textContent = "Menampilkan " + shown.length + " dari " + currentResults.length + " perusahaan";
+      var more = $("load-more");
+      more.hidden = currentResults.length <= visibleCount;
     }
 
-    function render() {
-      while (resultsEl.firstChild) { resultsEl.removeChild(resultsEl.firstChild); }
-      var total = current.length;
-      var toShow = Math.min(shown, total);
-      var hasPositionQuery = lastQuery.posisiTokens.length > 0;
-
-      if (total === 0) {
-        resultsEl.appendChild(renderState(
-          "Tidak ada perusahaan yang cocok.",
-          "Coba kata kunci lain, atau kosongkan filter kategori dan status."
-        ));
-        countEl.textContent = "Menampilkan 0 dari 0 perusahaan";
-        loadMoreButton.hidden = true;
-        return;
-      }
-
-      for (var i = 0; i < toShow; i++) {
-        var entry = current[i];
-        /* Label "belum terverifikasi" hanya untuk kartu yang posisi
-           kuncinya tidak cocok dengan data perusahaan itu. */
-        var showNotice = hasPositionQuery && !entry.positionMatched && !entry.nameMatched;
-        resultsEl.appendChild(buildCard(entry, showNotice));
-      }
-
-      countEl.textContent = "Menampilkan " + toShow + " dari " + total + " perusahaan";
-      loadMoreButton.hidden = toShow >= total;
-    }
-
-    function runSearch() {
-      var query = {
-        domisiliTokens: tokenize(domisiliInput.value),
-        posisiTokens: tokenize(posisiInput.value)
+    function readQuery(form) {
+      return {
+        domisiliTokens: tokenize(form.domisili.value),
+        posisiTokens: tokenize(form.posisi.value),
+        kategori: form.kategori ? form.kategori.value : "",
+        status: form.status ? form.status.value : "",
+        urutan: form.urutan ? form.urutan.value : "relevansi"
       };
-      lastQuery = query;
-      var kategori = kategoriSelect.value;
-      var status = statusSelect.value;
-      var urutan = urutanSelect.value;
+    }
 
-      /* Filter keras: kategori dan status. */
-      var pool = companies.filter(function (c) {
-        if (kategori && c.kategori !== kategori) { return false; }
-        if (status && c.status !== status) { return false; }
-        return true;
+    function runSearch(query) {
+      currentQuery = { domisiliTokens: query.domisiliTokens, posisiTokens: query.posisiTokens };
+      visibleCount = PAGE_SIZE;
+      var scored = DATA.map(function (c) {
+        var s = scoreCompany(c, currentQuery);
+        return { company: c, score: s.score, reasons: s.reasons,
+                 positionMatched: s.positionMatched, nameMatched: s.nameMatched };
       });
 
-      var scored = pool.map(function (c) {
-        var r = scoreCompany(c, query);
-        return { company: c, score: r.score, reasons: r.reasons, positionMatched: r.positionMatched, nameMatched: r.nameMatched };
-      });
+      if (query.kategori) {
+        scored = scored.filter(function (e) { return e.company.kategori === query.kategori; });
+      }
+      if (query.status) {
+        scored = scored.filter(function (e) { return e.company.status === query.status; });
+      }
 
-      var mode = "rekomendasi";
-      if (query.posisiTokens.length > 0) {
+      currentMode = "semua";
+      if (currentQuery.posisiTokens.length > 0) {
         var nameMatches = scored.filter(function (e) { return e.nameMatched; });
         if (nameMatches.length > 0) {
-          /* Kata kunci cocok dengan nama perusahaan: tampilkan hanya
-             perusahaan itu (pencarian perusahaan, bukan posisi). */
           scored = nameMatches;
-          mode = "perusahaan";
+          currentMode = "perusahaan";
         }
       }
 
-      if (urutan === "nama") {
-        scored.sort(compareByName);
-      } else {
-        scored.sort(compareByScore);
-      }
+      if (query.urutan === "nama") { scored.sort(compareByName); }
+      else { scored.sort(compareByScore); }
 
-      current = scored;
-      shown = PAGE_SIZE;
+      currentResults = scored;
 
-      /* Catatan jujur di atas hasil. */
-      noteEl.hidden = true;
-      noteEl.textContent = "";
-      if (mode === "rekomendasi" && query.posisiTokens.length > 0) {
+      var note = $("search-note");
+      if (currentQuery.posisiTokens.length > 0 && currentMode !== "perusahaan") {
         var anyMatch = scored.some(function (e) { return e.positionMatched; });
         if (!anyMatch) {
-          noteEl.textContent = "Tidak ada catatan posisi \"" + posisiInput.value.trim() +
-            "\" di data kami. Di bawah ini rekomendasi kanal berdasarkan domisili dan status portal — periksa langsung di portalnya.";
-          noteEl.hidden = false;
+          note.textContent = "Tidak ada kecocokan posisi di data kami. Hasil di bawah ini adalah rekomendasi kanal berdasarkan domisili dan status, bukan lowongan yang terverifikasi.";
+          note.hidden = false;
+        } else {
+          note.hidden = true;
         }
-      }
-      if (mode === "rekomendasi" && query.posisiTokens.length === 0 && query.domisiliTokens.length === 0) {
-        noteEl.textContent = "Menampilkan semua perusahaan. Yang ada lowongan target tampil di atas.";
-        noteEl.hidden = false;
+      } else {
+        note.hidden = true;
       }
 
-      render();
+      renderResults();
     }
 
-    function fillCategories() {
-      var seen = {};
-      companies.forEach(function (c) { seen[c.kategori] = true; });
-      Object.keys(seen).sort(function (a, b) { return a.localeCompare(b, "id"); }).forEach(function (cat) {
-        var opt = document.createElement("option");
-        opt.value = cat;
-        opt.textContent = cat;
-        kategoriSelect.appendChild(opt);
+    /* ----- Beranda: rel lowongan target ----- */
+    function renderVacancyRail() {
+      var rail = $("vacancy-rail");
+      if (!rail) { return; }
+      rail.textContent = "";
+      var targets = DATA.filter(function (c) { return c.status === "Ada lowongan target"; });
+      targets.sort(function (a, b) { return a.perusahaan.localeCompare(b.perusahaan, "id"); });
+      targets.forEach(function (c) {
+        var card = el("article", "vacancy-card");
+        card.appendChild(el("h3", null, c.perusahaan));
+        card.appendChild(el("p", "vacancy-role", (c.posisi || "").split(",")[0]));
+        card.appendChild(el("p", "vacancy-loc", c.lokasi || "Tidak tercantum"));
+        if (safeLink(c.link_karir)) {
+          var link = el("a", "vacancy-link", "Buka kanal karir");
+          link.href = c.link_karir;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          card.appendChild(link);
+        }
+        rail.appendChild(card);
       });
     }
 
-    function init() {
-      countEl.textContent = "Memuat data…";
-      fetch("companies.json")
-        .then(function (res) {
-          if (!res.ok) { throw new Error("HTTP " + res.status); }
-          return res.json();
-        })
-        .then(function (data) {
-          if (!Array.isArray(data)) { throw new Error("format data tidak dikenal"); }
-          companies = data;
-          fillCategories();
-          var targetCount = companies.filter(function (c) { return c.status === "Ada lowongan target"; }).length;
-          statTotal.textContent = String(companies.length);
-          statTarget.textContent = String(targetCount);
-          runSearch();
-        })
-        .catch(function () {
-          countEl.textContent = "Data tidak bisa dimuat.";
-          while (resultsEl.firstChild) { resultsEl.removeChild(resultsEl.firstChild); }
-          resultsEl.appendChild(renderState(
-            "Data tidak bisa dimuat.",
-            "Periksa koneksi internet, lalu muat ulang halaman ini."
-          ));
-          loadMoreButton.hidden = true;
-        });
+    /* ----- Dasbor ----- */
+    function barRow(label, count, total, barClass) {
+      var row = el("div", "bar-row");
+      row.appendChild(el("span", "bar-label", label));
+      var track = el("div", "bar-track");
+      var fill = el("div", "bar-fill" + (barClass ? " " + barClass : ""));
+      fill.style.width = (total > 0 ? (count / total * 100).toFixed(1) : 0) + "%";
+      track.appendChild(fill);
+      row.appendChild(track);
+      row.appendChild(el("span", "bar-count", String(count)));
+      return row;
     }
 
-    form.addEventListener("submit", function (e) {
-      e.preventDefault(); /* tidak ada form yang dikirim ke mana pun */
-      runSearch();
-    });
-    kategoriSelect.addEventListener("change", runSearch);
-    statusSelect.addEventListener("change", runSearch);
-    urutanSelect.addEventListener("change", runSearch);
-    loadMoreButton.addEventListener("click", function () {
-      shown += PAGE_SIZE;
-      render();
-    });
-    resetButton.addEventListener("click", function () {
-      domisiliInput.value = "";
-      posisiInput.value = "";
-      kategoriSelect.value = "";
-      statusSelect.value = "";
-      urutanSelect.value = "relevansi";
-      runSearch();
-      domisiliInput.focus();
+    function renderDashboard() {
+      var total = DATA.length;
+
+      var statusBox = $("dash-status");
+      if (statusBox) {
+        statusBox.textContent = "";
+        var order = ["Ada lowongan target", "Ada lowongan target (tidak cocok)",
+          "Tidak ada lowongan target", "Tidak ada lowongan terlihat",
+          "Tidak dapat diverifikasi", "Portal tidak bisa dibuka"];
+        var counts = countBy(DATA, "status");
+        order.forEach(function (s) {
+          var cls = s === "Ada lowongan target" ? "bar-ok"
+            : s === "Ada lowongan target (tidak cocok)" ? "bar-warn" : "";
+          statusBox.appendChild(barRow(s, counts[s] || 0, total, cls));
+        });
+      }
+
+      var catBox = $("dash-categories");
+      if (catBox) {
+        catBox.textContent = "";
+        topEntries(countBy(DATA, "kategori"), 8).forEach(function (e) {
+          catBox.appendChild(barRow(e.label, e.count, total, ""));
+        });
+      }
+
+      var targetBox = $("dash-targets");
+      if (targetBox) {
+        targetBox.textContent = "";
+        var targets = DATA.filter(function (c) { return c.status === "Ada lowongan target"; });
+        targets.sort(function (a, b) { return a.perusahaan.localeCompare(b.perusahaan, "id"); });
+        targets.forEach(function (c) {
+          var row = el("div", "target-row");
+          var name = safeLink(c.link_karir) ? el("a", null, c.perusahaan) : el("span", null, c.perusahaan);
+          if (safeLink(c.link_karir)) {
+            name.href = c.link_karir;
+            name.target = "_blank";
+            name.rel = "noopener noreferrer";
+          }
+          row.appendChild(name);
+          row.appendChild(el("span", "target-role", c.posisi || ""));
+          row.appendChild(el("span", "target-loc", c.lokasi || "Tidak tercantum"));
+          targetBox.appendChild(row);
+        });
+      }
+
+      function fillRecheck(id, countId, status) {
+        var box = $(id);
+        var countEl = $(countId);
+        var list = DATA.filter(function (c) { return c.status === status; });
+        list.sort(function (a, b) { return a.perusahaan.localeCompare(b.perusahaan, "id"); });
+        if (countEl) { countEl.textContent = "(" + list.length + ")"; }
+        if (!box) { return; }
+        box.textContent = "";
+        list.slice(0, 10).forEach(function (c) {
+          var li = el("li");
+          if (safeLink(c.link_karir)) {
+            var a = el("a", null, c.perusahaan);
+            a.href = c.link_karir;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            li.appendChild(a);
+          } else {
+            li.appendChild(document.createTextNode(c.perusahaan));
+          }
+          box.appendChild(li);
+        });
+        if (list.length > 10) {
+          var more = el("li", "plain-more", "dan " + (list.length - 10) + " lainnya di companies.json.");
+          box.appendChild(more);
+        }
+      }
+      fillRecheck("dash-portal", "dash-portal-count", "Portal tidak bisa dibuka");
+      fillRecheck("dash-unverified", "dash-unverified-count", "Tidak dapat diverifikasi");
+
+      var fresh = $("dash-freshness");
+      if (fresh) {
+        var byDate = countBy(DATA, "tanggal_cek");
+        var d4 = byDate["2026-11-04"] || 0;
+        var d5 = byDate["2026-11-05"] || 0;
+        fresh.textContent = d4 + " perusahaan dicek 4 November 2026, " + d5 +
+          " perusahaan dicek 5 November 2026. Lowongan bisa berubah setelah tanggal cek.";
+      }
+    }
+
+    /* ----- Angka statistik: naik dari 0 ke angka asli ----- */
+    function animateCounts() {
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      document.querySelectorAll(".count").forEach(function (node) {
+        var target = parseInt(node.getAttribute("data-count"), 10);
+        if (reduce || !target) { node.textContent = String(target); return; }
+        var start = null;
+        var duration = 800;
+        function step(ts) {
+          if (start === null) { start = ts; }
+          var p = Math.min((ts - start) / duration, 1);
+          var eased = 1 - Math.pow(1 - p, 3);
+          node.textContent = String(Math.round(target * eased));
+          if (p < 1) { window.requestAnimationFrame(step); }
+        }
+        window.requestAnimationFrame(step);
+      });
+    }
+
+    /* ----- Muat data ----- */
+    function fail(message) {
+      dataFailed = true;
+      var count = $("result-count");
+      if (count) { count.textContent = message; }
+      var rail = $("vacancy-rail");
+      if (rail) {
+        rail.textContent = "";
+        rail.appendChild(el("p", "state", message));
+      }
+    }
+
+    fetch(DATA_URL)
+      .then(function (res) {
+        if (!res.ok) { throw new Error("HTTP " + res.status); }
+        return res.json();
+      })
+      .then(function (data) {
+        DATA = data;
+        var catSelect = $("kategori");
+        if (catSelect) {
+          topEntries(countBy(DATA, "kategori"), 100).forEach(function (e) {
+            var opt = document.createElement("option");
+            opt.value = e.label;
+            opt.textContent = e.label;
+            catSelect.appendChild(opt);
+          });
+        }
+        renderVacancyRail();
+        renderDashboard();
+        animateCounts();
+        runSearch(readQuery($("search-form")));
+      })
+      .catch(function () {
+        fail("Data perusahaan tidak bisa dimuat. Periksa koneksi lalu muat ulang halaman.");
+      });
+
+    /* ----- Form pencarian (Cari) ----- */
+    var form = $("search-form");
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        runSearch(readQuery(form));
+      });
+      var reset = $("reset");
+      if (reset) {
+        reset.addEventListener("click", function () {
+          form.reset();
+          runSearch(readQuery(form));
+        });
+      }
+      var more = $("load-more");
+      if (more) {
+        more.addEventListener("click", function () {
+          visibleCount += PAGE_SIZE;
+          renderResults();
+        });
+      }
+    }
+
+    /* ----- Form hero (Beranda): pindah ke Cari lalu cari ----- */
+    var heroForm = $("hero-form");
+    if (heroForm) {
+      heroForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var cari = $("search-form");
+        if (cari) {
+          cari.domisili.value = heroForm["hero-domisili"].value;
+          cari.posisi.value = heroForm["hero-posisi"].value;
+          runSearch(readQuery(cari));
+        }
+        if (window.location.hash !== "#/cari") {
+          window.location.hash = "#/cari";
+        } else {
+          showView("cari", false);
+        }
+      });
+    }
+
+    document.querySelectorAll(".example-chip").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var heroDom = $("hero-domisili");
+        var heroPos = $("hero-posisi");
+        if (heroDom) { heroDom.value = chip.getAttribute("data-domisili") || ""; }
+        if (heroPos) { heroPos.value = chip.getAttribute("data-posisi") || ""; }
+        if (heroForm) {
+          heroForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }
+      });
     });
 
-    init();
-  });
+    showView(viewFromHash(), false);
+  })();
 }

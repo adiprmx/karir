@@ -2,6 +2,16 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 1.3.0 — 2026-11-06
+
+Aplikasi web dirombak total jadi tiga layar dengan konsep yang jelas.
+
+- Beranda: pencarian langsung di depan, contoh pencarian yang bisa diketuk, strip angka data, rel 22 lowongan target yang terverifikasi, dan cara kerja dalam tiga langkah.
+- Cari: pencarian lengkap dengan filter kategori, status, dan urutan.
+- Dasbor: sebaran status, kategori terbanyak, daftar 22 lowongan target, kanal yang perlu dicek ulang, dan kesegaran data — semua angka dihitung langsung dari data.
+- Navigasi antar layar lewat tautan `#/beranda`, `#/cari`, `#/dasbor` yang bisa dibagikan.
+- Perbaikan tampilan HP: kartu hasil tidak lagi meluber ke samping; kartu rel lowongan tidak lagi meregang kosong.
+
 ## 1.2.0 — 2026-11-05
 
 Repo dirombak total dari daftar gudang Bogor menjadi alat cari loker untuk semua orang.

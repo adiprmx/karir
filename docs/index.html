@@ -10,24 +10,76 @@
 </head>
 <body>
   <header class="site-header">
-    <div class="container">
-      <h1>Karir</h1>
-      <p class="tagline">Kanal karir resmi 406 perusahaan Indonesia, dicek langsung di browser.</p>
+    <div class="container header-inner">
+      <a class="wordmark" href="#/beranda">Karir</a>
+      <nav class="main-nav" aria-label="Navigasi utama">
+        <a href="#/beranda" data-view-link="beranda">Beranda</a>
+        <a href="#/cari" data-view-link="cari">Cari</a>
+        <a href="#/dasbor" data-view-link="dasbor">Dasbor</a>
+      </nav>
+      <span class="header-count">406 perusahaan</span>
     </div>
   </header>
 
   <main class="container">
-    <section class="hero" aria-label="Ringkasan data">
-      <ul class="stats">
-        <li><strong id="stat-total">406</strong><span>perusahaan</span></li>
-        <li><strong id="stat-target">22</strong><span>lowongan target</span></li>
-        <li><strong>Dicek</strong><span>4–5 Nov 2026</span></li>
-      </ul>
-      <p class="scope-note">Data ini dicek pada 4–5 November 2026 dengan fokus peran gudang, produksi, cleaning, office boy, packing, dan crew store. Peran lain belum tentu tercatat di data kami — selalu periksa langsung di portal perusahaan sebelum melamar.</p>
+
+    <!-- ============ BERANDA ============ -->
+    <section id="view-beranda" class="view" aria-label="Beranda">
+      <div class="hero">
+        <h1>Ketik domisili dan posisi yang kamu mau.</h1>
+        <p class="hero-sub">406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser pada 4 dan 5 November 2026.</p>
+        <form id="hero-form" action="#" method="get" class="hero-form">
+          <div class="field">
+            <label for="hero-domisili">Domisili</label>
+            <input type="search" id="hero-domisili" name="domisili" placeholder="Misal: Depok" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="hero-posisi">Posisi atau perusahaan</label>
+            <input type="search" id="hero-posisi" name="posisi" placeholder="Misal: Administrasi atau PGN" autocomplete="off">
+          </div>
+          <div class="actions">
+            <button type="submit" class="btn-primary">Cari</button>
+          </div>
+        </form>
+        <p class="examples">Coba:
+          <button type="button" class="example-chip" data-domisili="Depok" data-posisi="Administrasi">Depok + Administrasi</button>
+          <button type="button" class="example-chip" data-domisili="Bogor" data-posisi="Helper Gudang">Bogor + Helper Gudang</button>
+          <button type="button" class="example-chip" data-domisili="" data-posisi="PGN">PGN</button>
+        </p>
+      </div>
+
+      <dl class="stats-strip" aria-label="Ringkasan data">
+        <div><dt>Perusahaan</dt><dd><span class="count" data-count="406">406</span></dd></div>
+        <div><dt>Lowongan target</dt><dd><span class="count" data-count="22">22</span></dd></div>
+        <div><dt>Syarat tidak cocok</dt><dd><span class="count" data-count="5">5</span></dd></div>
+        <div><dt>Belum terverifikasi</dt><dd><span class="count" data-count="84">84</span></dd></div>
+        <div><dt>Portal tidak bisa dibuka</dt><dd><span class="count" data-count="66">66</span></dd></div>
+      </dl>
+
+      <section class="vacancies" aria-label="Lowongan target yang terverifikasi">
+        <div class="section-head">
+          <h2>Lowongan target yang terverifikasi</h2>
+          <p>22 lowongan, lengkap dengan tautannya.</p>
+        </div>
+        <div id="vacancy-rail" class="vacancy-rail"></div>
+      </section>
+
+      <section class="how" aria-label="Cara kerja">
+        <h2>Cara kerja</h2>
+        <ol class="steps">
+          <li><strong>Ketik domisili dan posisi.</strong> Hasilnya diurutkan dari yang paling cocok dengan datanya.</li>
+          <li><strong>Buka kanal karirnya.</strong> Tautan di setiap kartu mengarah ke halaman resmi perusahaan.</li>
+          <li><strong>Baca syarat lengkapnya.</strong> Lamar lewat kanal resmi. Rekrutmen yang sah tidak memungut biaya.</li>
+        </ol>
+      </section>
+
+      <p class="honesty-note">Data ini dicek dengan fokus peran gudang, produksi, cleaning, office boy, packing, dan crew store. Peran lain belum tentu tercatat di data kami. Selalu periksa langsung di portal perusahaan sebelum melamar.</p>
     </section>
 
-    <section class="search" aria-label="Pencarian">
-      <form id="search-form" action="#" method="get">
+    <!-- ============ CARI ============ -->
+    <section id="view-cari" class="view" aria-label="Cari kanal karir" hidden>
+      <h2 class="page-title" tabindex="-1">Cari kanal karir</h2>
+      <form id="search-form" action="#" method="get" class="search">
         <div class="field">
           <label for="domisili">Domisili</label>
           <input type="search" id="domisili" name="domisili" placeholder="Misal: Depok" autocomplete="off">
@@ -66,21 +118,62 @@
           <button type="button" id="reset" class="btn-secondary">Reset</button>
         </div>
       </form>
+
+      <p id="result-count" class="result-count" aria-live="polite">Memuat data…</p>
+      <p id="search-note" class="search-note" hidden></p>
+
+      <div id="results" class="results" aria-label="Hasil pencarian"></div>
+
+      <div class="more-wrap">
+        <button type="button" id="load-more" class="btn-secondary" hidden>Tampilkan lebih banyak</button>
+      </div>
     </section>
 
-    <p id="result-count" class="result-count" aria-live="polite">Memuat data…</p>
-    <p id="search-note" class="search-note" hidden></p>
+    <!-- ============ DASBOR ============ -->
+    <section id="view-dasbor" class="view" aria-label="Dasbor data" hidden>
+      <h2 class="page-title" tabindex="-1">Dasbor</h2>
+      <p class="page-sub">Angka di sini dihitung langsung dari data.</p>
 
-    <section id="results" class="results" aria-label="Hasil pencarian"></section>
+      <section aria-label="Sebaran status">
+        <h3>Sebaran status</h3>
+        <div id="dash-status" class="bars"></div>
+      </section>
 
-    <div class="more-wrap">
-      <button type="button" id="load-more" class="btn-secondary" hidden>Tampilkan lebih banyak</button>
-    </div>
+      <section aria-label="Kategori terbanyak">
+        <h3>Kategori terbanyak</h3>
+        <div id="dash-categories" class="bars"></div>
+      </section>
+
+      <section aria-label="Lowongan target">
+        <h3>Lowongan target</h3>
+        <p class="section-sub">22 lowongan yang judul perannya cocok dengan target.</p>
+        <div id="dash-targets" class="target-list"></div>
+      </section>
+
+      <section aria-label="Perlu dicek ulang">
+        <h3>Perlu dicek ulang</h3>
+        <p class="section-sub">Kanal yang tidak bisa dipastikan saat dicek. Bukan bukti perusahaan tidak membuka lowongan.</p>
+        <div class="recheck">
+          <div>
+            <h4>Portal tidak bisa dibuka <span id="dash-portal-count"></span></h4>
+            <ul id="dash-portal" class="plain-list"></ul>
+          </div>
+          <div>
+            <h4>Tidak dapat diverifikasi <span id="dash-unverified-count"></span></h4>
+            <ul id="dash-unverified" class="plain-list"></ul>
+          </div>
+        </div>
+        <p class="section-sub">Daftar lengkap ada di <a href="companies.json">companies.json</a>.</p>
+      </section>
+
+      <p class="freshness" id="dash-freshness"></p>
+    </section>
+
   </main>
 
   <footer class="site-footer">
     <div class="container">
-      <p>Data: <a href="companies.json">companies.json</a> (406 perusahaan, dicek 4–5 November 2026). Cara pengecekan: <a href="METODE.md">METODE.md</a>. Lowongan target yang terverifikasi: <a href="TEMUAN.md">TEMUAN.md</a>.</p>
+      <p>Data: <a href="companies.json">companies.json</a> (406 perusahaan, dicek 4–5 November 2026). Cara pengecekan: <a href="METODE.md">METODE.md</a>. Lowongan target yang terverifikasi: <a href="TEMUAN.md">TEMUAN.md</a>. Kode: <a href="https://github.com/adiprmx/karir">github.com/adiprmx/karir</a>.</p>
       <p>Aplikasi ini tidak mengumpulkan data pribadi dan tidak mengirim apa pun ke mana pun. Satu-satunya yang dimuat adalah data perusahaan dari situs ini.</p>
     </div>
   </footer>

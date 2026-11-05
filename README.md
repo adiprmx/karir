@@ -38,7 +38,13 @@ Repo ini buat siapa pun yang cari loker. Kamu berdomisili di mana dan mau posisi
 
 ## Aplikasi web
 
-Aplikasi webnya ada di repo ini juga, di folder `docs/`, dan berjalan tanpa server. Buka https://adiprmx.github.io/karir/, isi domisili dan posisi atau perusahaan yang dicari, lalu hasilnya diurutkan berdasarkan skor rekomendasi:
+Aplikasi webnya ada di repo ini juga, di folder `docs/`, dan berjalan tanpa server. Buka https://adiprmx.github.io/karir/. Isinya tiga layar:
+
+- **Beranda.** Pencariannya langsung di depan: ketik domisili dan posisi, lalu lihat rekomendasinya. Di bawahnya ada angka data dan 22 lowongan target yang terverifikasi.
+- **Cari.** Pencarian lengkap dengan filter kategori, status, dan urutan.
+- **Dasbor.** Gambaran data: sebaran status, kategori terbanyak, daftar 22 lowongan target, dan kanal yang perlu dicek ulang. Semua angka dihitung langsung dari data.
+
+Hasil diurutkan berdasarkan skor rekomendasi:
 
 | Kecocokan | Skor |
 | --- | --- |
