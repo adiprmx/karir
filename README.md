@@ -1,6 +1,6 @@
-# Daftar Link Karir Terverifikasi
+# Karir Terverifikasi
 
-Daftar kanal karir resmi dari 299 perusahaan, masing-masing sudah dibuka dan diperiksa langsung di browser pada 4–5 November 2026. Daftar ini dibuat untuk pencari kerja yang mencari peran gudang, produksi, cleaning, office boy, packing, dan crew store di Bogor, Depok, Cibinong, dan sekitarnya.
+Kanal karir resmi 299 perusahaan, masing-masing dibuka dan diperiksa langsung di browser pada 4–5 November 2026. Untuk pencari kerja yang mencari peran gudang, produksi, cleaning, office boy, packing, dan crew store di Bogor, Depok, Cibinong, dan sekitarnya.
 
 ## Yang perlu dipahami dulu
 
