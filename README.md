@@ -23,6 +23,10 @@
 
 ## Sekilas
 
+<p align="center">
+  <img src="assets/status-bar.svg" alt="Sebaran status 405 perusahaan" width="100%">
+</p>
+
 | Perusahaan | Lowongan target | Syarat tidak cocok | Terakhir dicek |
 | --- | --- | --- | --- |
 | 405 | 22 | 5 | 5 Nov 2026 |
