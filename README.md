@@ -82,9 +82,9 @@ Portal tidak bisa dibuka berarti situs atau portal karirnya tidak bisa diakses s
 | Perusahaan | Peran | Lokasi | Catatan |
 | --- | --- | --- | --- |
 | [OCS Group Indonesia](https://recruitment.dataon.com/ocsindonesia/) | CLEANER | Kab. Bogor | Min. SMA, maks. 40 tahun, min. 1 tahun pengalaman cleaning service |
-| [PT Novell Pharmaceutical Laboratories](https://novellpharm.com/index.php?mod=professional) | HELPER | Gunung Putri, Bogor | |
+| [PT Novell Pharmaceutical Laboratories](https://novellpharm.com/index.php?mod=professional) | HELPER | Gunung Putri, Bogor | Judul persis HELPER; WAREHOUSE STAFF juga tercantum di halaman yang sama |
 | [Ganesha Operation](https://career.ganeshaoperation.com/lowongan?posisi=Office+Boy&kota=47%2C48) | Office Boy | Bogor dan Cibinong | Detail menulis umur maksimal 25 tahun sampai Oktober 2025, tapi lowongan tampil live |
-| [PT Dexa Medica (Dexa Group)](https://www.dexagroupcareer.com) | Production Staff A, Steril Novice Worker | Bekasi | |
+| [PT Dexa Medica (Dexa Group)](https://www.dexagroupcareer.com) | Production Staff A, Steril Novice Worker | Bekasi | Production Staff A diposting 28 Okt 2026; Steril Novice Worker untuk pengemasan finished good |
 | [Swiss-Belhotel International](https://jobs.talentics.id/swiss-belhotel-international/hotel-executive-housekeeper-housekeeping-manager-copy-1) | Hotel Executive Housekeeper | Kota Bogor | Tidak cocok: butuh S1 dan pengalaman 2 tahun |
 | [KitaLulus](https://www.kitalulus.com/) | Staff Gudang, lewat platform | Cibinong | Tidak cocok: minimal D3/D4, pemberi kerja Titik Seduh Cibinong |
 
