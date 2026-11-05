@@ -1,28 +1,68 @@
 <p align="center">
-  <h1 align="center">Karir</h1>
-  <p align="center">Kanal karir resmi 405 perusahaan Indonesia, masing-masing dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026.</p>
-  <p align="center">
-    <a href="https://github.com/adiprmx/karir/actions/workflows/validate.yml"><img src="https://github.com/adiprmx/karir/actions/workflows/validate.yml/badge.svg" alt="Validasi data"></a>
-  </p>
+  <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-| 405 | 22 | 5 | 5 Nov 2026 |
+<p align="center">
+  <a href="https://github.com/adiprmx/karir/actions/workflows/validate.yml"><img src="https://github.com/adiprmx/karir/actions/workflows/validate.yml/badge.svg" alt="Validasi data"></a>
+  <a href="https://github.com/adiprmx/karir/blob/main/LICENSE"><img src="https://img.shields.io/github/license/adiprmx/karir" alt="Lisensi MIT"></a>
+  <img src="https://img.shields.io/badge/perusahaan-405-black" alt="405 perusahaan">
+</p>
+
+<p align="center">Kanal karir resmi 405 perusahaan Indonesia. Masing-masing dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026.</p>
+
+## Daftar isi
+
+- [Sekilas](#sekilas)
+- [Cara pakai](#cara-pakai)
+- [Skema data](#skema-data)
+- [Status](#status)
+- [Lowongan di Bogor dan sekitarnya](#lowongan-di-bogor-dan-sekitarnya)
+- [Metode](#metode)
+- [Berkontribusi](#berkontribusi)
+- [Lisensi](#lisensi)
+
+## Sekilas
+
+| Perusahaan | Lowongan target | Syarat tidak cocok | Terakhir dicek |
 | --- | --- | --- | --- |
-| perusahaan | lowongan target | syarat tidak cocok | terakhir dicek |
+| 405 | 22 | 5 | 5 Nov 2026 |
 
 Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, dan Crew Store. Lokasi yang diutamakan: Bogor, Depok, Cibinong, dan sekitarnya.
 
 Link di sini mengarah ke halaman karir perusahaan. Halaman itu belum tentu sedang menampilkan lowongan, dan statusnya ditulis sesuai tanggal cek.
 
-## Data
+## Cara pakai
 
-`data/daftar-link-karir.csv` berisi 405 baris dengan 9 kolom: no, perusahaan, kategori, link_karir, status, tanggal_cek, catatan, lokasi, posisi. File `data/daftar-link-karir.xlsx` isinya sama, ditambah sheet Petunjuk. Daftar lengkap lowongan target ada di `docs/TEMUAN.md`, riwayat perubahan di `CHANGELOG.md`.
+Buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar. Lamar hanya lewat kanal resmi di daftar ini. Rekrutmen yang sah tidak memungut biaya.
 
-| No | Perusahaan | Status | Lokasi | Posisi |
-| --- | --- | --- | --- | --- |
-| 212 | Novell Pharmaceutical Laboratories | Ada lowongan target | Gunung Putri, Bogor | HELPER |
-| 246 | Ganesha Operation | Ada lowongan target | Bogor, Cibinong | Office Boy |
-| 301 | BASF Care Chemicals Indonesia | Ada lowongan target | Jakarta | Production Operator |
+Dengan Python:
+
+```python
+import pandas as pd
+
+url = "https://raw.githubusercontent.com/adiprmx/karir/main/data/daftar-link-karir.csv"
+df = pd.read_csv(url)
+target = df[df.status == "Ada lowongan target"]
+print(target[["perusahaan", "link_karir", "lokasi"]].to_string(index=False))
+```
+
+## Skema data
+
+Satu baris per perusahaan, 9 kolom:
+
+| Kolom | Isi | Contoh |
+| --- | --- | --- |
+| no | Nomor urut | 212 |
+| perusahaan | Nama perusahaan | PT Novell Pharmaceutical Laboratories |
+| kategori | Jenis perusahaan | Manufaktur |
+| link_karir | Tautan kanal karir resmi | https://novellpharm.com/index.php?mod=professional |
+| status | Hasil cek | Ada lowongan target |
+| tanggal_cek | Tanggal pengecekan | 2026-11-05 |
+| catatan | Catatan hasil cek | Judul persis HELPER, penempatan Gunung Putri Bogor |
+| lokasi | Lokasi perusahaan atau lowongan | Gunung Putri Bogor |
+| posisi | Peran target yang ditemukan | HELPER, WAREHOUSE STAFF |
+
+File `data/daftar-link-karir.xlsx` isinya sama, ditambah sheet Petunjuk. Daftar lengkap lowongan target ada di `docs/TEMUAN.md`, riwayat perubahan di `CHANGELOG.md`.
 
 ## Status
 
@@ -42,22 +82,20 @@ Portal tidak bisa dibuka berarti situs atau portal karirnya tidak bisa diakses s
 | Perusahaan | Peran | Lokasi | Catatan |
 | --- | --- | --- | --- |
 | [OCS Group Indonesia](https://recruitment.dataon.com/ocsindonesia/) | CLEANER | Kab. Bogor | Min. SMA, maks. 40 tahun, min. 1 tahun pengalaman cleaning service |
-| [Novell Pharmaceutical Laboratories](https://novellpharm.com/index.php?mod=professional) | HELPER | Gunung Putri, Bogor | |
-| [Ganesha Operation](https://career.ganeshaoperation.com/lowongan?posisi=Office+Boy&kota=47%2C48) | Office Boy | Bogor dan Cibinong | |
-| [Dexa Group](https://www.dexagroupcareer.com) | Production Staff A, Steril Novice Worker | Bekasi | |
+| [PT Novell Pharmaceutical Laboratories](https://novellpharm.com/index.php?mod=professional) | HELPER | Gunung Putri, Bogor | |
+| [Ganesha Operation](https://career.ganeshaoperation.com/lowongan?posisi=Office+Boy&kota=47%2C48) | Office Boy | Bogor dan Cibinong | Detail menulis umur maksimal 25 tahun sampai Oktober 2025, tapi lowongan tampil live |
+| [PT Dexa Medica (Dexa Group)](https://www.dexagroupcareer.com) | Production Staff A, Steril Novice Worker | Bekasi | |
 | [Swiss-Belhotel International](https://jobs.talentics.id/swiss-belhotel-international/hotel-executive-housekeeper-housekeeping-manager-copy-1) | Hotel Executive Housekeeper | Kota Bogor | Tidak cocok: butuh S1 dan pengalaman 2 tahun |
 | [KitaLulus](https://www.kitalulus.com/) | Staff Gudang, lewat platform | Cibinong | Tidak cocok: minimal D3/D4, pemberi kerja Titik Seduh Cibinong |
-
-## Cara pakai
-
-Buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar. Lamar hanya lewat kanal resmi di daftar ini. Rekrutmen yang sah tidak memungut biaya.
 
 ## Metode
 
 Setiap kanal dibuka langsung di browser lewat navigasi situs resmi perusahaan. Cuplikan pencarian, postingan pihak ketiga, dan tautan pemendek tidak dipakai sebagai bukti. Pengecekan ini hanya membuka halaman: tidak ada yang dilamar, tidak ada akun yang dibuat, tidak ada login, dan tidak ada data pribadi yang dimasukkan. Penjelasan lengkap ada di `docs/METODE.md`.
 
-## Kontribusi dan lisensi
+## Berkontribusi
 
 Usulan perusahaan baru, koreksi tautan, dan hasil cek ulang diterima lewat issue dan pull request. Setiap perubahan data harus dibuktikan dengan tautan halaman resmi yang dibuka langsung. Aturannya ada di `CONTRIBUTING.md`.
+
+## Lisensi
 
 Kode dan skrip: MIT, lihat `LICENSE`. Data di `data/`: CC BY 4.0.
