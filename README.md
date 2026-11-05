@@ -59,6 +59,19 @@ Skor bukan janji lowongan. Aplikasi hanya merekomendasikan kanal karir berdasark
 
 Aplikasi tidak memakai akun, tidak mengumpulkan data pribadi, tidak mengirim apa pun ke mana pun, dan tidak memakai layanan pihak ketiga. Satu-satunya yang dimuat adalah data perusahaan dari situs ini. Kendali atas data dan kode ada di repo ini.
 
+## Stack
+
+Stack aplikasi web ini, lengkap:
+
+- Hosting: GitHub Pages, dari branch `main` folder `docs/`, HTTPS aktif.
+- Frontend: HTML, CSS, dan JavaScript polos (vanilla). Tanpa framework (tanpa React, Vue, Svelte, atau Angular), tanpa library apa pun, tanpa build step, tanpa bundler.
+- Font: font sistem perangkat, tanpa font eksternal.
+- Data: `docs/companies.json` (406 baris, dibuat dari `data/daftar-link-karir.csv`), dimuat dengan `fetch()` dari situs yang sama.
+- Routing: tiga layar (Beranda, Cari, Dasbor) dengan hash di URL (`#/beranda`, `#/cari`, `#/dasbor`), jadi tiap layar bisa dibagikan lewat tautan.
+- Backend: tidak ada. Tidak ada database, API, akun, cookie, localStorage, analytics, atau request ke pihak ketiga.
+- Validasi data: GitHub Actions menjalankan `scripts/validate.py` (Python) setiap ada perubahan pada CSV.
+- Alasan stack ini: gratis selamanya, tidak ada server yang harus dirawat, dan tidak ada data pengguna yang bisa bocor.
+
 ## Cara pakai
 
 Pakai aplikasi web di https://adiprmx.github.io/karir/ untuk mencari. Kalau mau mengolah datanya sendiri, buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar. Lamar hanya lewat kanal resmi di daftar ini. Rekrutmen yang sah tidak memungut biaya.
