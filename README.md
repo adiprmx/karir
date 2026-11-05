@@ -1,6 +1,6 @@
 # Karir
 
-Kanal karir resmi 299 perusahaan, masing-masing dibuka dan diperiksa langsung di browser pada 4–5 November 2026. Untuk pencari kerja yang mencari peran gudang, produksi, cleaning, office boy, packing, dan crew store di Bogor, Depok, Cibinong, dan sekitarnya.
+Kanal karir resmi 405 perusahaan, masing-masing dibuka dan diperiksa langsung di browser pada 4–5 November 2026. Untuk pencari kerja yang mencari peran gudang, produksi, cleaning, office boy, packing, dan crew store di Bogor, Depok, Cibinong, dan sekitarnya.
 
 ## Yang perlu dipahami dulu
 
@@ -13,7 +13,7 @@ Kanal karir resmi 299 perusahaan, masing-masing dibuka dan diperiksa langsung di
 
 | File | Isi |
 | --- | --- |
-| `data/daftar-link-karir.csv` | Seluruh 299 baris, format CSV. Ini sumber data utama. |
+| `data/daftar-link-karir.csv` | Seluruh 405 baris, format CSV. Ini sumber data utama. |
 | `data/daftar-link-karir.xlsx` | File spreadsheet yang sama, dengan sheet Petunjuk dan List Link Karir. |
 | `docs/METODE.md` | Cara pengecekan, arti tiap status, dan batasan daftar ini. |
 | `docs/TEMUAN.md` | Lowongan target yang terverifikasi, lengkap dengan tautan, lokasi, dan catatannya. |
@@ -21,16 +21,16 @@ Kanal karir resmi 299 perusahaan, masing-masing dibuka dan diperiksa langsung di
 
 ## Ringkasan hasil
 
-Tanggal cek: 4 November 2026 (81 perusahaan) dan 5 November 2026 (218 perusahaan). Total 299 perusahaan, semuanya sudah dicek, tidak ada yang berstatus "Belum dicek".
+Tanggal cek: 4 November 2026 (81 perusahaan) dan 5 November 2026 (324 perusahaan). Total 405 perusahaan, semuanya sudah dicek, tidak ada yang berstatus "Belum dicek".
 
 | Status | Jumlah | Artinya |
 | --- | --- | --- |
-| Tidak ada lowongan target | 119 | Portal terbuka dan ada lowongan, tapi tidak ada peran target. |
-| Tidak ada lowongan terlihat | 56 | Portal terbuka, tapi tidak menampilkan lowongan apa pun. |
-| Tidak dapat diverifikasi | 56 | Tidak ada kanal karir yang bisa diperiksa di navigasi resmi, atau halamannya kosong. |
-| Portal tidak bisa dibuka | 51 | Situs atau portal karirnya tidak bisa dibuka saat dicek. Ini kegagalan akses, bukan bukti tidak ada lowongan. |
-| Ada lowongan target | 16 | Ada peran target yang terlihat di halaman resmi. Lihat `docs/TEMUAN.md`. |
-| Ada lowongan target (tidak cocok) | 1 | Ada peran target, tapi syaratnya tidak cocok. Lihat `docs/TEMUAN.md`. |
+| Tidak ada lowongan target | 152 | Portal terbuka dan ada lowongan, tapi tidak ada peran target. |
+| Tidak ada lowongan terlihat | 77 | Portal terbuka, tapi tidak menampilkan lowongan apa pun. |
+| Tidak dapat diverifikasi | 83 | Tidak ada kanal karir yang bisa diperiksa di navigasi resmi, atau halamannya kosong. |
+| Portal tidak bisa dibuka | 66 | Situs atau portal karirnya tidak bisa dibuka saat dicek. Ini kegagalan akses, bukan bukti tidak ada lowongan. |
+| Ada lowongan target | 22 | Ada peran target yang terlihat di halaman resmi. Lihat `docs/TEMUAN.md`. |
+| Ada lowongan target (tidak cocok) | 5 | Ada peran target, tapi syaratnya tidak cocok. Lihat `docs/TEMUAN.md`. |
 
 Peran target yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, dan Crew Store. Lokasi yang diutamakan: Bogor, Depok, Cibinong, Citayam, Bojonggede, Citeureup, Gunung Putri, dan Jabodetabek.
 
@@ -43,15 +43,18 @@ Peran target yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office 
 
 ## Lowongan target yang terverifikasi
 
-Ada 16 lowongan target dan 1 lowongan target yang tidak cocok. Yang lokasinya paling dekat dengan Bogor dan sekitarnya:
+Ada 22 lowongan target dan 5 lowongan target yang tidak cocok. Yang lokasinya paling dekat dengan Bogor dan sekitarnya:
 
+- **OCS Group Indonesia** — CLEANER, di Kab. Bogor. Syarat min. SMA/sederajat, maks. 40 tahun, min. 1 tahun pengalaman sebagai cleaning service.
 - **Novell Pharmaceutical Laboratories** — HELPER, penempatan Gunung Putri, Bogor.
 - **Ganesha Operation** — Office Boy, di Bogor dan Cibinong.
+- **Dexa Group** — Production Staff A dan Steril Novice Worker, di Bekasi.
 - **Roti O** — Pelaksana Gudang, Produksi Buns & Pastry, dan Office Girl, di Kalideres, Jakarta Barat. Judulnya setara dengan peran target, bukan persis sama.
 - **Richeese Factory** — Crew Outlet, di seluruh outlet, tanpa kota spesifik yang tercantum.
 - **MR DIY Indonesia** — Store Crew Seluruh Indonesia, lokasi tertulis "Indonesia".
 - **ISS Indonesia** — Cleaning Services, lokasi tidak tercantum di halaman detail.
 - **Angkasa Pura Supports** — Cleaning Service di Jakarta, batas 10 November 2026.
+- **BASF Care Chemicals Indonesia** — Production Operator, di Jakarta.
 
 Daftar lengkapnya, termasuk yang lokasinya di luar prioritas dan yang syaratnya tidak cocok, ada di `docs/TEMUAN.md`. Baca catatan di sana sebelum melamar apa pun.
 

@@ -10,6 +10,30 @@ Daftar ini hanya memuat lowongan yang judul peran targetnya terlihat langsung di
 - Lokasi: Bogor - Sentul (Kota Wisata), jenis Mitra.
 - Status: **tidak cocok, jangan dilamar.** Syaratnya: bisa mengendarai mobil, SIM A dan SIM C.
 
+### RS Pondok Indah Group — Teknisi MEP, Bintaro Jaya
+
+- Tautan lowongan: https://www.rspondokindah.co.id/id/career-detail/teknisi-mekanikal-elektronik-metronika
+- Lokasi: RS Pondok Indah – Bintaro Jaya (Tangerang Selatan).
+- Status: **tidak cocok.** Teknisi Mekanikal, Elektronik, & Metronika, diposting 5 November 2026. Syaratnya: D3 Teknik, pengalaman min. 3 tahun.
+
+### Marriott International — Housekeeping Supervisor, Jakarta
+
+- Tautan: https://careers.marriott.com/jobs?filter%5Bcountry%5D%5B0%5D=Indonesia&keyword=Housekeeping
+- Lokasi: Le Meridien Jakarta, Jakarta.
+- Status: **tidak cocok.** Housekeeping Supervisor, level supervisor — peran housekeeping yang terlihat mayoritas level supervisor/manajer, bukan housekeeping staf.
+
+### Swiss-Belhotel International — Hotel Executive Housekeeper, Kota Bogor
+
+- Tautan lowongan: https://jobs.talentics.id/swiss-belhotel-international/hotel-executive-housekeeper-housekeeping-manager-copy-1
+- Lokasi: Kota Bogor termasuk salah satu dari 8 lokasi penempatan.
+- Status: **tidak cocok.** Hotel Executive Housekeeper / Housekeeping Manager, level Department Head/Manager, kontrak, batas lamar 31 Desember 2026. Syaratnya: pengalaman 2 tahun dan gelar S1.
+
+### KitaLulus — Staff Gudang, Cibinong (lewat platform)
+
+- Tautan: https://www.kitalulus.com/
+- Lokasi: Kabupaten Bogor (Cibinong).
+- Status: **tidak cocok.** Staff Gudang ini lowongan platform, milik pemberi kerja pihak ketiga Titik Seduh Cibinong (diperbarui 24 Oktober 2026), bukan lowongan KitaLulus sendiri. Syaratnya: minimal D3/D4.
+
 ## Yang terverifikasi, diurutkan sesuai nomor di daftar
 
 ### Super Indo — DC Staff Gudang, Cikarang
@@ -108,3 +132,42 @@ Daftar ini hanya memuat lowongan yang judul peran targetnya terlihat langsung di
 - Tautan portal: https://erecruitment.apsupports.com/erecruitment/public/
 - Lokasi: Jakarta. Syarat: SMA, Fresh Graduate. Batas 10 November 2026.
 - Catatan: Angkasa Pura Supports adalah anak perusahaan Angkasa Pura Indonesia, dengan portal sendiri. Portal ini tidak disajikan sebagai portal induk. Juga ada Supervisor Cleaning Service di Jakarta, batas yang sama.
+
+## Temuan ronde H (No. 300–405, dicek 5 November 2026)
+
+### BASF Care Chemicals Indonesia — Production Operator, Jakarta
+
+- Tautan: https://www.basf.com/id/en/careers
+- Lokasi: Jakarta, IDN. Jakarta masuk Jabodetabek, tapi bukan Cimanggis/Depok.
+- Catatan: lowongan Indonesia lain yang terlihat bukan target: Instrumentation Engineer, Site Manager, AT/TS Staff, Maintenance Administrator & Store Keeper (Merak), Production Manager, EHS Support (Merak).
+
+### Fore Coffee — Barista (Part-Time), seluruh Indonesia
+
+- Tautan: https://fore.coffee/id/career-at-fore-coffee-indo/
+- Lokasi: tertulis "Penempatan di seluruh Indonesia", tanpa penyebutan Bogor/Depok.
+- Catatan: detailnya tertulis "Full Time, Indonesia, WFO". Juga terlihat Area Manager dan Supervisor Store, lokasinya tertulis "Indonesia".
+
+### Ranch Market & Farmers Market — Kasir operasional, Ambon dan Kota Malang
+
+- Tautan: https://ranchmarket.jobseeker.software/vacancy
+- Lokasi: Cikarang Barat; Ambon; Kota Malang; Jakarta Selatan. Peran kasir yang termasuk target lokasinya di Ambon dan Kota Malang, bukan Bogor/Depok.
+- Catatan: empat lowongan terlihat: Staff Operational FV FM JBK (Cikarang Barat), staff Operational Cashier FM AMS (Ambon), STAFF OPERASIONAL CASHIER RM MPS (Kota Malang), Staff Operational MS RM PIM 3 (Jakarta Selatan).
+
+### OCS Group Indonesia — CLEANER, Kab. Bogor
+
+- Tautan portal: https://recruitment.dataon.com/ocsindonesia/
+- Lokasi: Kab. Bogor, plus banyak kota lain (Bandung, Cikarang, Jakarta, Tangerang, Bekasi, dan lain-lain).
+- Syarat contoh detail: min. SMA/sederajat, maks. 40 tahun, min. 1 tahun pengalaman sebagai cleaning service. Detail contoh: https://sf.dataon.com/recruitment/#/ocsindonesia/jobdetail/RCR20261102603
+- Catatan: 46 lowongan di portal itu, termasuk CLEANER & GARDENER dan CLEANING SERVICE. Ini satu-satunya lowongan target di batch H3 yang lokasinya di Bogor.
+
+### Accor — Receiving & Storekeeper, Jakarta Pusat
+
+- Tautan: https://careers.accor.com/global/en/jobs
+- Lokasi: Novotel Jakarta Cikini, Jakarta Pusat.
+- Catatan: Receiving & Storekeeper setara Storekeeper/Warehouse Staff, ditemukan di halaman 1 hasil filter Indonesia (225 lowongan).
+
+### Dexa Group — Production Staff A dan Steril Novice Worker, Bekasi
+
+- Tautan: https://www.dexagroupcareer.com
+- Lokasi: Bekasi, Jawa Barat.
+- Catatan: Production Staff A (28 Oktober 2026; proses produksi, packaging, pengendalian mutu) dan Steril 2 Extension Novice Worker (14 Agustus 2026; pengemasan finished good). Juga terlihat Forklift Operator B, tapi Forklift Operator bukan peran target jadi tidak dihitung sebagai temuan.

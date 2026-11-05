@@ -74,7 +74,8 @@ def main() -> int:
         link = (row["link_karir"] or "").strip()
         if link and not link.startswith(("http://", "https://")):
             errors.append(f"baris {i}: link_karir bukan URL http(s): {link!r}")
-        if not link and "tidak ada situs resmi" not in (row["catatan"] or "").lower():
+        note = (row["catatan"] or "").lower()
+        if not link and not ("situs resmi" in note and ("tidak ada" in note or "tidak ditemukan" in note or "not found" in note)):
             errors.append(f"baris {i}: link kosong tanpa penjelasan di catatan")
         for col in ("perusahaan", "kategori", "status", "lokasi", "posisi"):
             if not (row[col] or "").strip():
