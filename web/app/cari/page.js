@@ -19,7 +19,8 @@ export default async function Cari({ searchParams }) {
     Math.min(400, parseInt(params.limit || String(PAGE_SIZE), 10) || PAGE_SIZE),
   );
 
-  const companies = getCompanies();
+  const companies = await getCompanies();
+  const categories = await getCategories();
   const { results, mode, query } = runSearch(companies, {
     domisili,
     posisi,
@@ -78,7 +79,7 @@ export default async function Cari({ searchParams }) {
             <legend>Kategori</legend>
             <select name="kategori" defaultValue={kategori}>
               <option value="">Semua kategori</option>
-              {getCategories().map((k) => (
+              {categories.map((k) => (
                 <option key={k} value={k}>
                   {k}
                 </option>

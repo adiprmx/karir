@@ -56,11 +56,11 @@ function RecheckList({ title, count, list }) {
   );
 }
 
-export default function Dasbor() {
-  const companies = getCompanies();
-  const stats = getStats();
+export default async function Dasbor() {
+  const companies = await getCompanies();
+  const stats = await getStats();
   const total = stats.total;
-  const targets = getTargets();
+  const targets = await getTargets();
   const topCats = topEntries(countBy(companies, "kategori"), 8);
   const portalDead = companies
     .filter((c) => c.status === "Portal tidak bisa dibuka")

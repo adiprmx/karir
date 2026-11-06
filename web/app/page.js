@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { getCompanies, getTargets, getStats } from "@/lib/companies";
 
-export default function Beranda() {
-  const stats = getStats();
-  const targets = getTargets();
+export default async function Beranda() {
+  const stats = await getStats();
+  const targets = await getTargets();
   const byDate = stats.byDate;
   const d4 = byDate["2026-11-04"] || 0;
   const d5 = byDate["2026-11-05"] || 0;
