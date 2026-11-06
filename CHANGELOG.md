@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.0.0 — 2026-11-06
+
+Aplikasi web dibangun ulang jadi full stack.
+
+- Next.js 15 dengan React 19 di Vercel (https://karir-adiprmx.vercel.app/), tiga layar yang sama: Beranda, Cari, Dasbor.
+- Database Firebase Firestore (proyek `karir-9d53a`, asia-southeast1, paket Spark gratis): 406 perusahaan di koleksi `companies`, diimpor dari CSV. Aturan: baca terbuka, tulis hanya untuk pengguna yang sudah login.
+- API pencarian server `GET /api/companies`, logika skor yang sama dengan halaman Cari (posisi +50, domisili +30, terverifikasi +20, tidak cocok +10, portal mati −20, tidak terverifikasi −10). Hasilnya terverifikasi sama dengan versi sebelumnya: Bogor + Helper Gudang menempatkan Roti O di atas dengan skor 100, PGN tepat satu hasil.
+- Admin panel di `/admin`: login Firebase Auth (Email/Password) untuk tambah, ubah, dan hapus perusahaan. Akun admin dibuat pemilik repo di Firebase Console.
+- Supabase tidak dipakai karena akun sudah mencapai batas 2 proyek gratis yang aktif. Vercel KV tidak dipakai karena bukan database sungguhan. Versi statis lama di `docs/` (GitHub Pages) tidak lagi jadi aplikasi live.
+- Data dibaca aplikasi lewat Firestore REST API, karena SDK gRPC tidak bisa menembus proxy jaringan lingkungan build.
+
 ## 1.3.0 — 2026-11-06
 
 Aplikasi web dirombak total jadi tiga layar dengan konsep yang jelas.

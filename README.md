@@ -10,7 +10,7 @@
 
 <p align="center">Kanal karir resmi 406 perusahaan Indonesia, masing-masing dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026.</p>
 
-<p align="center"><a href="https://adiprmx.github.io/karir/">Cari loker di aplikasi web</a> — masukkan domisili dan posisi yang kamu mau, lalu lihat rekomendasinya.</p>
+<p align="center"><a href="https://karir-adiprmx.vercel.app/">Cari loker di aplikasi web</a> — masukkan domisili dan posisi yang kamu mau, lalu lihat rekomendasinya.</p>
 
 ## Daftar isi
 
@@ -38,7 +38,7 @@ Repo ini buat siapa pun yang cari loker. Kamu berdomisili di mana dan mau posisi
 
 ## Aplikasi web
 
-Aplikasi webnya ada di repo ini juga, di folder `docs/`, dan berjalan tanpa server. Buka https://adiprmx.github.io/karir/. Isinya tiga layar:
+Aplikasi webnya ada di repo ini juga, di folder `web/`, dan berjalan di https://karir-adiprmx.vercel.app/. Isinya tiga layar:
 
 - **Beranda.** Pencariannya langsung di depan: ketik domisili dan posisi, lalu lihat rekomendasinya. Di bawahnya ada angka data dan 22 lowongan target yang terverifikasi.
 - **Cari.** Pencarian lengkap dengan filter kategori, status, dan urutan.
@@ -57,24 +57,27 @@ Hasil diurutkan berdasarkan skor rekomendasi:
 
 Skor bukan janji lowongan. Aplikasi hanya merekomendasikan kanal karir berdasarkan data yang tercatat. Kalau posisi yang kamu cari tidak tercatat di data sebuah perusahaan, kartu perusahaannya tetap tampil dengan label "Peran ini belum terverifikasi di data kami — cek langsung di portalnya". Kalimat penyangkalan di data, misalnya "tidak ada penyebutan Bogor/Depok", tidak dihitung sebagai kecocokan.
 
-Aplikasi tidak memakai akun, tidak mengumpulkan data pribadi, tidak mengirim apa pun ke mana pun, dan tidak memakai layanan pihak ketiga. Satu-satunya yang dimuat adalah data perusahaan dari situs ini. Kendali atas data dan kode ada di repo ini.
+Aplikasi tidak memakai akun pengguna, tidak mengumpulkan data pribadi pengunjung, dan tidak memakai analytics. Ada satu akun admin (dibuat pemilik repo di Firebase Console) untuk memperbarui data lewat panel admin di `/admin`. Kendali atas data dan kode ada di repo ini.
+
+Pencarian juga tersedia sebagai API: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang` mengembalikan hasil yang sama dengan halaman Cari, dalam JSON.
 
 ## Stack
 
 Stack aplikasi web ini, lengkap:
 
-- Hosting: GitHub Pages, dari branch `main` folder `docs/`, HTTPS aktif.
-- Frontend: HTML, CSS, dan JavaScript polos (vanilla). Tanpa framework (tanpa React, Vue, Svelte, atau Angular), tanpa library apa pun, tanpa build step, tanpa bundler.
-- Font: font sistem perangkat, tanpa font eksternal.
-- Data: `docs/companies.json` (406 baris, dibuat dari `data/daftar-link-karir.csv`), dimuat dengan `fetch()` dari situs yang sama.
-- Routing: tiga layar (Beranda, Cari, Dasbor) dengan hash di URL (`#/beranda`, `#/cari`, `#/dasbor`), jadi tiap layar bisa dibagikan lewat tautan.
-- Backend: tidak ada. Tidak ada database, API, akun, cookie, localStorage, analytics, atau request ke pihak ketiga.
+- Hosting: Vercel, proyek `karir`, dari repo ini branch `main` folder `web/`, HTTPS aktif. Setiap push ke `main` men-deploy otomatis.
+- Frontend dan backend: Next.js 15 dengan React 19 (App Router). Beranda dan Dasbor di-render di server, halaman Cari di-render di server dari parameter URL, jadi tiap pencarian bisa dibagikan lewat tautan.
+- Database: Firebase Firestore, proyek `karir-9d53a`, lokasi asia-southeast1, paket Spark gratis. Koleksi `companies` berisi 406 dokumen, satu per perusahaan, diimpor dari `data/daftar-link-karir.csv` lewat `web/scripts/import-firestore.mjs`. Aturan Firestore: baca terbuka untuk semua, tulis hanya untuk pengguna yang sudah login.
+- API pencarian server: `GET /api/companies`, logika skor yang sama dengan halaman Cari, berjalan di server.
+- Admin panel: halaman `/admin`, login Firebase Auth (Email/Password), untuk tambah, ubah, dan hapus perusahaan. Akun admin dibuat pemilik repo di Firebase Console, bukan dari aplikasi.
+- Data baca aplikasi: lewat Firestore REST API, bukan SDK gRPC.
 - Validasi data: GitHub Actions menjalankan `scripts/validate.py` (Python) setiap ada perubahan pada CSV.
-- Alasan stack ini: gratis selamanya, tidak ada server yang harus dirawat, dan tidak ada data pengguna yang bisa bocor.
+- Yang tidak dipakai, dan kenapa: Supabase tidak dipakai karena akun sudah mencapai batas 2 proyek gratis yang aktif, dan keduanya sedang live sehingga tidak bisa di-pause atau dipakai untuk repo ini. Vercel KV tidak dipakai karena bukan database sungguhan. Versi statis lama di folder `docs/` (GitHub Pages, HTML/CSS/JS polos) sudah tidak dipakai lagi sebagai aplikasi live; foldernya tetap ada di repo sebagai versi sebelumnya.
+- Alasan stack ini: semuanya gratis selamanya, tanpa server yang harus dirawat, dan tanpa data pengguna yang bisa bocor.
 
 ## Cara pakai
 
-Pakai aplikasi web di https://adiprmx.github.io/karir/ untuk mencari. Kalau mau mengolah datanya sendiri, buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar. Lamar hanya lewat kanal resmi di daftar ini. Rekrutmen yang sah tidak memungut biaya.
+Pakai aplikasi web di https://karir-adiprmx.vercel.app/ untuk mencari. Kalau mau mengolah datanya sendiri, buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar. Lamar hanya lewat kanal resmi di daftar ini. Rekrutmen yang sah tidak memungut biaya.
 
 Dengan Python:
 
