@@ -1,0 +1,223 @@
+/* Kamus antarmuka Karir: Indonesia (id) dan Inggris (en).
+ * Data perusahaan tetap Bahasa Indonesia; yang diterjemahkan hanya
+ * chrome antarmuka (navigasi, judul, tombol, label). Bahasa dipilih
+ * lewat cookie `karir-locale` (diatur rute /api/locale), default id. */
+import { cookies } from "next/headers";
+
+const DICT = {
+  id: {
+    "nav.home": "Beranda",
+    "nav.search": "Cari",
+    "nav.dashboard": "Dasbor",
+    "nav.about": "Tentang",
+    "nav.method": "Metode",
+    "nav.faq": "FAQ",
+    "nav.changelog": "Perubahan",
+    "nav.admin": "Admin",
+    "header.count": "{n} perusahaan",
+    "footer.note":
+      "Data dicek langsung di browser pada 4 dan 5 November 2026. Lowongan bisa berubah setelah tanggal cek, selalu periksa portal resminya.",
+    "footer.repo": "Repo GitHub",
+    "footer.method": "Metode pengecekan",
+    "footer.about": "Tentang Karir",
+    "footer.faq": "Pertanyaan umum",
+    "footer.changelog": "Riwayat perubahan",
+    "home.title": "Lowongan yang dicek, bukan yang dicopas.",
+    "home.lede":
+      "406 kanal karir resmi perusahaan Indonesia. Ketik domisili dan posisi yang kamu mau, kami tunjukkan kanal yang paling relevan.",
+    "home.intro":
+      "{n} kanal karir resmi perusahaan Indonesia. Setiap kanal dibuka dan dibaca langsung di browser pada 4 dan 5 November 2026, bukan dari cuplikan pencarian.",
+    "home.domisili": "Domisili",
+    "home.domisiliPh": "mis. Bogor, Depok, Cibinong",
+    "home.posisi": "Posisi",
+    "home.posisiPerusahaan": "Posisi atau perusahaan",
+    "home.posisiPh": "mis. Helper Gudang, Cleaning Service",
+    "home.searchBtn": "Cari loker",
+    "home.try": "Coba:",
+    "home.targets": "Lowongan target terverifikasi",
+    "home.targetsHeading": "{n} perusahaan punya lowongan yang kamu cari",
+    "home.howTitle": "Cara kerja",
+    "home.how1": "Ketik domisili dan posisi yang kamu cari.",
+    "home.how2": "Lihat kanal karir yang paling cocok, diurutkan berdasarkan skor.",
+    "home.how3": "Buka portal resminya dan lamar lewat kanal resmi.",
+    "home.applyStep":
+      "Buka kanal karir resminya dan lamar dari sana. Aplikasi ini tidak menyimpan data kamu.",
+    "home.stats": "Angka data",
+    "home.dataState": "Keadaan data",
+    "home.checked": "perusahaan dicek",
+    "home.hasTarget": "ada lowongan target",
+    "home.targetMismatch": "lowongan ada, syarat tidak cocok",
+    "home.freshNote":
+      "{a} perusahaan dicek 4 November 2026, {b} perusahaan dicek 5 November 2026. Lowongan bisa berubah setelah tanggal cek.",
+    "home.viewDashboard": "Lihat dasbor",
+    "search.title": "Cari kanal karir",
+    "search.lede": "Saring 406 perusahaan berdasarkan domisili, posisi, kategori, dan status.",
+    "search.category": "Kategori",
+    "search.allCategories": "Semua kategori",
+    "search.status": "Status",
+    "search.allStatuses": "Semua status",
+    "search.order": "Urutan",
+    "search.orderRelevance": "Paling relevan",
+    "search.orderName": "Nama A-Z",
+    "search.submit": "Cari",
+    "search.reset": "Atur ulang",
+    "search.results": "hasil",
+    "search.sortNote":
+      "Hasil diurutkan berdasarkan kecocokan posisi, domisili, dan status verifikasi.",
+    "search.domisiliPh": "Misal: Depok",
+    "search.posisiPh": "Misal: Administrasi atau PGN",
+    "search.showing": "Menampilkan {a} dari {b} perusahaan",
+    "search.noPositionMatch":
+      "Tidak ada kecocokan posisi di data kami. Hasil di bawah ini adalah rekomendasi kanal berdasarkan domisili dan status, bukan lowongan yang terverifikasi.",
+    "search.loadMore": "Tampilkan lebih banyak",
+    "search.resultsLabel": "Hasil pencarian",
+    "search.metaTitle": "Cari - Karir",
+    "dash.title": "Dasbor data",
+    "dash.lede": "Gambaran 406 kanal karir yang dicek pada 4 dan 5 November 2026.",
+    "dash.byStatus": "Sebaran status",
+    "dash.byCategory": "Kategori terbanyak",
+    "dash.targets": "Lowongan target",
+    "dash.recheck": "Perlu dicek ulang",
+    "dash.freshness": "Kesegaran data",
+    "dash.numbersNote":
+      "Semua angka dihitung langsung dari data {n} perusahaan. Tidak ada angka contoh.",
+    "dash.statusHeading": "Status {n} perusahaan",
+    "dash.topCategories": "{n} kategori teratas",
+    "dash.targetCompanies": "Perusahaan dengan lowongan target",
+    "dash.whenChecked": "Kapan dicek",
+    "dash.andMore": "dan {n} lainnya di data perusahaan.",
+    "dash.metaTitle": "Dasbor - Karir",
+    "detail.portalBtn": "Buka portal karir",
+    "detail.share": "Bagikan",
+    "detail.copied": "Tautan disalin.",
+    "detail.related": "Perusahaan sejenis",
+    "detail.report": "Laporkan tautan mati",
+    "detail.reportSent": "Laporan terkirim. Terima kasih.",
+    "detail.checked": "Terakhir dicek",
+    "detail.location": "Lokasi",
+    "detail.positions": "Posisi tercatat",
+    "detail.notes": "Catatan pengecekan",
+    "detail.category": "Kategori",
+    "common.back": "Kembali",
+    "common.loading": "Memuat…",
+    "common.notListed": "Tidak tercantum",
+  },
+  en: {
+    "nav.home": "Home",
+    "nav.search": "Search",
+    "nav.dashboard": "Dashboard",
+    "nav.about": "About",
+    "nav.method": "Method",
+    "nav.faq": "FAQ",
+    "nav.changelog": "Changelog",
+    "nav.admin": "Admin",
+    "header.count": "{n} companies",
+    "footer.note":
+      "Data checked directly in the browser on 4 and 5 November 2026. Openings can change after the check date, always verify on the official portal.",
+    "footer.repo": "GitHub repo",
+    "footer.method": "Checking method",
+    "footer.about": "About Karir",
+    "footer.faq": "FAQ",
+    "footer.changelog": "Changelog",
+    "home.title": "Openings that were checked, not copied.",
+    "home.lede":
+      "406 official career channels of Indonesian companies. Type your location and the role you want, and we show the most relevant channels.",
+    "home.intro":
+      "{n} official career channels of Indonesian companies. Every channel was opened and read directly in the browser on 4 and 5 November 2026, not from search snippets.",
+    "home.domisili": "Location",
+    "home.domisiliPh": "e.g. Bogor, Depok, Cibinong",
+    "home.posisi": "Role",
+    "home.posisiPerusahaan": "Role or company",
+    "home.posisiPh": "e.g. Warehouse Helper, Cleaning Service",
+    "home.searchBtn": "Search jobs",
+    "home.try": "Try:",
+    "home.targets": "Verified target openings",
+    "home.targetsHeading": "{n} companies have the opening you are looking for",
+    "home.howTitle": "How it works",
+    "home.how1": "Type the location and role you are looking for.",
+    "home.how2": "See the best matching career channels, ranked by score.",
+    "home.how3": "Open the official portal and apply through the official channel.",
+    "home.applyStep":
+      "Open the official career channel and apply from there. This app does not store your data.",
+    "home.stats": "Data in numbers",
+    "home.dataState": "The state of the data",
+    "home.checked": "companies checked",
+    "home.hasTarget": "have a target opening",
+    "home.targetMismatch": "opening exists, requirements do not match",
+    "home.freshNote":
+      "{a} companies checked on 4 November 2026, {b} companies checked on 5 November 2026. Openings can change after the check date.",
+    "home.viewDashboard": "View dashboard",
+    "search.title": "Search career channels",
+    "search.lede": "Filter 406 companies by location, role, category, and status.",
+    "search.category": "Category",
+    "search.allCategories": "All categories",
+    "search.status": "Status",
+    "search.allStatuses": "All statuses",
+    "search.order": "Sort by",
+    "search.orderRelevance": "Most relevant",
+    "search.orderName": "Name A-Z",
+    "search.submit": "Search",
+    "search.reset": "Reset",
+    "search.results": "results",
+    "search.sortNote":
+      "Results are ranked by role match, location match, and verification status.",
+    "search.domisiliPh": "E.g. Depok",
+    "search.posisiPh": "E.g. Administration or PGN",
+    "search.showing": "Showing {a} of {b} companies",
+    "search.noPositionMatch":
+      "No role match in our data. The results below are channel recommendations based on location and status, not verified openings.",
+    "search.loadMore": "Show more",
+    "search.resultsLabel": "Search results",
+    "search.metaTitle": "Search - Karir",
+    "dash.title": "Data dashboard",
+    "dash.lede": "An overview of 406 career channels checked on 4 and 5 November 2026.",
+    "dash.byStatus": "Status breakdown",
+    "dash.byCategory": "Top categories",
+    "dash.targets": "Target openings",
+    "dash.recheck": "Needs re-checking",
+    "dash.freshness": "Data freshness",
+    "dash.numbersNote":
+      "Every number is computed directly from the data of {n} companies. No sample numbers.",
+    "dash.statusHeading": "Status of {n} companies",
+    "dash.topCategories": "Top {n} categories",
+    "dash.targetCompanies": "Companies with a target opening",
+    "dash.whenChecked": "When checked",
+    "dash.andMore": "and {n} more in the company data.",
+    "dash.metaTitle": "Dashboard - Karir",
+    "detail.portalBtn": "Open career portal",
+    "detail.share": "Share",
+    "detail.copied": "Link copied.",
+    "detail.related": "Similar companies",
+    "detail.report": "Report a dead link",
+    "detail.reportSent": "Report sent. Thank you.",
+    "detail.checked": "Last checked",
+    "detail.location": "Location",
+    "detail.positions": "Recorded roles",
+    "detail.notes": "Check notes",
+    "detail.category": "Category",
+    "common.back": "Back",
+    "common.loading": "Loading…",
+    "common.notListed": "Not listed",
+  },
+};
+
+export async function getLocale() {
+  try {
+    const store = await cookies();
+    const v = store.get("karir-locale")?.value;
+    return v === "en" ? "en" : "id";
+  } catch {
+    return "id";
+  }
+}
+
+export function t(locale, key, vars) {
+  const lang = DICT[locale] || DICT.id;
+  let s = lang[key] ?? DICT.id[key] ?? key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      s = s.replace(`{${k}}`, String(v));
+    }
+  }
+  return s;
+}

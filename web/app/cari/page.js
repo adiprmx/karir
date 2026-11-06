@@ -2,10 +2,14 @@ import Link from "next/link";
 import { getCompanies, getCategories, STATUS_ORDER } from "@/lib/companies";
 import { runSearch, tokenize } from "@/lib/search";
 import { ResultsTable } from "@/app/components";
+import { getLocale, t } from "@/lib/i18n";
 
 const PAGE_SIZE = 20;
 
-export const metadata = { title: "Cari — Karir" };
+export async function generateMetadata() {
+  const locale = await getLocale();
+  return { title: t(locale, "search.metaTitle") };
+}
 
 export default async function Cari({ searchParams }) {
   const params = await searchParams;
@@ -19,8 +23,11 @@ export default async function Cari({ searchParams }) {
     Math.min(400, parseInt(params.limit || String(PAGE_SIZE), 10) || PAGE_SIZE),
   );
 
-  const companies = await getCompanies();
-  const categories = await getCategories();
+  const [companies, categories, locale] = await Promise.all([
+    getCompanies(),
+    getCategories(),
+    getLocale(),
+  ]);
   const { results, mode, query } = runSearch(companies, {
     domisili,
     posisi,
@@ -46,39 +53,36 @@ export default async function Cari({ searchParams }) {
   return (
     <div className="wrap">
       <div className="page-head">
-        <h1>Cari perusahaan</h1>
-        <p className="lede">
-          Hasil diurutkan berdasarkan kecocokan posisi, domisili, dan status
-          verifikasi.
-        </p>
+        <h1>{t(locale, "search.title")}</h1>
+        <p className="lede">{t(locale, "search.sortNote")}</p>
       </div>
 
       <div className="cari-grid">
         <form className="filters" method="get" action="/cari">
           <fieldset>
-            <legend>Domisili</legend>
+            <legend>{t(locale, "home.domisili")}</legend>
             <input
               name="domisili"
               type="text"
               defaultValue={domisili}
-              placeholder="Misal: Depok"
+              placeholder={t(locale, "search.domisiliPh")}
               autoComplete="off"
             />
           </fieldset>
           <fieldset>
-            <legend>Posisi atau perusahaan</legend>
+            <legend>{t(locale, "home.posisiPerusahaan")}</legend>
             <input
               name="posisi"
               type="text"
               defaultValue={posisi}
-              placeholder="Misal: Administrasi atau PGN"
+              placeholder={t(locale, "search.posisiPh")}
               autoComplete="off"
             />
           </fieldset>
           <fieldset>
-            <legend>Kategori</legend>
+            <legend>{t(locale, "search.category")}</legend>
             <select name="kategori" defaultValue={kategori}>
-              <option value="">Semua kategori</option>
+              <option value="">{t(locale, "search.allCategories")}</option>
               {categories.map((k) => (
                 <option key={k} value={k}>
                   {k}
@@ -87,9 +91,9 @@ export default async function Cari({ searchParams }) {
             </select>
           </fieldset>
           <fieldset>
-            <legend>Status</legend>
+            <legend>{t(locale, "search.status")}</legend>
             <select name="status" defaultValue={status}>
-              <option value="">Semua status</option>
+              <option value="">{t(locale, "search.allStatuses")}</option>
               {STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -98,38 +102,41 @@ export default async function Cari({ searchParams }) {
             </select>
           </fieldset>
           <fieldset>
-            <legend>Urutan</legend>
+            <legend>{t(locale, "search.order")}</legend>
             <select name="urutan" defaultValue={urutan}>
-              <option value="relevansi">Paling relevan</option>
-              <option value="nama">Nama A–Z</option>
+              <option value="relevansi">
+                {t(locale, "search.orderRelevance")}
+              </option>
+              <option value="nama">{t(locale, "search.orderName")}</option>
             </select>
           </fieldset>
           <div className="filter-actions">
             <button className="btn" type="submit">
-              Cari
+              {t(locale, "search.submit")}
             </button>
             <Link className="btn ghost" href="/cari">
-              Atur ulang
+              {t(locale, "search.reset")}
             </Link>
           </div>
         </form>
 
-        <section aria-label="Hasil pencarian">
+        <section aria-label={t(locale, "search.resultsLabel")}>
           <p className="result-count">
-            Menampilkan {shown.length} dari {results.length} perusahaan
+            {t(locale, "search.showing", {
+              a: shown.length,
+              b: results.length,
+            })}
           </p>
           {queryHasPosisi && mode !== "perusahaan" && !anyPositionMatch && (
             <p className="search-note">
-              Tidak ada kecocokan posisi di data kami. Hasil di bawah ini
-              adalah rekomendasi kanal berdasarkan domisili dan status, bukan
-              lowongan yang terverifikasi.
+              {t(locale, "search.noPositionMatch")}
             </p>
           )}
           <ResultsTable entries={shown} queryHasPosisi={queryHasPosisi} />
           {results.length > limit && (
             <div className="load-more">
               <Link className="btn ghost" href={`/cari?${moreQs.toString()}`}>
-                Tampilkan lebih banyak
+                {t(locale, "search.loadMore")}
               </Link>
             </div>
           )}

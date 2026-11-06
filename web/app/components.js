@@ -14,20 +14,16 @@ export function safeLink(url) {
   return typeof url === "string" && /^https?:\/\//.test(url);
 }
 
-/* Baris hasil di tabel Cari. */
+/* Baris hasil di tabel Cari. Nama perusahaan membuka halaman detail;
+ * tautan portal ada di halaman detail dan di tombol terpisah. */
 export function CompanyRow({ entry }) {
   const c = entry.company;
-  const name = safeLink(c.link_karir) ? (
-    <a href={c.link_karir} target="_blank" rel="noopener noreferrer">
-      {c.perusahaan}
-    </a>
-  ) : (
-    c.perusahaan
-  );
   return (
     <tr>
       <td data-label="Perusahaan">
-        <span className="cell-name">{name}</span>
+        <span className="cell-name">
+          <Link href={`/perusahaan/${c.no}`}>{c.perusahaan}</Link>
+        </span>
         <span className="cell-sub">{c.kategori}</span>
         <span className="chip-row">
           {(entry.reasons || []).map((r) => (

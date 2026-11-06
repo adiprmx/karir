@@ -1,11 +1,32 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import "./globals.css";
 import { getStats } from "@/lib/companies";
+import { getLocale, t } from "@/lib/i18n";
+import LocaleToggle from "./locale-toggle";
 
 export const metadata = {
-  title: "Karir — Cari Kanal Lowongan Kerja",
+  metadataBase: new URL("https://karir-adiprmx.vercel.app"),
+  title: {
+    default: "Karir — Cari Kanal Lowongan Kerja",
+    template: "%s — Karir",
+  },
   description:
     "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser. Cari berdasarkan domisili dan posisi.",
+  openGraph: {
+    type: "website",
+    locale: "id_ID",
+    siteName: "Karir",
+    title: "Karir — Cari Kanal Lowongan Kerja",
+    description:
+      "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser. Cari berdasarkan domisili dan posisi.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Karir — Cari Kanal Lowongan Kerja",
+    description:
+      "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser.",
+  },
 };
 
 export const viewport = {
@@ -13,10 +34,10 @@ export const viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }) {
-  const stats = getStats();
+export default async function RootLayout({ children }) {
+  const [stats, locale] = await Promise.all([getStats(), getLocale()]);
   return (
-    <html lang="id">
+    <html lang={locale}>
       <body>
         <header className="site-header">
           <div className="wrap header-inner">
@@ -24,35 +45,45 @@ export default function RootLayout({ children }) {
               KARIR
             </Link>
             <nav className="site-nav" aria-label="Navigasi utama">
-              <Link href="/">Beranda</Link>
-              <Link href="/cari">Cari</Link>
-              <Link href="/dasbor">Dasbor</Link>
+              <Link href="/">{t(locale, "nav.home")}</Link>
+              <Link href="/cari">{t(locale, "nav.search")}</Link>
+              <Link href="/dasbor">{t(locale, "nav.dashboard")}</Link>
+              <Link href="/tentang">{t(locale, "nav.about")}</Link>
+              <Link href="/faq">{t(locale, "nav.faq")}</Link>
             </nav>
-            <span className="header-count">{stats.total} perusahaan</span>
+            <span className="header-count">
+              {t(locale, "header.count", { n: stats.total })}
+            </span>
+            <Suspense
+              fallback={
+                <span className="locale-toggle" aria-hidden="true">
+                  ID / EN
+                </span>
+              }
+            >
+              <LocaleToggle locale={locale} />
+            </Suspense>
           </div>
         </header>
         <main>{children}</main>
         <footer className="site-footer">
           <div className="wrap footer-inner">
+            <p>{t(locale, "footer.note")}</p>
             <p>
-              Data dicek langsung di browser pada 4 dan 5 November 2026. Lowongan
-              bisa berubah setelah tanggal cek — selalu periksa portal resminya.
-            </p>
-            <p>
+              <Link href="/tentang">{t(locale, "footer.about")}</Link>
+              {" · "}
+              <Link href="/metode">{t(locale, "footer.method")}</Link>
+              {" · "}
+              <Link href="/faq">{t(locale, "footer.faq")}</Link>
+              {" · "}
+              <Link href="/changelog">{t(locale, "footer.changelog")}</Link>
+              {" · "}
               <a
                 href="https://github.com/adiprmx/karir"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Repo GitHub
-              </a>
-              {" · "}
-              <a
-                href="https://github.com/adiprmx/karir/blob/main/docs/METODE.md"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Metode pengecekan
+                {t(locale, "footer.repo")}
               </a>
             </p>
           </div>

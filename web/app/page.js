@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { getCompanies, getTargets, getStats } from "@/lib/companies";
+import { getLocale, t } from "@/lib/i18n";
 
 export default async function Beranda() {
-  const stats = await getStats();
-  const targets = await getTargets();
+  const [stats, targets, locale] = await Promise.all([
+    getStats(),
+    getTargets(),
+    getLocale(),
+  ]);
   const byDate = stats.byDate;
   const d4 = byDate["2026-11-04"] || 0;
   const d5 = byDate["2026-11-05"] || 0;
@@ -11,33 +15,33 @@ export default async function Beranda() {
   return (
     <div className="wrap">
       <section className="hero">
-        <h1>Lowongan yang dicek, bukan yang dicopas.</h1>
+        <h1>{t(locale, "home.title")}</h1>
         <p className="lede">
-          {stats.total} kanal karir resmi perusahaan Indonesia. Setiap kanal
-          dibuka dan dibaca langsung di browser pada 4 dan 5 November 2026 —
-          bukan dari cuplikan pencarian.
+          {t(locale, "home.intro", { n: stats.total })}
         </p>
         <form className="searchbar" method="get" action="/cari">
-          <label htmlFor="hero-domisili">Domisili</label>
+          <label htmlFor="hero-domisili">{t(locale, "home.domisili")}</label>
           <input
             id="hero-domisili"
             name="domisili"
             type="text"
-            placeholder="Domisili, misal Depok"
+            placeholder={t(locale, "home.domisiliPh")}
             autoComplete="off"
           />
-          <label htmlFor="hero-posisi">Posisi atau perusahaan</label>
+          <label htmlFor="hero-posisi">
+            {t(locale, "home.posisiPerusahaan")}
+          </label>
           <input
             id="hero-posisi"
             name="posisi"
             type="text"
-            placeholder="Posisi, misal Administrasi"
+            placeholder={t(locale, "home.posisiPh")}
             autoComplete="off"
           />
-          <button type="submit">Cari</button>
+          <button type="submit">{t(locale, "home.searchBtn")}</button>
         </form>
         <div className="examples">
-          <span>Coba:</span>
+          <span>{t(locale, "home.try")}</span>
           <a className="example-chip" href="/cari?domisili=Depok&posisi=Administrasi">
             Depok + Administrasi
           </a>
@@ -53,9 +57,11 @@ export default async function Beranda() {
       <div className="split">
         <section aria-labelledby="target-title">
           <p className="section-label" id="target-title">
-            Lowongan target yang terverifikasi
+            {t(locale, "home.targets")}
           </p>
-          <h2>{targets.length} perusahaan punya lowongan yang kamu cari</h2>
+          <h2>
+            {t(locale, "home.targetsHeading", { n: targets.length })}
+          </h2>
           <ol className="index-list">
             {targets.map((c, i) => (
               <li key={c.no}>
@@ -69,7 +75,7 @@ export default async function Beranda() {
                   <span className="index-meta">
                     {(c.posisi || "").split(",")[0]}
                     {" · "}
-                    {c.lokasi || "Tidak tercantum"}
+                    {c.lokasi || t(locale, "common.notListed")}
                   </span>
                   <span className="index-arrow" aria-hidden="true">
                     →
@@ -80,59 +86,56 @@ export default async function Beranda() {
           </ol>
         </section>
 
-        <aside aria-label="Angka">
-          <p className="section-label">Angka</p>
-          <h2>Keadaan data</h2>
+        <aside aria-label={t(locale, "home.stats")}>
+          <p className="section-label">{t(locale, "home.stats")}</p>
+          <h2>{t(locale, "home.dataState")}</h2>
           <div className="stat-stack">
             <div className="stat-row">
               <span className="stat-num num">{stats.total}</span>
-              <span className="stat-label">perusahaan dicek</span>
+              <span className="stat-label">{t(locale, "home.checked")}</span>
             </div>
             <div className="stat-row">
               <span className="stat-num ok num">
                 {stats.byStatus["Ada lowongan target"]}
               </span>
-              <span className="stat-label">ada lowongan target</span>
+              <span className="stat-label">{t(locale, "home.hasTarget")}</span>
             </div>
             <div className="stat-row">
               <span className="stat-num warn num">
                 {stats.byStatus["Ada lowongan target (tidak cocok)"]}
               </span>
-              <span className="stat-label">lowongan ada, syarat tidak cocok</span>
+              <span className="stat-label">
+                {t(locale, "home.targetMismatch")}
+              </span>
             </div>
             <div className="stat-row">
               <span className="stat-num num">
                 {stats.byStatus["Tidak dapat diverifikasi"]}
               </span>
-              <span className="stat-label">tidak dapat diverifikasi</span>
+              <span className="stat-label">Tidak dapat diverifikasi</span>
             </div>
             <div className="stat-row">
               <span className="stat-num num">
                 {stats.byStatus["Portal tidak bisa dibuka"]}
               </span>
-              <span className="stat-label">portal tidak bisa dibuka</span>
+              <span className="stat-label">Portal tidak bisa dibuka</span>
             </div>
           </div>
           <p className="fresh-note">
-            {d4} perusahaan dicek 4 November 2026, {d5} perusahaan dicek 5
-            November 2026. Lowongan bisa berubah setelah tanggal cek.
+            {t(locale, "home.freshNote", { a: d4, b: d5 })}
           </p>
           <div style={{ marginTop: 32 }}>
-            <p className="section-label">Cara kerja</p>
+            <p className="section-label">{t(locale, "home.howTitle")}</p>
             <ol className="steps">
-              <li>Ketik domisili dan posisi yang kamu mau.</li>
-              <li>
-                Hasil diurutkan berdasarkan kecocokan posisi, domisili, dan
-                status verifikasi.
-              </li>
-              <li>
-                Buka kanal karir resminya dan lamar dari sana — aplikasi ini
-                tidak menyimpan data kamu.
-              </li>
+              <li>{t(locale, "home.how1")}</li>
+              <li>{t(locale, "home.how2")}</li>
+              <li>{t(locale, "home.applyStep")}</li>
             </ol>
           </div>
           <p style={{ marginTop: 32 }}>
-            <Link href="/dasbor">Lihat dasbor →</Link>
+            <Link href="/dasbor">
+              {t(locale, "home.viewDashboard")} →
+            </Link>
           </p>
         </aside>
       </div>

@@ -1,8 +1,12 @@
 import { getCompanies, getStats, STATUS_ORDER, getTargets } from "@/lib/companies";
 import { countBy, topEntries } from "@/lib/search";
 import { safeLink } from "@/app/components";
+import { getLocale, t } from "@/lib/i18n";
 
-export const metadata = { title: "Dasbor — Karir" };
+export async function generateMetadata() {
+  const locale = await getLocale();
+  return { title: t(locale, "dash.metaTitle") };
+}
 
 function BarRow({ label, count, total, tone }) {
   const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
@@ -27,7 +31,7 @@ function shortText(text, max) {
   return text.length > max ? text.slice(0, max).trimEnd() + "…" : text;
 }
 
-function RecheckList({ title, count, list }) {
+function RecheckList({ title, count, list, locale }) {
   return (
     <section className="dash-section" aria-label={title}>
       <p className="section-label">
@@ -48,7 +52,7 @@ function RecheckList({ title, count, list }) {
         ))}
         {list.length > 10 && (
           <li className="plain-more">
-            dan {list.length - 10} lainnya di data perusahaan.
+            {t(locale, "dash.andMore", { n: list.length - 10 })}
           </li>
         )}
       </ul>
@@ -57,10 +61,13 @@ function RecheckList({ title, count, list }) {
 }
 
 export default async function Dasbor() {
-  const companies = await getCompanies();
-  const stats = await getStats();
+  const [companies, stats, targets, locale] = await Promise.all([
+    getCompanies(),
+    getStats(),
+    getTargets(),
+    getLocale(),
+  ]);
   const total = stats.total;
-  const targets = await getTargets();
   const topCats = topEntries(countBy(companies, "kategori"), 8);
   const portalDead = companies
     .filter((c) => c.status === "Portal tidak bisa dibuka")
@@ -74,18 +81,17 @@ export default async function Dasbor() {
   return (
     <div className="wrap">
       <div className="page-head">
-        <h1>Dasbor</h1>
+        <h1>{t(locale, "dash.title")}</h1>
         <p className="lede">
-          Semua angka dihitung langsung dari data {total} perusahaan. Tidak ada
-          angka contoh.
+          {t(locale, "dash.numbersNote", { n: total })}
         </p>
       </div>
 
       <div className="dash-grid">
         <div>
-          <section className="dash-section" aria-label="Sebaran status">
-            <p className="section-label">Sebaran status</p>
-            <h2>Status {total} perusahaan</h2>
+          <section className="dash-section" aria-label={t(locale, "dash.byStatus")}>
+            <p className="section-label">{t(locale, "dash.byStatus")}</p>
+            <h2>{t(locale, "dash.statusHeading", { n: total })}</h2>
             {STATUS_ORDER.map((s) => (
               <BarRow
                 key={s}
@@ -103,9 +109,11 @@ export default async function Dasbor() {
             ))}
           </section>
 
-          <section className="dash-section" aria-label="Kategori terbanyak">
-            <p className="section-label">Kategori terbanyak</p>
-            <h2>8 kategori teratas</h2>
+          <section className="dash-section" aria-label={t(locale, "dash.byCategory")}>
+            <p className="section-label">{t(locale, "dash.byCategory")}</p>
+            <h2>
+              {t(locale, "dash.topCategories", { n: topCats.length })}
+            </h2>
             {topCats.map((e) => (
               <BarRow key={e.label} label={e.label} count={e.count} total={total} />
             ))}
@@ -113,11 +121,11 @@ export default async function Dasbor() {
         </div>
 
         <div>
-          <section className="dash-section" aria-label="Lowongan target">
+          <section className="dash-section" aria-label={t(locale, "dash.targets")}>
             <p className="section-label">
-              Lowongan target ({targets.length})
+              {t(locale, "dash.targets")} ({targets.length})
             </p>
-            <h2>Perusahaan dengan lowongan target</h2>
+            <h2>{t(locale, "dash.targetCompanies")}</h2>
             <ul className="recheck-list">
               {targets.map((c) => (
                 <li key={c.no}>
@@ -134,7 +142,7 @@ export default async function Dasbor() {
                   )}
                   <span className="cell-sub">
                     {shortText(
-                      `${c.posisi || ""} · ${c.lokasi || "Tidak tercantum"}`,
+                      `${c.posisi || ""} · ${c.lokasi || t(locale, "common.notListed")}`,
                       140,
                     )}
                   </span>
@@ -147,19 +155,20 @@ export default async function Dasbor() {
             title="Portal tidak bisa dibuka"
             count={portalDead.length}
             list={portalDead}
+            locale={locale}
           />
           <RecheckList
             title="Tidak dapat diverifikasi"
             count={unverified.length}
             list={unverified}
+            locale={locale}
           />
 
-          <section className="dash-section" aria-label="Kesegaran data">
-            <p className="section-label">Kesegaran data</p>
-            <h2>Kapan dicek</h2>
+          <section className="dash-section" aria-label={t(locale, "dash.freshness")}>
+            <p className="section-label">{t(locale, "dash.freshness")}</p>
+            <h2>{t(locale, "dash.whenChecked")}</h2>
             <p className="fresh-note" style={{ marginTop: 0 }}>
-              {d4} perusahaan dicek 4 November 2026, {d5} perusahaan dicek 5
-              November 2026. Lowongan bisa berubah setelah tanggal cek.
+              {t(locale, "home.freshNote", { a: d4, b: d5 })}
             </p>
           </section>
         </div>

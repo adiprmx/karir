@@ -16,6 +16,23 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache = null;
 let cacheAt = 0;
 
+/* Semua fetch ke Firestore WAJIB punya timeout: kalau rute egress mati,
+ * request tidak boleh menggantung selamanya — gagal cepat (10 dtk) supaya
+ * halaman menampilkan error yang jelas, bukan hang. */
+async function fetchJson(url, timeoutMs = 10_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      next: { revalidate: 300 },
+    });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function revalidateCompanies() {
   cache = null;
   cacheAt = 0;
@@ -46,7 +63,7 @@ export async function getCompanies() {
     const url =
       `${BASE}/companies?pageSize=300&key=${API_KEY}` +
       (token ? `&pageToken=${token}` : "");
-    const res = await fetch(url, { next: { revalidate: 300 } });
+    const res = await fetchJson(url);
     if (!res.ok) {
       throw new Error(`Firestore list gagal: HTTP ${res.status}`);
     }
@@ -58,6 +75,45 @@ export async function getCompanies() {
   cache = list;
   cacheAt = now;
   return list;
+}
+
+export async function getCompanyById(no) {
+  const id = Number(no);
+  if (!id) return null;
+  const res = await fetchJson(`${BASE}/companies/${id}?key=${API_KEY}`);
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`Firestore get gagal: HTTP ${res.status}`);
+  }
+  const d = await res.json();
+  return docToCompany(d);
+}
+
+/* Perusahaan sejenis: kategori sama, bukan dirinya sendiri, yang punya
+ * lowongan target dulu, lalu nama A-Z. */
+export async function getRelated(company, n = 6) {
+  const companies = await getCompanies();
+  const same = companies.filter(
+    (c) => c.kategori === company.kategori && c.no !== company.no,
+  );
+  const rank = (c) => (c.status === "Ada lowongan target" ? 0 : 1);
+  same.sort(
+    (a, b) =>
+      rank(a) - rank(b) || a.perusahaan.localeCompare(b.perusahaan, "id"),
+  );
+  return same.slice(0, n);
+}
+
+/* Jumlah baris yang tanggal ceknya sudah lebih dari 30 hari. */
+export async function getStaleCount() {
+  const companies = await getCompanies();
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  return companies.filter((c) => {
+    if (!c.tanggal_cek) return true;
+    const t = Date.parse(c.tanggal_cek + "T00:00:00Z");
+    return Number.isNaN(t) || now - t > 30 * DAY;
+  }).length;
 }
 
 export async function getTargets() {

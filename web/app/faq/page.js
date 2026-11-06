@@ -1,0 +1,87 @@
+import Link from "next/link";
+import { getLocale } from "@/lib/i18n";
+
+export const metadata = {
+  title: "Pertanyaan umum",
+  description:
+    "Jawaban singkat untuk hal yang paling sering ditanyakan soal Karir: cara pakai, gratis atau tidak, cara data dicek, dan cara berkontribusi.",
+};
+
+const COPY = {
+  title: { id: "Pertanyaan umum", en: "Frequently asked questions" },
+  lede: {
+    id: "Jawaban singkat untuk hal yang paling sering ditanyakan.",
+    en: "Short answers to the most common questions.",
+  },
+};
+
+const QA = [
+  {
+    q: "Bagaimana cara memakai Karir?",
+    a: "Ketik domisili dan posisi di Beranda, lalu lihat kanal yang paling cocok. Buka portal resminya dari hasil, baca syarat lengkapnya, dan lamar lewat kanal resmi.",
+  },
+  {
+    q: "Apakah Karir gratis?",
+    a: "Ya, gratis. Tidak ada biaya, tidak ada akun, dan tidak ada data pribadi yang diminta.",
+  },
+  {
+    q: "Kenapa tidak ada akun?",
+    a: "Supaya kamu bisa langsung pakai tanpa daftar dan tanpa menyerahkan data pribadi. Semua data perusahaan bisa dibaca siapa pun.",
+  },
+  {
+    q: "Bagaimana data dicek?",
+    a: "Tiap perusahaan dibuka kanal karir resminya langsung di browser, lewat navigasi situs resminya. Tanggal cek dicatat di tiap baris data. Tidak ada lamaran, akun, atau login yang dilakukan saat pengecekan.",
+  },
+  {
+    q: "Kenapa ada lowongan yang tidak terverifikasi?",
+    a: "Kadang kanal karir tidak ditemukan lewat navigasi resmi, halamannya terbuka tapi kosong, atau daftar lowongannya cuma terlihat setelah login. Karena tidak ada login yang dilakukan, statusnya ditulis tidak dapat diverifikasi. Itu bukan berarti perusahaan itu tidak membuka lowongan.",
+  },
+  {
+    q: "Bagaimana melaporkan tautan mati?",
+    a: "Buka halaman perusahaannya, lalu pakai tombol Laporkan tautan mati. Kamu juga bisa buka issue di repo GitHub Karir.",
+  },
+  {
+    q: "Bagaimana berkontribusi?",
+    a: "Usulkan perusahaan baru atau koreksi lewat issue dan pull request di repo GitHub. Sertakan tautan halaman resmi yang kamu buka langsung sebagai bukti.",
+  },
+  {
+    q: "Kenapa skor bukan janji lowongan?",
+    a: "Skor cuma mengurutkan kanal berdasarkan kecocokan data dengan yang kamu cari. Lowongan bisa berubah setelah tanggal cek, jadi selalu periksa portal resminya.",
+  },
+];
+
+export default async function Faq() {
+  const locale = await getLocale();
+
+  return (
+    <div className="wrap">
+      <div className="page-head">
+        <h1>{COPY.title[locale]}</h1>
+        <p className="lede">{COPY.lede[locale]}</p>
+      </div>
+
+      {QA.map((item, i) => (
+        <section
+          className="dash-section"
+          aria-label={item.q}
+          key={item.q}
+        >
+          <p className="section-label">
+            {String(i + 1).padStart(2, "0")}
+          </p>
+          <h2>{item.q}</h2>
+          <p>
+            {item.a}
+            {i === 3 && (
+              <>
+                {" "}
+                Cara lengkapnya ada di halaman{" "}
+                <Link href="/metode">Metode</Link>.
+              </>
+            )}
+          </p>
+        </section>
+      ))}
+    </div>
+  );
+}
