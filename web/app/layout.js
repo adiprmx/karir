@@ -50,9 +50,38 @@ export default async function RootLayout({ children }) {
       <body>
         <header className="site-header">
           <div className="wrap header-inner">
-            <Link href="/" className="wordmark">
-              KARIR
-            </Link>
+            <div className="header-row">
+              <Link href="/" className="wordmark">
+                KARIR
+              </Link>
+              <Link
+                href="/mulai"
+                className="btn"
+                style={{
+                  background: "#fff",
+                  color: "#0a0a0a",
+                  borderColor: "#fff",
+                  padding: "8px 14px",
+                  minHeight: 36,
+                  fontSize: 14,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {t(locale, "nav.mulai")}
+              </Link>
+              <Suspense
+                fallback={
+                  <span className="locale-toggle" aria-hidden="true">
+                    ID / EN
+                  </span>
+                }
+              >
+                <LocaleToggle locale={locale} />
+              </Suspense>
+              <span className="header-count">
+                {total ? t(locale, "header.count", { n: total }) : null}
+              </span>
+            </div>
             <nav className="site-nav" aria-label="Navigasi utama">
               <Link href="/">{t(locale, "nav.home")}</Link>
               <Link href="/cari">{t(locale, "nav.search")}</Link>
@@ -61,33 +90,6 @@ export default async function RootLayout({ children }) {
               <Link href="/tentang">{t(locale, "nav.about")}</Link>
               <Link href="/faq">{t(locale, "nav.faq")}</Link>
             </nav>
-            <Link
-              href="/mulai"
-              className="btn"
-              style={{
-                background: "#fff",
-                color: "#0a0a0a",
-                borderColor: "#fff",
-                padding: "8px 14px",
-                minHeight: 36,
-                fontSize: 14,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {t(locale, "nav.mulai")}
-            </Link>
-            <span className="header-count">
-              {total ? t(locale, "header.count", { n: total }) : null}
-            </span>
-            <Suspense
-              fallback={
-                <span className="locale-toggle" aria-hidden="true">
-                  ID / EN
-                </span>
-              }
-            >
-              <LocaleToggle locale={locale} />
-            </Suspense>
           </div>
         </header>
         <main>{children}</main>

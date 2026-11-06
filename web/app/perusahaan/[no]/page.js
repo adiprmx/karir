@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getCompanyById, getRelated } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import { StatusBadge, safeLink } from "@/app/components";
-import { StatusDot, CategoryIcon } from "@/app/visual";
+import { StatusDot, CategoryIcon, Reveal } from "@/app/visual";
 import { TrackerControl } from "@/app/tracker";
 import { DetailActions } from "./actions";
 import { CompanyLogo } from "@/lib/logos";
@@ -69,7 +69,8 @@ export default async function CompanyDetail({ params }) {
 
   return (
     <div className="wrap">
-      <div className="page-head anim-fade-up">
+      <Reveal>
+      <div className="page-head">
         <p className="section-note">
           <Link href="/">{t(locale, "nav.home")}</Link>
           {" / "}
@@ -93,9 +94,11 @@ export default async function CompanyDetail({ params }) {
           <StatusBadge status={company.status} />
         </p>
       </div>
+      </Reveal>
 
       {hasLink ? (
-        <p className="anim-fade-up-1">
+        <Reveal delay={80}>
+        <p>
           <a
             className="btn"
             href={company.link_karir}
@@ -105,13 +108,17 @@ export default async function CompanyDetail({ params }) {
             {t(locale, "detail.portalBtn")}
           </a>
         </p>
+        </Reveal>
       ) : (
-        <p className="notice anim-fade-up-1">
+        <Reveal delay={80}>
+        <p className="notice">
           Perusahaan ini tidak punya tautan karir yang ditemukan
         </p>
+        </Reveal>
       )}
 
-      <div className="anim-fade-up-1">
+      <Reveal delay={120}>
+      <div>
         <DetailActions
           company={company}
           url={url}
@@ -124,12 +131,16 @@ export default async function CompanyDetail({ params }) {
           }}
         />
       </div>
+      </Reveal>
 
-      <div className="anim-fade-up-1">
+      <Reveal delay={160}>
+      <div>
         <TrackerControl company={company} />
       </div>
+      </Reveal>
 
-      <section className="dash-section anim-fade-up-2" aria-label="Detail perusahaan">
+      <Reveal delay={200}>
+      <section className="dash-section" aria-label="Detail perusahaan">
         <p className="section-label">{t(locale, "detail.location")}</p>
         <p>{company.lokasi || "Tidak tercantum"}</p>
         <p className="section-label">{t(locale, "detail.positions")}</p>
@@ -139,7 +150,9 @@ export default async function CompanyDetail({ params }) {
         <p className="section-label">{t(locale, "detail.checked")}</p>
         <p>{company.tanggal_cek || "Belum ada tanggal cek."}</p>
       </section>
+      </Reveal>
 
+      <Reveal delay={240}>
       <section className="dash-section">
         <h2>{t(locale, "detail.related")}</h2>
         {related.length > 0 ? (
@@ -168,6 +181,7 @@ export default async function CompanyDetail({ params }) {
           </p>
         )}
       </section>
+      </Reveal>
 
       <p>
         <Link href="/cari">← {t(locale, "common.back")}</Link>

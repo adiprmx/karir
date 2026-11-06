@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCompanies, getCategories, STATUS_ORDER } from "@/lib/companies";
 import { runSearch, tokenize } from "@/lib/search";
 import { ResultsTable } from "@/app/components";
+import { Reveal } from "@/app/visual";
 import RecentSaver from "@/app/cari/recent-saver";
 import { getLocale, t } from "@/lib/i18n";
 
@@ -57,10 +58,12 @@ export default async function Cari({ searchParams }) {
   return (
     <div className="wrap">
       <RecentSaver domisili={domisili} posisi={posisi} />
-      <div className="page-head">
-        <h1>{t(locale, "search.title")}</h1>
-        <p className="lede">{t(locale, "search.sortNote")}</p>
-      </div>
+      <Reveal>
+        <div className="page-head">
+          <h1>{t(locale, "search.title")}</h1>
+          <p className="lede">{t(locale, "search.sortNote")}</p>
+        </div>
+      </Reveal>
 
       <div className="cari-grid">
         <form className="filters" method="get" action="/cari">
@@ -125,10 +128,8 @@ export default async function Cari({ searchParams }) {
           </div>
         </form>
 
-        <section
-          aria-label={t(locale, "search.resultsLabel")}
-          className="anim-fade-up"
-        >
+        <section aria-label={t(locale, "search.resultsLabel")}>
+          <Reveal delay={80}>
           <p className="result-count">
             {t(locale, "search.showing", {
               a: shown.length,
@@ -148,6 +149,7 @@ export default async function Cari({ searchParams }) {
               </Link>
             </div>
           )}
+          </Reveal>
         </section>
       </div>
     </div>

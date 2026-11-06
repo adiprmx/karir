@@ -17,6 +17,7 @@
   --warn: #d97706;
   --warn-bg: #fef3c7;
   --warn-ink: #92400e;
+  --chip: #f4f4f5;
   --radius: 10px;
 }
 
@@ -51,6 +52,7 @@ select:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   position: sticky;
   top: 0;
   z-index: 20;
+  border-bottom: 1px solid #262626;
 }
 .header-inner {
   display: flex;
@@ -385,16 +387,25 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
 
 /* ---------- Responsif ---------- */
 @media (max-width: 860px) {
-  .site-header { position: static; }
   .header-inner {
     flex-wrap: wrap;
-    gap: 4px 16px;
+    gap: 8px 16px;
     padding-top: 10px;
     padding-bottom: 10px;
     min-height: 0;
   }
-  .site-nav { flex-wrap: wrap; margin-left: 0; }
-  .site-nav a { padding: 8px 10px; }
+  /* Baris kedua: navigasi satu baris yang bisa di-scroll, tanpa lipat. */
+  .site-nav {
+    order: 2;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    white-space: nowrap;
+    margin-left: 0;
+    scrollbar-width: none;
+  }
+  .site-nav::-webkit-scrollbar { display: none; }
+  .site-nav a { padding: 8px 10px; flex-shrink: 0; }
   .locale-toggle { margin-left: auto; }
   .split { grid-template-columns: 1fr; gap: 40px; }
   .cari-grid { grid-template-columns: 1fr; gap: 24px; }
@@ -450,6 +461,12 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
 }
 .faq-item[open ] summary::before { content: "–"; }
 .faq-item p { margin: 0 0 14px 24px; color: var(--muted); }
+/* Isi FAQ masuk pelan saat dibuka. */
+@keyframes faqIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.faq-item[open ] p { animation: faqIn 200ms ease-out; }
 
 /* ---------- Gerak & visual (v2.2) ---------- */
 @keyframes fadeUp {
@@ -520,8 +537,20 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
   transition: width 700ms ease-out;
 }
 
+/* Muncul saat scroll (komponen Reveal): sekali, lalu diam. */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+.reveal.revealed { opacity: 1; transform: translateY(0); }
+
 /* Pencarian langsung. */
 .live-search { position: relative; z-index: 40; }
+@keyframes liveDrop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .live-results {
   position: absolute;
   left: 0;
@@ -533,6 +562,7 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
   z-index: 30;
   overflow: hidden;
+  animation: liveDrop 160ms ease-out;
 }
 .live-item {
   display: flex;
@@ -560,13 +590,15 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
 }
 
 /* Micro-interaksi. */
-.index-list a { transition: background 150ms ease, transform 150ms ease; }
-.index-list a:hover { background: var(--chip); transform: translateX(4px); }
+.index-list a { transition: background 150ms ease; }
+.index-list a:hover { background: var(--chip); }
+.index-arrow { transition: transform 150ms ease; }
+.index-list a:hover .index-arrow { transform: translateX(4px); }
 .example-chip { transition: transform 150ms ease, border-color 150ms ease; }
 .example-chip:hover { transform: translateY(-2px); border-color: var(--ink); }
 .btn { transition: transform 120ms ease, background 120ms ease; }
 .btn:hover { transform: translateY(-1px); }
-.btn:active { transform: scale(0.97); }
+.btn:active { transform: scale(0.98); }
 
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-up, .anim-fade-up-1, .anim-fade-up-2 { animation: none; }
@@ -575,6 +607,11 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
   .skeleton { animation: none; }
   .bar-fill { transition: none; }
   .index-list a:hover, .example-chip:hover, .btn:hover { transform: none; }
+  .index-list a:hover .index-arrow { transform: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .live-results { animation: none; }
+  .faq-item[open ] p { animation: none; }
+  .photo-strip img { transition: none; }
 }
 
 /* Baris hasil aktif (navigasi keyboard di pencarian langsung). */
@@ -651,22 +688,68 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
 .fresh-stamp .ok { color: var(--ok); }
 .fresh-stamp .warn { color: var(--warn); }
 
-/* Strip foto asli: tiga foto grayscale, tiga kolom jadi satu di HP. */
+/* Strip foto asli: tiga foto grayscale, tiga kolom jadi satu di HP.
+ * Zoom halus saat hover atau fokus, dipotong sudut figure. */
 .photo-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
-.photo-strip figure { margin: 0; }
+.photo-strip figure { margin: 0; overflow: hidden; border-radius: var(--radius); }
 .photo-strip img {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
-  border-radius: var(--radius);
   filter: grayscale(1);
+  transition: transform 300ms ease;
 }
+.photo-strip figure:hover img,
+.photo-strip figure:focus-within img { transform: scale(1.03); }
 .photo-strip figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+/* Filter kelompok di daftar target: chip pil, yang aktif hitam. */
+.target-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.filter-chip {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 40px;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.filter-chip:hover { border-color: var(--ink); }
+.filter-chip[aria-pressed="true"] {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+/* Baris target dua baris: nomor + logo + nama + panah, lalu posisi dan
+ * lokasi di bawah nama (membungkus, tanpa potongan). */
+.index-list.target-rows a { display: block; padding: 12px 4px; }
+.target-row-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.target-row-main .index-name { flex: 1; }
+.target-logo-slot {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.target-row-sub {
+  display: block;
+  margin-top: 2px;
+  padding-left: 80px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 
 /* Fitur: baris bertautan seperti indeks, bukan kartu dan bukan grid. */
 .feature-rows { list-style: none; margin: 0; padding: 0; }

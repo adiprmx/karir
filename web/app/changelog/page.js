@@ -16,6 +16,17 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.7.0",
+    date: "6 November 2026",
+    points: [
+      "Halaman hidup: tiap seksi muncul pelan saat di-scroll, angka naik saat terlihat, tombol dan baris merespons sentuhan.",
+      "Header menempel saat scroll, navigasi HP jadi satu baris yang bisa digeser, tidak melipat lagi.",
+      "Seksi Angka data yang menduplikasi trust strip dihapus.",
+      "Daftar 22 target bisa disaring per kelompok (Gudang, Cleaning, Produksi, Toko, Lainnya) dan barisnya dua baris supaya tidak terpotong di HP.",
+      "Foto membesar sedikit saat disentuh.",
+    ],
+  },
+  {
     version: "2.6.0",
     date: "6 November 2026",
     points: [

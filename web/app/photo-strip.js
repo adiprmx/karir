@@ -30,10 +30,7 @@ export default function PhotoStrip({ title, captions }) {
   const visible = PHOTOS.filter((p) => !failed[p.key]);
   if (visible.length === 0) return null;
   return (
-    <section
-      className="landing-section anim-fade-in-2"
-      aria-labelledby="photos-title"
-    >
+    <section className="landing-section" aria-labelledby="photos-title">
       <h2 id="photos-title">{title}</h2>
       <div className="photo-strip">
         {visible.map((p) => (

@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTracker, TRACKER_STATUSES } from "@/app/tracker";
 import { loadRecentSearch } from "@/app/recent";
-import { CountUp } from "@/app/visual";
+import { CountUp, Reveal } from "@/app/visual";
 
 const ONBOARDING_KEY = "karir-onboarding";
 const VISITED_METODE_KEY = "karir-visited-metode";
@@ -147,8 +147,9 @@ export default function DashboardPersonal() {
       : "/cari";
 
   return (
-    <section className="dash-section anim-fade-up" aria-label="Dasbor saya">
+    <section className="dash-section" aria-label="Dasbor saya">
       <p className="section-label">Dasbor saya</p>
+      <Reveal>
       {onboarding ? (
         <>
           <h2>
@@ -179,9 +180,11 @@ export default function DashboardPersonal() {
           </p>
         </>
       )}
+      </Reveal>
 
       {recent &&
         [recent.domisili, recent.posisi].filter((v) => v).length > 0 && (
+          <Reveal delay={80}>
           <p style={{ marginTop: 16 }}>
             Terakhir kamu cari:{" "}
             <Link
@@ -199,8 +202,10 @@ export default function DashboardPersonal() {
                 .join(" + ")}
             </Link>
           </p>
+          </Reveal>
         )}
 
+      <Reveal delay={120}>
       <div style={{ marginTop: 32 }}>
         <p className="section-label">Langkah berikutnya</p>
         {allDone ? (
@@ -232,7 +237,9 @@ export default function DashboardPersonal() {
           </ol>
         )}
       </div>
+      </Reveal>
 
+      <Reveal delay={160}>
       <div style={{ marginTop: 32 }}>
         <p className="section-label">Lamaran saya</p>
         {total === 0 ? (
@@ -255,12 +262,15 @@ export default function DashboardPersonal() {
           <Link href="/pengaturan">Pengaturan</Link>
         </p>
       </div>
+      </Reveal>
 
       {latestCheck && (
+        <Reveal delay={200}>
         <p style={{ marginTop: 16 }}>
           Terakhir dicek ulang {latestCheck} ·{" "}
           <Link href="/#berubah">Lihat yang berubah</Link>
         </p>
+        </Reveal>
       )}
     </section>
   );

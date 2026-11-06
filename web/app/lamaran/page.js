@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TRACKER_STATUSES, useTracker } from "@/app/tracker";
-import { CountUp } from "@/app/visual";
+import { CountUp, Reveal } from "@/app/visual";
 
 const STATUS_BADGE = {
   Dipanggil: "badge ok",
@@ -72,15 +72,18 @@ export default function Lamaran() {
 
   return (
     <div className="wrap">
-      <div className="page-head anim-fade-up">
+      <Reveal>
+      <div className="page-head">
         <h1>Lamaran Saya</h1>
         <p className="lede">
           Perusahaan yang kamu tandai dan lamar. Semua tersimpan di browser
           ini saja.
         </p>
       </div>
+      </Reveal>
 
-      <section className="dash-section anim-fade-up-1" aria-label="Ringkasan">
+      <Reveal delay={80}>
+      <section className="dash-section" aria-label="Ringkasan">
         <div className="stat-stack">
           <div className="stat-row">
             <span className="stat-num num">
@@ -106,7 +109,9 @@ export default function Lamaran() {
           ))}
         </div>
       </section>
+      </Reveal>
 
+      <Reveal delay={120}>
       <section aria-label="Daftar lamaran">
         {!loaded || loadState === "loading" ? (
           <div className="live-loading">
@@ -205,6 +210,7 @@ export default function Lamaran() {
           </ul>
         )}
       </section>
+      </Reveal>
     </div>
   );
 }

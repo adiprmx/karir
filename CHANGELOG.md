@@ -2,6 +2,16 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.7.0 — 2026-11-06
+
+Rombakan tampilan: halaman bergerak dan tersusun.
+
+- Tiap seksi muncul pelan saat di-scroll (IntersectionObserver, hormati prefers-reduced-motion); angka CountUp baru naik saat terlihat.
+- Header menempel saat scroll; navigasi HP jadi satu baris horizontal yang bisa digeser (header tetap hitam sesuai design lock).
+- Seksi Angka data dihapus — angkanya sudah ada di trust strip.
+- Daftar 22 target: chip filter per kelompok (Gudang 7, Toko 5, Cleaning 4, Produksi 3, Lainnya 3) dan baris dua baris (nama di atas, posisi dan lokasi di bawah) supaya tidak terpotong di HP.
+- Foto membesar sedikit saat disentuh; tombol dan baris merespons sentuhan; dropdown pencarian dan FAQ membuka dengan animasi.
+
 ## 2.6.0 — 2026-11-06
 
 Karir Hidup: data dicek ulang sendiri tiap hari, dan tampilannya memakai visual asli.

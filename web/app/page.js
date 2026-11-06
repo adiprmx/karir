@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { getCompanies, getTargets, getStats } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
-import { CategoryIcon, CountUp, LiveSearch, PrintButton, StatusDot } from "@/app/visual";
+import { CountUp, LiveSearch, PrintButton, Reveal, StatusDot } from "@/app/visual";
 import RecentChip from "@/app/recent-chip";
 import PhotoStrip from "@/app/photo-strip";
 import ChangesFeed from "@/app/changes-feed";
-import { CompanyLogo } from "@/lib/logos";
+import TargetFilter from "@/app/target-filter";
 
 /* Data di-render saat request, bukan saat build, supaya build tidak
  * gagal bila Firestore tidak bisa dijangkau dari mesin build. */
@@ -18,8 +18,6 @@ export default async function Beranda() {
     getLocale(),
   ]);
   const byDate = stats.byDate;
-  const d4 = byDate["2026-11-04"] || 0;
-  const d5 = byDate["2026-11-05"] || 0;
   const dateKeys = Object.keys(byDate).sort();
   const latestDate = dateKeys.length ? dateKeys[dateKeys.length - 1] : null;
   const latestMs = latestDate ? Date.parse(`${latestDate}T00:00:00Z`) : 0;
@@ -74,8 +72,9 @@ export default async function Beranda() {
         </div>
       </section>
 
+      <Reveal>
       <section
-        className="trust-strip anim-fade-in-1"
+        className="trust-strip"
         aria-label={t(locale, "landing.trustLabel")}
       >
         <div className="trust-item">
@@ -113,9 +112,11 @@ export default async function Beranda() {
           </span>
         </div>
       </section>
+      </Reveal>
 
       {latestDate ? (
-        <p className="fresh-stamp anim-fade-in-1">
+        <Reveal>
+        <p className="fresh-stamp">
           {t(locale, "landing.freshLabel", { date: latestLabel })}
           {" · "}
           <span className={fresh ? "ok" : "warn"}>
@@ -124,10 +125,12 @@ export default async function Beranda() {
               : t(locale, "landing.freshStale")}
           </span>
         </p>
+        </Reveal>
       ) : null}
 
+      <Reveal>
       <section
-        className="landing-section problem-outcome anim-fade-in-2"
+        className="landing-section problem-outcome"
         aria-labelledby="problem-title"
       >
         <h2 id="problem-title">{t(locale, "landing.problemTitle")}</h2>
@@ -153,7 +156,9 @@ export default async function Beranda() {
           </div>
         </div>
       </section>
+      </Reveal>
 
+      <Reveal>
       <PhotoStrip
         title={t(locale, "landing.photosTitle")}
         captions={{
@@ -162,9 +167,11 @@ export default async function Beranda() {
           cleaning: t(locale, "landing.photoCleaning"),
         }}
       />
+      </Reveal>
 
+      <Reveal delay={100}>
       <section
-        className="landing-section anim-fade-in-2"
+        className="landing-section"
         aria-labelledby="how-title"
       >
         <h2 id="how-title">{t(locale, "home.howTitle")}</h2>
@@ -174,9 +181,11 @@ export default async function Beranda() {
           <li>{t(locale, "landing.step3")}</li>
         </ol>
       </section>
+      </Reveal>
 
+      <Reveal>
       <section
-        className="landing-section anim-fade-in"
+        className="landing-section"
         aria-labelledby="features-title"
       >
         <h2 id="features-title">{t(locale, "landing.featuresTitle")}</h2>
@@ -222,9 +231,11 @@ export default async function Beranda() {
           </li>
         </ul>
       </section>
+      </Reveal>
 
+      <Reveal>
       <section
-        className="landing-section anim-fade-in"
+        className="landing-section"
         aria-labelledby="target-title"
       >
         <p className="section-label" id="target-title">
@@ -232,30 +243,10 @@ export default async function Beranda() {
           {t(locale, "home.targets")}
         </p>
         <h2>{t(locale, "home.targetsHeading", { n: targets.length })}</h2>
-        <ol className="index-list">
-          {targets.map((c, i) => (
-            <li key={c.no}>
-              <Link href={`/perusahaan/${c.no}`}>
-                <span className="index-no">{String(i + 1).padStart(2, "0")}</span>
-                <CompanyLogo
-                  linkKarir={c.link_karir}
-                  name={c.perusahaan}
-                  size={32}
-                />
-                <CategoryIcon kategori={c.kategori} />
-                <span className="index-name">{c.perusahaan}</span>
-                <span className="index-meta">
-                  {(c.posisi || "").split(",")[0]}
-                  {" · "}
-                  {c.lokasi || t(locale, "common.notListed")}
-                </span>
-                <span className="index-arrow" aria-hidden="true">
-                  →
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ol>
+        <TargetFilter
+          targets={targets}
+          notListed={t(locale, "common.notListed")}
+        />
         <div className="target-actions">
           <a
             className="btn ghost"
@@ -276,64 +267,22 @@ export default async function Beranda() {
           />
         </div>
       </section>
+      </Reveal>
 
+      <Reveal>
       <section
-        className="landing-section anim-fade-in"
+        className="landing-section"
         id="berubah"
         aria-labelledby="changes-title"
       >
         <h2 id="changes-title">{t(locale, "landing.changesTitle")}</h2>
         <ChangesFeed />
       </section>
+      </Reveal>
 
+      <Reveal>
       <section
-        className="landing-section anim-fade-in"
-        aria-labelledby="stats-title"
-      >
-        <h2 id="stats-title">{t(locale, "home.stats")}</h2>
-        <div className="stat-stack">
-          <div className="stat-row">
-            <span className="stat-num num">
-              <CountUp value={stats.total} />
-            </span>
-            <span className="stat-label">{t(locale, "home.checked")}</span>
-          </div>
-          <div className="stat-row">
-            <span className="stat-num ok num">
-              <CountUp value={stats.byStatus["Ada lowongan target"]} />
-            </span>
-            <span className="stat-label">{t(locale, "home.hasTarget")}</span>
-          </div>
-          <div className="stat-row">
-            <span className="stat-num warn num">
-              <CountUp
-                value={stats.byStatus["Ada lowongan target (tidak cocok)"]}
-              />
-            </span>
-            <span className="stat-label">
-              {t(locale, "home.targetMismatch")}
-            </span>
-          </div>
-          <div className="stat-row">
-            <span className="stat-num num">
-              <CountUp value={stats.byStatus["Tidak dapat diverifikasi"]} />
-            </span>
-            <span className="stat-label">Tidak dapat diverifikasi</span>
-          </div>
-          <div className="stat-row">
-            <span className="stat-num num">
-              <CountUp value={stats.byStatus["Portal tidak bisa dibuka"]} />
-            </span>
-            <span className="stat-label">Portal tidak bisa dibuka</span>
-          </div>
-        </div>
-        <p className="fresh-note">
-          {t(locale, "home.freshNote", { a: d4, b: d5 })}
-        </p>
-      </section>
-
-      <section
-        className="landing-section faq-teaser anim-fade-in no-print"
+        className="landing-section faq-teaser no-print"
         aria-labelledby="faq-title"
       >
         <h2 id="faq-title">{t(locale, "landing.faqTitle")}</h2>
@@ -353,8 +302,10 @@ export default async function Beranda() {
           <Link href="/faq">{t(locale, "landing.faqMore")} →</Link>
         </p>
       </section>
+      </Reveal>
 
-      <section className="cta-close anim-fade-in no-print">
+      <Reveal>
+      <section className="cta-close no-print">
         <p className="cta-text">{t(locale, "landing.ctaText")}</p>
         <div className="cta-actions">
           <Link className="btn" href="/mulai">
@@ -365,6 +316,7 @@ export default async function Beranda() {
           </Link>
         </div>
       </section>
+      </Reveal>
     </div>
   );
 }

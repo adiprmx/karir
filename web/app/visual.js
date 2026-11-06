@@ -14,10 +14,74 @@ function reducedMotion() {
   );
 }
 
-/* Angka yang naik dari 0 ke nilai asli. */
-export function CountUp({ value }) {
-  const [n, setN] = useState(0);
+/* Muncul saat masuk viewport: sekali saja, lalu observer dilepas.
+ * Pengguna prefers-reduced-motion langsung melihat isinya. */
+export function Reveal({ children, delay = 0, className }) {
+  const ref = useRef(null);
+  const [shown, setShown] = useState(false);
   useEffect(() => {
+    if (reducedMotion()) {
+      setShown(true);
+      return;
+    }
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setShown(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setShown(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const cls = `reveal${shown ? " revealed" : ""}${
+    className ? ` ${className}` : ""
+  }`;
+  const style = delay ? { transitionDelay: `${delay}ms` } : undefined;
+  return (
+    <div ref={ref} className={cls} style={style}>
+      {children}
+    </div>
+  );
+}
+
+/* Angka yang naik dari 0 ke nilai asli, baru jalan saat terlihat. */
+export function CountUp({ value }) {
+  const ref = useRef(null);
+  const [n, setN] = useState(0);
+  const [started, setStarted] = useState(false);
+  useEffect(() => {
+    if (reducedMotion()) {
+      setN(value);
+      setStarted(true);
+      return;
+    }
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setStarted(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setStarted(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [value]);
+  useEffect(() => {
+    if (!started) return;
     if (reducedMotion()) {
       setN(value);
       return;
@@ -32,8 +96,12 @@ export function CountUp({ value }) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [value]);
-  return <span className="num">{n}</span>;
+  }, [value, started]);
+  return (
+    <span ref={ref} className="num">
+      {n}
+    </span>
+  );
 }
 
 /* Titik status: hijau berdenyut untuk lowongan target, kuning untuk
