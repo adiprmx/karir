@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.2.0 — 2026-11-06
+
+Aplikasi web dibuat lebih hidup, lebih visual, dan lebih rapi.
+
+- Pencarian langsung di Beranda: ketik domisili dan posisi, 6 hasil teratas muncul di bawah kolom tanpa pindah halaman (Enter tetap mengirim ke halaman Cari).
+- Angka naik saat halaman muncul, grafik donat dan bar tumbuh, titik hijau berdenyut untuk lowongan target, ikon garis per kategori, dan satu animasi masuk yang halus per seksi. Semua gerak mati bila pengguna memakai prefers-reduced-motion.
+- Dasbor dirombak jadi visual: donat sebaran status, bar animasi kategori terbanyak, angka besar yang naik, dan daftar lowongan target dengan ikon dan titik status.
+- Copy dipangkas: lede Beranda jadi satu kalimat, langkah cara kerja masing-masing maksimal 6 kata, Tentang memakai angka besar, Metode memakai legenda status dengan jumlah asli, FAQ jadi lipat-buka.
+- Detail perusahaan dan Cari: ikon kategori dan titik status di tiap baris, animasi masuk, kerapian blok di HP.
+- Ketahanan build: halaman yang butuh data di-render saat request, bukan saat build, dan hitungan di header tidak menggagalkan build bila Firestore tidak bisa dijangkau dari mesin build. PRODUCT.md diperbarui karena masih menyebut aplikasi statis.
+
 ## 2.1.0 — 2026-11-06
 
 Aplikasi web dilengkapi jadi produk yang lebih serius.

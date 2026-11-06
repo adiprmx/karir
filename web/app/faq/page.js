@@ -30,11 +30,11 @@ const QA = [
   },
   {
     q: "Bagaimana data dicek?",
-    a: "Tiap perusahaan dibuka kanal karir resminya langsung di browser, lewat navigasi situs resminya. Tanggal cek dicatat di tiap baris data. Tidak ada lamaran, akun, atau login yang dilakukan saat pengecekan.",
+    a: "Tiap perusahaan dibuka kanal karir resminya langsung di browser. Tanggal cek dicatat di tiap baris data.",
   },
   {
     q: "Kenapa ada lowongan yang tidak terverifikasi?",
-    a: "Kadang kanal karir tidak ditemukan lewat navigasi resmi, halamannya terbuka tapi kosong, atau daftar lowongannya cuma terlihat setelah login. Karena tidak ada login yang dilakukan, statusnya ditulis tidak dapat diverifikasi. Itu bukan berarti perusahaan itu tidak membuka lowongan.",
+    a: "Kadang kanalnya tidak ditemukan, halamannya kosong, atau lowongannya cuma terlihat setelah login. Itu bukan berarti perusahaan itu tidak membuka lowongan.",
   },
   {
     q: "Bagaimana melaporkan tautan mati?",
@@ -55,33 +55,28 @@ export default async function Faq() {
 
   return (
     <div className="wrap">
-      <div className="page-head">
+      <div className="page-head anim-fade-up">
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
       </div>
 
-      {QA.map((item, i) => (
-        <section
-          className="dash-section"
-          aria-label={item.q}
-          key={item.q}
-        >
-          <p className="section-label">
-            {String(i + 1).padStart(2, "0")}
-          </p>
-          <h2>{item.q}</h2>
-          <p>
-            {item.a}
-            {i === 3 && (
-              <>
-                {" "}
-                Cara lengkapnya ada di halaman{" "}
-                <Link href="/metode">Metode</Link>.
-              </>
-            )}
-          </p>
-        </section>
-      ))}
+      <section className="dash-section anim-fade-up" aria-label="Tanya jawab">
+        {QA.map((item) => (
+          <details key={item.q}>
+            <summary>{item.q}</summary>
+            <p>
+              {item.a}
+              {item.q === "Bagaimana data dicek?" && (
+                <>
+                  {" "}
+                  Cara lengkapnya ada di halaman{" "}
+                  <Link href="/metode">Metode</Link>.
+                </>
+              )}
+            </p>
+          </details>
+        ))}
+      </section>
     </div>
   );
 }

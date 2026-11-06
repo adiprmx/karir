@@ -35,7 +35,16 @@ export const viewport = {
 };
 
 export default async function RootLayout({ children }) {
-  const [stats, locale] = await Promise.all([getStats(), getLocale()]);
+  const locale = await getLocale();
+  // Hitungan header tidak boleh menggagalkan build: kalau Firestore tidak
+  // bisa dijangkau saat build, header tampil tanpa angka (halaman yang
+  // butuh data di-render saat request, bukan saat build).
+  let total = null;
+  try {
+    total = (await getStats()).total;
+  } catch {
+    total = null;
+  }
   return (
     <html lang={locale}>
       <body>
@@ -52,7 +61,7 @@ export default async function RootLayout({ children }) {
               <Link href="/faq">{t(locale, "nav.faq")}</Link>
             </nav>
             <span className="header-count">
-              {t(locale, "header.count", { n: stats.total })}
+              {total ? t(locale, "header.count", { n: total }) : null}
             </span>
             <Suspense
               fallback={

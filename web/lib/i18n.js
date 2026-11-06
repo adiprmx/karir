@@ -25,8 +25,7 @@ const DICT = {
     "home.title": "Lowongan yang dicek, bukan yang dicopas.",
     "home.lede":
       "406 kanal karir resmi perusahaan Indonesia. Ketik domisili dan posisi yang kamu mau, kami tunjukkan kanal yang paling relevan.",
-    "home.intro":
-      "{n} kanal karir resmi perusahaan Indonesia. Setiap kanal dibuka dan dibaca langsung di browser pada 4 dan 5 November 2026, bukan dari cuplikan pencarian.",
+    "home.intro": "{n} kanal karir resmi, dicek langsung di browser.",
     "home.domisili": "Domisili",
     "home.domisiliPh": "mis. Bogor, Depok, Cibinong",
     "home.posisi": "Posisi",
@@ -37,11 +36,10 @@ const DICT = {
     "home.targets": "Lowongan target terverifikasi",
     "home.targetsHeading": "{n} perusahaan punya lowongan yang kamu cari",
     "home.howTitle": "Cara kerja",
-    "home.how1": "Ketik domisili dan posisi yang kamu cari.",
-    "home.how2": "Lihat kanal karir yang paling cocok, diurutkan berdasarkan skor.",
+    "home.how1": "Ketik domisili dan posisimu.",
+    "home.how2": "Pilih kanal yang paling cocok.",
     "home.how3": "Buka portal resminya dan lamar lewat kanal resmi.",
-    "home.applyStep":
-      "Buka kanal karir resminya dan lamar dari sana. Aplikasi ini tidak menyimpan data kamu.",
+    "home.applyStep": "Buka portalnya dan lamar.",
     "home.stats": "Angka data",
     "home.dataState": "Keadaan data",
     "home.checked": "perusahaan dicek",
@@ -77,6 +75,7 @@ const DICT = {
     "dash.byStatus": "Sebaran status",
     "dash.byCategory": "Kategori terbanyak",
     "dash.targets": "Lowongan target",
+    "dash.totalLabel": "Perusahaan dicek",
     "dash.recheck": "Perlu dicek ulang",
     "dash.freshness": "Kesegaran data",
     "dash.numbersNote":
@@ -122,8 +121,7 @@ const DICT = {
     "home.title": "Openings that were checked, not copied.",
     "home.lede":
       "406 official career channels of Indonesian companies. Type your location and the role you want, and we show the most relevant channels.",
-    "home.intro":
-      "{n} official career channels of Indonesian companies. Every channel was opened and read directly in the browser on 4 and 5 November 2026, not from search snippets.",
+    "home.intro": "{n} official career channels, checked directly in the browser.",
     "home.domisili": "Location",
     "home.domisiliPh": "e.g. Bogor, Depok, Cibinong",
     "home.posisi": "Role",
@@ -134,11 +132,10 @@ const DICT = {
     "home.targets": "Verified target openings",
     "home.targetsHeading": "{n} companies have the opening you are looking for",
     "home.howTitle": "How it works",
-    "home.how1": "Type the location and role you are looking for.",
-    "home.how2": "See the best matching career channels, ranked by score.",
+    "home.how1": "Type your location and role.",
+    "home.how2": "Pick the best matching channel.",
     "home.how3": "Open the official portal and apply through the official channel.",
-    "home.applyStep":
-      "Open the official career channel and apply from there. This app does not store your data.",
+    "home.applyStep": "Open the portal and apply.",
     "home.stats": "Data in numbers",
     "home.dataState": "The state of the data",
     "home.checked": "companies checked",
@@ -174,6 +171,7 @@ const DICT = {
     "dash.byStatus": "Status breakdown",
     "dash.byCategory": "Top categories",
     "dash.targets": "Target openings",
+    "dash.totalLabel": "Companies checked",
     "dash.recheck": "Needs re-checking",
     "dash.freshness": "Data freshness",
     "dash.numbersNote":

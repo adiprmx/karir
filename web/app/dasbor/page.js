@@ -1,34 +1,59 @@
+import Link from "next/link";
 import { getCompanies, getStats, STATUS_ORDER, getTargets } from "@/lib/companies";
 import { countBy, topEntries } from "@/lib/search";
-import { safeLink } from "@/app/components";
 import { getLocale, t } from "@/lib/i18n";
+import {
+  CountUp,
+  DonutChart,
+  AnimatedBar,
+  StatusDot,
+  CategoryIcon,
+} from "@/app/visual";
+
+/* Data di-render saat request, bukan saat build. */
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata() {
   const locale = await getLocale();
   return { title: t(locale, "dash.metaTitle") };
 }
 
-function BarRow({ label, count, total, tone }) {
-  const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
-  return (
-    <div className="bar-row">
-      <div className="bar-head">
-        <span className="bar-label">{label}</span>
-        <span className="bar-count num">{count}</span>
-      </div>
-      <div className="bar-track">
-        <span
-          className={tone ? `bar-fill ${tone}` : "bar-fill"}
-          style={{ display: "block", width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
+/* Warna donat per status: hijau target, kuning tidak cocok, sisanya
+ * abu dari gelap ke terang sesuai urutan STATUS_ORDER. */
+const STATUS_COLORS = {
+  "Ada lowongan target": "#16a34a",
+  "Ada lowongan target (tidak cocok)": "#d97706",
+  "Tidak ada lowongan target": "#0a0a0a",
+  "Tidak ada lowongan terlihat": "#52525b",
+  "Tidak dapat diverifikasi": "#a1a1aa",
+  "Portal tidak bisa dibuka": "#d4d4d8",
+};
 
 function shortText(text, max) {
   if (!text) return "";
   return text.length > max ? text.slice(0, max).trimEnd() + "…" : text;
+}
+
+/* Satu baris daftar perusahaan: titik status, ikon kategori, nama yang
+ * menaut ke halaman detail, lalu posisi dan lokasi sebagai sub-baris. */
+function CompanyListRow({ company, locale }) {
+  return (
+    <li>
+      <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <StatusDot status={company.status} />
+        <CategoryIcon kategori={company.kategori} />
+        <span style={{ minWidth: 0 }}>
+          <Link href={`/perusahaan/${company.no}`}>{company.perusahaan}</Link>
+          <span className="cell-sub">
+            {shortText(
+              `${company.posisi || ""} · ${company.lokasi || t(locale, "common.notListed")}`,
+              140,
+            )}
+          </span>
+        </span>
+      </span>
+    </li>
+  );
 }
 
 function RecheckList({ title, count, list, locale }) {
@@ -40,15 +65,7 @@ function RecheckList({ title, count, list, locale }) {
       <h2>{title}</h2>
       <ul className="recheck-list">
         {list.slice(0, 10).map((c) => (
-          <li key={c.no}>
-            {safeLink(c.link_karir) ? (
-              <a href={c.link_karir} target="_blank" rel="noopener noreferrer">
-                {c.perusahaan}
-              </a>
-            ) : (
-              c.perusahaan
-            )}
-          </li>
+          <CompanyListRow key={c.no} company={c} locale={locale} />
         ))}
         {list.length > 10 && (
           <li className="plain-more">
@@ -69,6 +86,7 @@ export default async function Dasbor() {
   ]);
   const total = stats.total;
   const topCats = topEntries(countBy(companies, "kategori"), 8);
+  const topCatMax = topCats.length > 0 ? topCats[0].count : 0;
   const portalDead = companies
     .filter((c) => c.status === "Portal tidak bisa dibuka")
     .sort((a, b) => a.perusahaan.localeCompare(b.perusahaan, "id"));
@@ -77,50 +95,59 @@ export default async function Dasbor() {
     .sort((a, b) => a.perusahaan.localeCompare(b.perusahaan, "id"));
   const d4 = stats.byDate["2026-11-04"] || 0;
   const d5 = stats.byDate["2026-11-05"] || 0;
+  const segments = STATUS_ORDER.map((s) => ({
+    label: s,
+    value: stats.byStatus[s] || 0,
+    color: STATUS_COLORS[s],
+  }));
 
   return (
     <div className="wrap">
-      <div className="page-head">
+      <div className="page-head anim-fade-up">
         <h1>{t(locale, "dash.title")}</h1>
-        <p className="lede">
-          {t(locale, "dash.numbersNote", { n: total })}
-        </p>
+      </div>
+
+      <div className="stat-stack anim-fade-up" aria-label={t(locale, "home.stats")}>
+        <div className="stat-row">
+          <span className="stat-num">
+            <CountUp value={total} />
+          </span>
+          <span className="stat-label">{t(locale, "dash.totalLabel")}</span>
+        </div>
+        <div className="stat-row">
+          <span className="stat-num ok">
+            <CountUp value={targets.length} />
+          </span>
+          <span className="stat-label">{t(locale, "dash.targets")}</span>
+        </div>
       </div>
 
       <div className="dash-grid">
-        <div>
+        <div className="anim-fade-up-1">
           <section className="dash-section" aria-label={t(locale, "dash.byStatus")}>
             <p className="section-label">{t(locale, "dash.byStatus")}</p>
             <h2>{t(locale, "dash.statusHeading", { n: total })}</h2>
-            {STATUS_ORDER.map((s) => (
-              <BarRow
-                key={s}
-                label={s}
-                count={stats.byStatus[s] || 0}
-                total={total}
-                tone={
-                  s === "Ada lowongan target"
-                    ? "ok"
-                    : s === "Ada lowongan target (tidak cocok)"
-                      ? "warn"
-                      : undefined
-                }
-              />
-            ))}
+            <DonutChart segments={segments} total={total} centerLabel="perusahaan" />
           </section>
 
           <section className="dash-section" aria-label={t(locale, "dash.byCategory")}>
             <p className="section-label">{t(locale, "dash.byCategory")}</p>
-            <h2>
-              {t(locale, "dash.topCategories", { n: topCats.length })}
-            </h2>
+            <h2>{t(locale, "dash.topCategories", { n: topCats.length })}</h2>
             {topCats.map((e) => (
-              <BarRow key={e.label} label={e.label} count={e.count} total={total} />
+              <div className="bar-row" key={e.label}>
+                <div className="bar-head">
+                  <span className="bar-label">{e.label}</span>
+                  <span className="bar-count num">
+                    <CountUp value={e.count} />
+                  </span>
+                </div>
+                <AnimatedBar value={e.count} max={topCatMax} color="#0a0a0a" />
+              </div>
             ))}
           </section>
         </div>
 
-        <div>
+        <div className="anim-fade-up-2">
           <section className="dash-section" aria-label={t(locale, "dash.targets")}>
             <p className="section-label">
               {t(locale, "dash.targets")} ({targets.length})
@@ -128,25 +155,7 @@ export default async function Dasbor() {
             <h2>{t(locale, "dash.targetCompanies")}</h2>
             <ul className="recheck-list">
               {targets.map((c) => (
-                <li key={c.no}>
-                  {safeLink(c.link_karir) ? (
-                    <a
-                      href={c.link_karir}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {c.perusahaan}
-                    </a>
-                  ) : (
-                    c.perusahaan
-                  )}
-                  <span className="cell-sub">
-                    {shortText(
-                      `${c.posisi || ""} · ${c.lokasi || t(locale, "common.notListed")}`,
-                      140,
-                    )}
-                  </span>
-                </li>
+                <CompanyListRow key={c.no} company={c} locale={locale} />
               ))}
             </ul>
           </section>

@@ -1,5 +1,9 @@
 import { getCompanies } from "@/lib/companies";
 
+/* Di-render saat request, bukan saat build, supaya build tidak gagal
+ * bila Firestore tidak bisa dijangkau dari mesin build. */
+export const dynamic = "force-dynamic";
+
 const BASE = "https://karir-adiprmx.vercel.app";
 
 const STATIC_PAGES = [

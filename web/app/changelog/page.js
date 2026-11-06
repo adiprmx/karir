@@ -16,6 +16,28 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.2.0",
+    date: "6 November 2026",
+    points: [
+      "Pencarian langsung di Beranda: ketik domisili dan posisi, 6 hasil teratas muncul di bawah kolom tanpa pindah halaman.",
+      "Angka naik saat halaman muncul, grafik donat dan bar tumbuh, titik hijau berdenyut untuk lowongan target, ikon garis per kategori.",
+      "Dasbor dirombak jadi visual: donat sebaran status, bar animasi kategori terbanyak, angka besar yang naik.",
+      "Copy dipangkas: lede Beranda satu kalimat, FAQ jadi lipat-buka, Metode memakai legenda status dengan jumlah asli.",
+      "Build tidak lagi gagal bila Firestore tidak bisa dijangkau dari mesin build: halaman data di-render saat request.",
+    ],
+  },
+  {
+    version: "2.1.0",
+    date: "6 November 2026",
+    points: [
+      "Halaman detail tiap perusahaan: portal, lokasi, posisi, perusahaan sejenis, bagikan, dan laporkan tautan mati.",
+      "Halaman Tentang, Metode, FAQ, dan Riwayat perubahan, plus sitemap dan robots.",
+      "Antarmuka dua bahasa (Indonesia dan Inggris) lewat saklar di header.",
+      "Admin panel ditulis ulang: tabel, kualitas data, impor dan ekspor CSV, jejak perubahan, dan cek tautan.",
+      "Aturan Firestore diperketat: validasi 9 kolom, laporan tautan mati, dan jejak audit.",
+    ],
+  },
+  {
     version: "2.0.0",
     date: "6 November 2026",
     points: [

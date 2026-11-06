@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getCompanyById, getRelated } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import { StatusBadge, safeLink } from "@/app/components";
+import { StatusDot, CategoryIcon } from "@/app/visual";
 import { DetailActions } from "./actions";
 
 const SITE_URL = "https://karir-adiprmx.vercel.app";
@@ -66,7 +67,7 @@ export default async function CompanyDetail({ params }) {
 
   return (
     <div className="wrap">
-      <div className="page-head">
+      <div className="page-head anim-fade-up">
         <p className="section-note">
           <Link href="/">{t(locale, "nav.home")}</Link>
           {" / "}
@@ -77,12 +78,15 @@ export default async function CompanyDetail({ params }) {
         <h1>{company.perusahaan}</h1>
         <p className="chip-row">
           <span className="chip">{company.kategori}</span>
+          <span style={{ alignSelf: "center", display: "flex" }}>
+            <StatusDot status={company.status} />
+          </span>
           <StatusBadge status={company.status} />
         </p>
       </div>
 
       {hasLink ? (
-        <p>
+        <p className="anim-fade-up-1">
           <a
             className="btn"
             href={company.link_karir}
@@ -93,24 +97,26 @@ export default async function CompanyDetail({ params }) {
           </a>
         </p>
       ) : (
-        <p className="notice">
+        <p className="notice anim-fade-up-1">
           Perusahaan ini tidak punya tautan karir yang ditemukan
         </p>
       )}
 
-      <DetailActions
-        company={company}
-        url={url}
-        labels={{
-          share: t(locale, "detail.share"),
-          copied: t(locale, "detail.copied"),
-          report: t(locale, "detail.report"),
-          reportSent: t(locale, "detail.reportSent"),
-          loading: t(locale, "common.loading"),
-        }}
-      />
+      <div className="anim-fade-up-1">
+        <DetailActions
+          company={company}
+          url={url}
+          labels={{
+            share: t(locale, "detail.share"),
+            copied: t(locale, "detail.copied"),
+            report: t(locale, "detail.report"),
+            reportSent: t(locale, "detail.reportSent"),
+            loading: t(locale, "common.loading"),
+          }}
+        />
+      </div>
 
-      <section className="dash-section" aria-label="Detail perusahaan">
+      <section className="dash-section anim-fade-up-2" aria-label="Detail perusahaan">
         <p className="section-label">{t(locale, "detail.location")}</p>
         <p>{company.lokasi || "Tidak tercantum"}</p>
         <p className="section-label">{t(locale, "detail.positions")}</p>
@@ -127,7 +133,18 @@ export default async function CompanyDetail({ params }) {
           <ul className="recheck-list">
             {related.map((c) => (
               <li key={c.no}>
-                <Link href={`/perusahaan/${c.no}`}>{c.perusahaan}</Link>
+                <span
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  <CategoryIcon kategori={c.kategori} />
+                  <Link
+                    href={`/perusahaan/${c.no}`}
+                    style={{ minWidth: 0, overflowWrap: "anywhere" }}
+                  >
+                    {c.perusahaan}
+                  </Link>
+                  <StatusDot status={c.status} />
+                </span>
                 <span className="cell-sub">{c.kategori}</span>
               </li>
             ))}

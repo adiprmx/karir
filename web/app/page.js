@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { getCompanies, getTargets, getStats } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
+import { CategoryIcon, CountUp, LiveSearch, StatusDot } from "@/app/visual";
+
+/* Data di-render saat request, bukan saat build, supaya build tidak
+ * gagal bila Firestore tidak bisa dijangkau dari mesin build. */
+export const dynamic = "force-dynamic";
 
 export default async function Beranda() {
   const [stats, targets, locale] = await Promise.all([
@@ -14,32 +19,20 @@ export default async function Beranda() {
 
   return (
     <div className="wrap">
-      <section className="hero">
+      <section className="hero anim-fade-up">
         <h1>{t(locale, "home.title")}</h1>
         <p className="lede">
           {t(locale, "home.intro", { n: stats.total })}
         </p>
-        <form className="searchbar" method="get" action="/cari">
-          <label htmlFor="hero-domisili">{t(locale, "home.domisili")}</label>
-          <input
-            id="hero-domisili"
-            name="domisili"
-            type="text"
-            placeholder={t(locale, "home.domisiliPh")}
-            autoComplete="off"
-          />
-          <label htmlFor="hero-posisi">
-            {t(locale, "home.posisiPerusahaan")}
-          </label>
-          <input
-            id="hero-posisi"
-            name="posisi"
-            type="text"
-            placeholder={t(locale, "home.posisiPh")}
-            autoComplete="off"
-          />
-          <button type="submit">{t(locale, "home.searchBtn")}</button>
-        </form>
+        <LiveSearch
+          labels={{
+            domisili: t(locale, "home.domisili"),
+            domisiliPh: t(locale, "home.domisiliPh"),
+            posisi: t(locale, "home.posisiPerusahaan"),
+            posisiPh: t(locale, "home.posisiPh"),
+            searchBtn: t(locale, "home.searchBtn"),
+          }}
+        />
         <div className="examples">
           <span>{t(locale, "home.try")}</span>
           <a className="example-chip" href="/cari?domisili=Depok&posisi=Administrasi">
@@ -55,8 +48,9 @@ export default async function Beranda() {
       </section>
 
       <div className="split">
-        <section aria-labelledby="target-title">
+        <section aria-labelledby="target-title" className="anim-fade-in-1">
           <p className="section-label" id="target-title">
+            <StatusDot status="Ada lowongan target" />{" "}
             {t(locale, "home.targets")}
           </p>
           <h2>
@@ -65,12 +59,9 @@ export default async function Beranda() {
           <ol className="index-list">
             {targets.map((c, i) => (
               <li key={c.no}>
-                <a
-                  href={c.link_karir}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <Link href={`/perusahaan/${c.no}`}>
                   <span className="index-no">{String(i + 1).padStart(2, "0")}</span>
+                  <CategoryIcon kategori={c.kategori} />
                   <span className="index-name">{c.perusahaan}</span>
                   <span className="index-meta">
                     {(c.posisi || "").split(",")[0]}
@@ -80,29 +71,32 @@ export default async function Beranda() {
                   <span className="index-arrow" aria-hidden="true">
                     →
                   </span>
-                </a>
+                </Link>
               </li>
             ))}
           </ol>
         </section>
 
-        <aside aria-label={t(locale, "home.stats")}>
+        <aside aria-label={t(locale, "home.stats")} className="anim-fade-in-2">
           <p className="section-label">{t(locale, "home.stats")}</p>
-          <h2>{t(locale, "home.dataState")}</h2>
           <div className="stat-stack">
             <div className="stat-row">
-              <span className="stat-num num">{stats.total}</span>
+              <span className="stat-num num">
+                <CountUp value={stats.total} />
+              </span>
               <span className="stat-label">{t(locale, "home.checked")}</span>
             </div>
             <div className="stat-row">
               <span className="stat-num ok num">
-                {stats.byStatus["Ada lowongan target"]}
+                <CountUp value={stats.byStatus["Ada lowongan target"]} />
               </span>
               <span className="stat-label">{t(locale, "home.hasTarget")}</span>
             </div>
             <div className="stat-row">
               <span className="stat-num warn num">
-                {stats.byStatus["Ada lowongan target (tidak cocok)"]}
+                <CountUp
+                  value={stats.byStatus["Ada lowongan target (tidak cocok)"]}
+                />
               </span>
               <span className="stat-label">
                 {t(locale, "home.targetMismatch")}
@@ -110,13 +104,13 @@ export default async function Beranda() {
             </div>
             <div className="stat-row">
               <span className="stat-num num">
-                {stats.byStatus["Tidak dapat diverifikasi"]}
+                <CountUp value={stats.byStatus["Tidak dapat diverifikasi"]} />
               </span>
               <span className="stat-label">Tidak dapat diverifikasi</span>
             </div>
             <div className="stat-row">
               <span className="stat-num num">
-                {stats.byStatus["Portal tidak bisa dibuka"]}
+                <CountUp value={stats.byStatus["Portal tidak bisa dibuka"]} />
               </span>
               <span className="stat-label">Portal tidak bisa dibuka</span>
             </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CategoryIcon, StatusDot } from "./visual";
 
 export function StatusBadge({ status }) {
   const cls =
@@ -21,7 +22,8 @@ export function CompanyRow({ entry }) {
   return (
     <tr>
       <td data-label="Perusahaan">
-        <span className="cell-name">
+        <span className="cell-name cell-name-row">
+          <CategoryIcon kategori={c.kategori} />
           <Link href={`/perusahaan/${c.no}`}>{c.perusahaan}</Link>
         </span>
         <span className="cell-sub">{c.kategori}</span>
@@ -39,7 +41,7 @@ export function CompanyRow({ entry }) {
         </span>
         {entry.queryHasPosisi && !entry.positionMatched && !entry.nameMatched && (
           <p className="notice">
-            Peran ini belum terverifikasi di data kami — cek langsung di portalnya.
+            Peran ini belum terverifikasi di data kami, cek langsung di portalnya.
           </p>
         )}
       </td>
@@ -50,7 +52,10 @@ export function CompanyRow({ entry }) {
         <span className="cell-clamp">{c.posisi || "Tidak ada posisi terlihat"}</span>
       </td>
       <td data-label="Status">
-        <StatusBadge status={c.status} />
+        <span className="cell-status">
+          <StatusDot status={c.status} />
+          <StatusBadge status={c.status} />
+        </span>
       </td>
     </tr>
   );

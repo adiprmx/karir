@@ -1,4 +1,9 @@
+import { getStats } from "@/lib/companies";
+
+/* Data di-render saat request, bukan saat build. */
+export const dynamic = "force-dynamic";
 import { getLocale } from "@/lib/i18n";
+import { CountUp, StatusDot } from "@/app/visual";
 
 export const metadata = {
   title: "Metode pengecekan",
@@ -32,11 +37,11 @@ const STATUS_MEANINGS = [
   },
   {
     status: "Ada lowongan target (tidak cocok)",
-    text: "Judulnya terlihat, tapi ada syarat yang membuat lowongan itu tidak bisa dipakai. Syaratnya ditulis di catatan.",
+    text: "Judulnya terlihat, tapi syaratnya tidak cocok, dan syarat itu ditulis di catatan.",
   },
   {
     status: "Tidak ada lowongan target",
-    text: "Portal terbuka dan ada lowongan, tapi tidak ada satu pun peran target. Posisi lain yang terlihat dicatat di kolom posisi.",
+    text: "Portal terbuka dan ada lowongan, tapi tidak ada peran target.",
   },
   {
     status: "Tidak ada lowongan terlihat",
@@ -44,11 +49,11 @@ const STATUS_MEANINGS = [
   },
   {
     status: "Portal tidak bisa dibuka",
-    text: "Situs atau portal karirnya tidak bisa dibuka saat dicek. Ini kegagalan akses, bukan bukti perusahaan itu tidak membuka lowongan.",
+    text: "Situsnya tidak bisa dibuka saat dicek, dan ini kegagalan akses, bukan bukti tidak ada lowongan.",
   },
   {
     status: "Tidak dapat diverifikasi",
-    text: "Tidak ada kanal karir yang bisa diperiksa lewat navigasi resmi, atau halaman karirnya terbuka tapi kosong, atau daftar lowongannya hanya terlihat setelah login. Tidak ada login yang dilakukan saat pengecekan.",
+    text: "Kanalnya tidak ditemukan lewat navigasi resmi, halamannya kosong, atau lowongannya cuma terlihat setelah login.",
   },
 ];
 
@@ -77,31 +82,31 @@ const SCORE_RULES = [
   "Tidak dapat diverifikasi: -10",
 ];
 
+function numClass(status) {
+  if (status === "Ada lowongan target") return "stat-num ok num";
+  if (status === "Ada lowongan target (tidak cocok)")
+    return "stat-num warn num";
+  return "stat-num num";
+}
+
 export default async function Metode() {
-  const locale = await getLocale();
+  const [locale, stats] = await Promise.all([getLocale(), getStats()]);
 
   return (
     <div className="wrap">
-      <div className="page-head">
+      <div className="page-head anim-fade-up">
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
       </div>
 
-      <section className="dash-section" aria-label="Yang dicek">
+      <section className="dash-section anim-fade-up" aria-label="Yang dicek">
         <p className="section-label">Yang dicek</p>
         <h2>Cara pengecekan</h2>
         <p>
-          Tiap perusahaan dicek dengan membuka kanal karir resminya langsung di
-          browser, lalu menelusuri navigasi situs resmi perusahaan. Tanggal cek
-          dicatat di tiap baris data.
-        </p>
-        <p>
-          Pengecekan lowongan difokuskan ke peran target di bawah ini, jadi
-          kolom posisi dan catatan paling lengkap untuk peran-peran itu. Lokasi
-          yang diutamakan: Bogor, Depok, Cibinong, Citayam, Bojonggede,
-          Citeureup, Gunung Putri, dan Jabodetabek. Lowongan target di luar
-          lokasi itu tetap dicatat, tapi lokasinya ditulis apa adanya supaya
-          kamu bisa menilai sendiri jaraknya.
+          Tiap perusahaan dicek dengan membuka kanal karir resminya langsung
+          di browser. Pengecekan difokuskan ke 8 peran di bawah ini, dan
+          lokasi yang diutamakan: Bogor, Depok, Cibinong, Citayam, Bojonggede,
+          Citeureup, Gunung Putri, dan Jabodetabek.
         </p>
         <ul className="recheck-list">
           {TARGET_ROLES.map((r) => (
@@ -110,25 +115,38 @@ export default async function Metode() {
         </ul>
       </section>
 
-      <section className="dash-section" aria-label="Arti tiap status">
+      <section
+        className="dash-section anim-fade-up"
+        aria-label="Arti tiap status"
+      >
         <p className="section-label">Arti tiap status</p>
         <h2>Enam status di data</h2>
-        <ul className="recheck-list">
+        <ul className="stat-stack">
           {STATUS_MEANINGS.map((s) => (
-            <li key={s.status}>
-              {s.status}: {s.text}
+            <li className="stat-row" key={s.status}>
+              <span className={numClass(s.status)}>
+                <CountUp value={stats.byStatus[s.status] || 0} />
+              </span>
+              <span
+                className="stat-label"
+                style={{ textAlign: "left", flex: 1 }}
+              >
+                <StatusDot status={s.status} /> {s.status}. {s.text}
+              </span>
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="dash-section" aria-label="Yang tidak dipakai sebagai bukti">
+      <section
+        className="dash-section anim-fade-up"
+        aria-label="Yang tidak dipakai sebagai bukti"
+      >
         <p className="section-label">Yang tidak dipakai sebagai bukti</p>
         <h2>Bukti yang tidak diterima</h2>
         <p>
-          Pengecualian: kalau kanal resmi perusahaan memang mengarah ke platform
-          rekrutmen pihak ketiga, platform itu dicatat apa adanya, dengan
-          catatan bahwa itu platform, bukan pemberi kerja langsung.
+          Kalau kanal resmi memang mengarah ke platform pihak ketiga, platform
+          itu dicatat apa adanya.
         </p>
         <ul className="recheck-list">
           {NOT_EVIDENCE.map((e) => (
@@ -137,7 +155,10 @@ export default async function Metode() {
         </ul>
       </section>
 
-      <section className="dash-section" aria-label="Yang tidak dilakukan selama pengecekan">
+      <section
+        className="dash-section anim-fade-up"
+        aria-label="Yang tidak dilakukan selama pengecekan"
+      >
         <p className="section-label">Yang tidak dilakukan</p>
         <h2>Selama pengecekan</h2>
         <ul className="recheck-list">
@@ -147,15 +168,15 @@ export default async function Metode() {
         </ul>
       </section>
 
-      <section className="dash-section" aria-label="Skor di halaman Cari">
+      <section
+        className="dash-section anim-fade-up"
+        aria-label="Skor di halaman Cari"
+      >
         <p className="section-label">Skor di halaman Cari</p>
         <h2>Cara hasil diurutkan</h2>
         <p>
-          Hasil di halaman Cari diurutkan berdasarkan skor. Kecocokan posisi
-          hanya dihitung dari kolom posisi dan catatan. Kalimat penyangkalan di
-          data tidak dihitung sebagai kecocokan, misalnya lokasi yang berbunyi
-          tidak ada penyebutan Bogor atau Depok tidak dihitung cocok untuk
-          domisili Depok.
+          Hasil diurutkan berdasarkan skor. Kalimat penyangkalan di data tidak
+          dihitung sebagai kecocokan.
         </p>
         <ul className="recheck-list">
           {SCORE_RULES.map((r) => (
@@ -164,20 +185,13 @@ export default async function Metode() {
         </ul>
       </section>
 
-      <section className="dash-section" aria-label="Batasan">
+      <section className="dash-section anim-fade-up" aria-label="Batasan">
         <p className="section-label">Batasan</p>
         <h2>Yang perlu diingat</h2>
         <p>
-          Hasil ini berlaku pada tanggal cek. Lowongan bisa dibuka atau ditutup
-          setelah tanggal itu. Untuk portal yang tidak bisa dibuka atau tidak
-          dapat diverifikasi, tidak ada kesimpulan tentang lowongan perusahaan
-          itu, dan perlu dicek ulang di lain waktu.
-        </p>
-        <p>
-          Untuk lowongan yang judulnya setara tapi tidak persis sama dengan
-          peran target, hal itu ditulis di catatan supaya kamu bisa menilai
-          sendiri. Daftar ini tidak menjamin lowongan masih ada, dan tidak
-          menjamin pelamar akan diterima.
+          Hasil ini berlaku pada tanggal cek. Lowongan bisa berubah setelah
+          itu, dan daftar ini tidak menjamin lowongan masih ada atau pelamar
+          akan diterima.
         </p>
       </section>
     </div>

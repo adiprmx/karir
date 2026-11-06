@@ -4,6 +4,9 @@ import { runSearch, tokenize } from "@/lib/search";
 import { ResultsTable } from "@/app/components";
 import { getLocale, t } from "@/lib/i18n";
 
+/* Data di-render saat request, bukan saat build. */
+export const dynamic = "force-dynamic";
+
 const PAGE_SIZE = 20;
 
 export async function generateMetadata() {
@@ -120,7 +123,10 @@ export default async function Cari({ searchParams }) {
           </div>
         </form>
 
-        <section aria-label={t(locale, "search.resultsLabel")}>
+        <section
+          aria-label={t(locale, "search.resultsLabel")}
+          className="anim-fade-up"
+        >
           <p className="result-count">
             {t(locale, "search.showing", {
               a: shown.length,

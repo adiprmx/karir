@@ -59,7 +59,7 @@ export function DetailActions({ company, url, labels }) {
 
   return (
     <div>
-      <div className="filter-actions">
+      <div className="filter-actions" style={{ flexWrap: "wrap" }}>
         <button className="btn ghost" type="button" onClick={copyLink}>
           {labels.share}
         </button>
@@ -79,26 +79,35 @@ export function DetailActions({ company, url, labels }) {
         </p>
       )}
 
-      <form className="filters" onSubmit={submitReport}>
-        <fieldset>
-          <legend>{labels.report}</legend>
-          <input
-            type="text"
-            value={alasan}
-            onChange={(e) => setAlasan(e.target.value.slice(0, 500))}
-            maxLength={500}
-            required
-            placeholder="Misal: halaman tidak bisa dibuka"
-            autoComplete="off"
-          />
-        </fieldset>
+      <form
+        className="filters"
+        onSubmit={submitReport}
+        style={{ marginTop: 24 }}
+      >
+        <label
+          htmlFor="report-alasan"
+          className="section-label"
+          style={{ display: "block" }}
+        >
+          {labels.report}
+        </label>
+        <input
+          id="report-alasan"
+          type="text"
+          value={alasan}
+          onChange={(e) => setAlasan(e.target.value.slice(0, 500))}
+          maxLength={500}
+          required
+          placeholder="Misal: halaman tidak bisa dibuka"
+          autoComplete="off"
+        />
         {sent && <p className="notice">{labels.reportSent}</p>}
         {reportError && (
           <p className="notice">
             Laporan gagal terkirim. Periksa koneksi lalu coba lagi.
           </p>
         )}
-        <div className="filter-actions">
+        <div className="filter-actions" style={{ marginTop: 16 }}>
           <button className="btn" type="submit" disabled={sending}>
             {sending ? labels.loading : labels.report}
           </button>
