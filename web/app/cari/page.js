@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCompanies, getCategories, STATUS_ORDER } from "@/lib/companies";
 import { runSearch, tokenize } from "@/lib/search";
 import { ResultsTable } from "@/app/components";
+import RecentSaver from "@/app/cari/recent-saver";
 import { getLocale, t } from "@/lib/i18n";
 
 /* Data di-render saat request, bukan saat build. */
@@ -55,6 +56,7 @@ export default async function Cari({ searchParams }) {
 
   return (
     <div className="wrap">
+      <RecentSaver domisili={domisili} posisi={posisi} />
       <div className="page-head">
         <h1>{t(locale, "search.title")}</h1>
         <p className="lede">{t(locale, "search.sortNote")}</p>

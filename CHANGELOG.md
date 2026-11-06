@@ -2,6 +2,28 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.6.0 — 2026-11-06
+
+Karir Hidup: data dicek ulang sendiri tiap hari, dan tampilannya memakai visual asli.
+
+- Cron Vercel mengecek ulang 22 portal target tiap jam 01:00 WIB; portal yang tadinya hidup terus mati dicatat ke umpan Yang berubah, portal mati yang hidup lagi jadi "Tidak dapat diverifikasi" sampai dicek ulang manusia.
+- Umpan Yang berubah di Beranda (koleksi `changes`, API /api/changes); cek massal admin ikut mencatat perubahan yang sama.
+- Logo asli tiap perusahaan dari domain resminya (layanan favicon Google) di daftar target dan halaman detail; bila favicon gagal, logonya hilang rapi.
+- Tiga foto asli di Beranda (gudang, produksi, cleaning), tampil hitam-putih; semua URL foto dan favicon diverifikasi langsung sebelum dipakai.
+- Cap "Terakhir dicek ulang" di Beranda dan Dasbor, dengan penanda Segar (dalam 7 hari) atau Sudah lama.
+- Versi 2.5.0 tidak dirilis terpisah; isinya ikut rilis ini.
+
+## 2.5.0 — 2026-11-06
+
+Temuan riset alur web besar diterapkan ke Karir.
+
+- Landing nambah seksi Masalah dan hasil setelah angka kepercayaan: kanal karir berserakan dan lowongan copas lawan 406 kanal resmi yang dicek langsung di browser.
+- Pencarian terakhir: tersimpan di browser saja, chip "Terakhir" di Beranda, tersimpan juga saat mencari dari /cari, dan baris yang sama di Dasbor.
+- Pengaturan di /pengaturan: pilihan onboarding, lamaran yang dilacak, dan pencarian terakhir — masing-masing bisa dihapus, atau hapus semuanya sekaligus.
+- Dasbor: keadaan "Semua langkah selesai" kalau ketiga langkah berikutnya sudah beres; halaman Metode menandai dirinya sudah dibaca.
+- FAQ sekarang bisa dicari lewat kolom pencarian.
+- Sitemap 417 URL (11 halaman + 406 perusahaan).
+
 ## 2.4.0 — 2026-11-06
 
 Landing page, onboarding, dan dasbor pribadi — alur pengguna lengkap.

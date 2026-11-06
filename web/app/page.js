@@ -2,6 +2,10 @@ import Link from "next/link";
 import { getCompanies, getTargets, getStats } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import { CategoryIcon, CountUp, LiveSearch, PrintButton, StatusDot } from "@/app/visual";
+import RecentChip from "@/app/recent-chip";
+import PhotoStrip from "@/app/photo-strip";
+import ChangesFeed from "@/app/changes-feed";
+import { CompanyLogo } from "@/lib/logos";
 
 /* Data di-render saat request, bukan saat build, supaya build tidak
  * gagal bila Firestore tidak bisa dijangkau dari mesin build. */
@@ -16,6 +20,17 @@ export default async function Beranda() {
   const byDate = stats.byDate;
   const d4 = byDate["2026-11-04"] || 0;
   const d5 = byDate["2026-11-05"] || 0;
+  const dateKeys = Object.keys(byDate).sort();
+  const latestDate = dateKeys.length ? dateKeys[dateKeys.length - 1] : null;
+  const latestMs = latestDate ? Date.parse(`${latestDate}T00:00:00Z`) : 0;
+  const latestLabel = latestDate
+    ? new Date(`${latestDate}T00:00:00Z`).toLocaleDateString(
+        locale === "en" ? "en-GB" : "id-ID",
+        { day: "numeric", month: "long", year: "numeric" },
+      )
+    : null;
+  const fresh =
+    latestMs > 0 && (Date.now() - latestMs) / 86400000 <= 7;
   const shareText =
     (locale === "en"
       ? `Target openings on Karir (${targets.length} companies):\n`
@@ -55,6 +70,7 @@ export default async function Beranda() {
           <a className="example-chip" href="/cari?posisi=PGN">
             PGN
           </a>
+          <RecentChip label={t(locale, "landing.recentLabel")} />
         </div>
       </section>
 
@@ -97,6 +113,55 @@ export default async function Beranda() {
           </span>
         </div>
       </section>
+
+      {latestDate ? (
+        <p className="fresh-stamp anim-fade-in-1">
+          {t(locale, "landing.freshLabel", { date: latestLabel })}
+          {" · "}
+          <span className={fresh ? "ok" : "warn"}>
+            {fresh
+              ? t(locale, "landing.freshOk")
+              : t(locale, "landing.freshStale")}
+          </span>
+        </p>
+      ) : null}
+
+      <section
+        className="landing-section problem-outcome anim-fade-in-2"
+        aria-labelledby="problem-title"
+      >
+        <h2 id="problem-title">{t(locale, "landing.problemTitle")}</h2>
+        <div className="problem-cols">
+          <div>
+            <p className="section-label">
+              {t(locale, "landing.problemLabel")}
+            </p>
+            <p>{t(locale, "landing.problem1")}</p>
+            <p>{t(locale, "landing.problem2")}</p>
+          </div>
+          <div>
+            <p className="section-label">
+              {t(locale, "landing.outcomeLabel")}
+            </p>
+            <p>
+              {t(locale, "landing.outcome1", { n: stats.total })}
+            </p>
+            <p>
+              {t(locale, "landing.outcome2", { n: targets.length })}
+            </p>
+            <p>{t(locale, "landing.outcome3")}</p>
+          </div>
+        </div>
+      </section>
+
+      <PhotoStrip
+        title={t(locale, "landing.photosTitle")}
+        captions={{
+          warehouse: t(locale, "landing.photoWarehouse"),
+          production: t(locale, "landing.photoProduction"),
+          cleaning: t(locale, "landing.photoCleaning"),
+        }}
+      />
 
       <section
         className="landing-section anim-fade-in-2"
@@ -172,6 +237,11 @@ export default async function Beranda() {
             <li key={c.no}>
               <Link href={`/perusahaan/${c.no}`}>
                 <span className="index-no">{String(i + 1).padStart(2, "0")}</span>
+                <CompanyLogo
+                  linkKarir={c.link_karir}
+                  name={c.perusahaan}
+                  size={32}
+                />
                 <CategoryIcon kategori={c.kategori} />
                 <span className="index-name">{c.perusahaan}</span>
                 <span className="index-meta">
@@ -205,6 +275,15 @@ export default async function Beranda() {
             }
           />
         </div>
+      </section>
+
+      <section
+        className="landing-section anim-fade-in"
+        id="berubah"
+        aria-labelledby="changes-title"
+      >
+        <h2 id="changes-title">{t(locale, "landing.changesTitle")}</h2>
+        <ChangesFeed />
       </section>
 
       <section

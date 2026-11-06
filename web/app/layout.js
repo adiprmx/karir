@@ -109,6 +109,8 @@ export default async function RootLayout({ children }) {
               {" · "}
               <Link href="/mulai">{t(locale, "footer.mulai")}</Link>
               {" · "}
+              <Link href="/pengaturan">{t(locale, "footer.settings")}</Link>
+              {" · "}
               <a
                 href="https://github.com/adiprmx/karir"
                 target="_blank"

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { getLocale } from "@/lib/i18n";
+import FaqSearch from "@/app/faq/faq-search";
 
 export const metadata = {
   title: "Pertanyaan umum",
@@ -61,21 +61,7 @@ export default async function Faq() {
       </div>
 
       <section className="dash-section anim-fade-up" aria-label="Tanya jawab">
-        {QA.map((item) => (
-          <details key={item.q} className="faq-item">
-            <summary>{item.q}</summary>
-            <p>
-              {item.a}
-              {item.q === "Bagaimana data dicek?" && (
-                <>
-                  {" "}
-                  Cara lengkapnya ada di halaman{" "}
-                  <Link href="/metode">Metode</Link>.
-                </>
-              )}
-            </p>
-          </details>
-        ))}
+        <FaqSearch items={QA} />
       </section>
     </div>
   );

@@ -5,6 +5,7 @@
  * bila pengguna memakai prefers-reduced-motion. */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { saveRecentSearch } from "@/app/recent";
 
 function reducedMotion() {
   return (
@@ -257,6 +258,7 @@ export function LiveSearch({ labels }) {
     } else if (e.key === "Enter") {
       if (open && active >= 0 && results && results[active]) {
         e.preventDefault();
+        saveRecentSearch(domisili, posisi);
         window.location.assign(
           `/perusahaan/${results[active].company.no}`,
         );
@@ -288,7 +290,12 @@ export function LiveSearch({ labels }) {
 
   return (
     <div className="live-search">
-      <form className="searchbar" method="get" action="/cari">
+      <form
+        className="searchbar"
+        method="get"
+        action="/cari"
+        onSubmit={() => saveRecentSearch(domisili, posisi)}
+      >
         <label htmlFor="hero-domisili">{labels.domisili}</label>
         <input
           id="hero-domisili"

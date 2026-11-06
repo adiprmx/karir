@@ -19,10 +19,11 @@ Indonesian job seekers. They open the app, type where they live and what positio
 4. Detail perusahaan (/perusahaan/[no]). Status, lokasi, posisi, catatan hasil cek, dan tanggal dicek. Tombol "Buka portal karir" mengarah ke situs resmi perusahaan itu. Di bawahnya ada "Lamaran saya": tandai sebagai Ditandai, Sudah dilamar, Dipanggil, atau Ditolak, lengkap tanggal dan catatan (tersimpan di browser saja).
 5. Lamaran Saya (/lamaran). Semua perusahaan yang ditandai terkumpul di satu halaman, dengan hitungan per status. Di sinilah pengguna mengelola proses lamarannya.
 6. Peta (/peta). 22 lowongan target di peta per kota. Klik satu titik, keluar daftar perusahaan di kota itu.
-7. Dasbor (/dasbor). Ruang kerja pribadi: sapaan sesuai domisili dan posisi dari langkah 2, daftar langkah berikutnya (isi pilihan, tandai lamaran pertama, periksa portal resmi), ringkasan lamaran, lalu grafik sebaran status dan daftar target.
+7. Dasbor (/dasbor). Ruang kerja pribadi: sapaan sesuai domisili dan posisi dari langkah 2, daftar langkah berikutnya (isi pilihan, tandai lamaran pertama, periksa portal resmi), ringkasan lamaran, lalu grafik sebaran status dan daftar target. Cap "Terakhir dicek ulang" menunjukkan seberapa segar datanya.
 8. Admin (/admin, khusus owner). Login Firebase, lalu ubah data perusahaan, impor dan ekspor CSV, cek massal 22 tautan target, dan lihat laporan tautan mati dari pengunjung plus audit log.
+9. Karir Hidup. Tiap jam 01:00 WIB cron mengecek ulang 22 portal target; perubahan status masuk umpan "Yang berubah" di Beranda (koleksi `changes`). Cek massal admin ikut mencatat perubahan yang sama. Portal yang tadinya mati lalu hidup lagi jadi "Tidak dapat diverifikasi" sampai dicek ulang manusia, karena cek tautan hanya membuktikan portal bisa dibuka, bukan lowongannya masih ada.
 
-Alur data: Firestore (406 dokumen) → API server → halaman. Tulis data hanya lewat admin panel (tercatat di audit_logs). Tracker lamaran dan pilihan onboarding tidak pernah menyentuh server: localStorage di browser pengguna saja.
+Alur data: Firestore (406 dokumen) → API server → halaman. Tulis data hanya lewat admin panel (tercatat di audit_logs). Tracker lamaran, pilihan onboarding, dan pencarian terakhir tidak pernah menyentuh server: localStorage di browser pengguna saja. Pengaturan (/pengaturan) menunjukkan apa yang tersimpan di browser dan bisa menghapusnya.
 
 ## Direction contract (surface: web/app)
 

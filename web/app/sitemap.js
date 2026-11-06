@@ -13,6 +13,7 @@ const STATIC_PAGES = [
   { path: "/lamaran", lastModified: "2026-11-06" },
   { path: "/peta", lastModified: "2026-11-06" },
   { path: "/mulai", lastModified: "2026-11-06" },
+  { path: "/pengaturan", lastModified: "2026-11-06" },
   { path: "/tentang", lastModified: "2026-11-06" },
   { path: "/metode", lastModified: "2026-11-06" },
   { path: "/faq", lastModified: "2026-11-06" },

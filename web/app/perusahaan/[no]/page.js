@@ -6,6 +6,7 @@ import { StatusBadge, safeLink } from "@/app/components";
 import { StatusDot, CategoryIcon } from "@/app/visual";
 import { TrackerControl } from "@/app/tracker";
 import { DetailActions } from "./actions";
+import { CompanyLogo } from "@/lib/logos";
 
 const SITE_URL = "https://karir-adiprmx.vercel.app";
 
@@ -76,7 +77,14 @@ export default async function CompanyDetail({ params }) {
           {" / "}
           {company.perusahaan}
         </p>
-        <h1>{company.perusahaan}</h1>
+        <h1 className="detail-title">
+          <CompanyLogo
+            linkKarir={company.link_karir}
+            name={company.perusahaan}
+            size={40}
+          />
+          {company.perusahaan}
+        </h1>
         <p className="chip-row">
           <span className="chip">{company.kategori}</span>
           <span style={{ alignSelf: "center", display: "flex" }}>

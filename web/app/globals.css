@@ -623,6 +623,51 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
 .trust-num.warn { color: var(--warn); }
 .trust-label { display: block; font-size: 13px; color: var(--muted); margin-top: 4px; }
 
+/* Masalah dan hasil: dua kolom teks pendek, bukan kartu. */
+.problem-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 40px;
+}
+.problem-cols p { margin: 0 0 12px; max-width: 56ch; }
+.problem-cols p:last-child { margin-bottom: 0; }
+
+/* Chip pencarian terakhir: sama seperti contoh pencarian, hanya
+ * garisnya putus-putus supaya terbaca sebagai riwayat, bukan contoh. */
+.recent-chip { border-style: dashed; }
+
+/* Logo asli perusahaan: favicon dari domain link karir resminya. */
+.company-logo { flex-shrink: 0; border-radius: 6px; }
+.index-list .company-logo { align-self: center; }
+.detail-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.detail-title .company-logo { border-radius: 8px; }
+
+/* Cap kesegaran: tanggal cek terbaru dan penandanya. */
+.fresh-stamp { font-size: 13px; color: var(--muted); margin: 12px 0 0; line-height: 1.6; }
+.fresh-stamp .ok { color: var(--ok); }
+.fresh-stamp .warn { color: var(--warn); }
+
+/* Strip foto asli: tiga foto grayscale, tiga kolom jadi satu di HP. */
+.photo-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.photo-strip figure { margin: 0; }
+.photo-strip img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius);
+  filter: grayscale(1);
+}
+.photo-strip figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
 /* Fitur: baris bertautan seperti indeks, bukan kartu dan bukan grid. */
 .feature-rows { list-style: none; margin: 0; padding: 0; }
 .feature-rows li { border-top: 1px solid var(--line); }
@@ -652,6 +697,8 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
 
 @media (max-width: 860px) {
   .trust-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
+  .problem-cols { grid-template-columns: minmax(0, 1fr); }
+  .photo-strip { grid-template-columns: minmax(0, 1fr); }
   .feature-rows a { flex-wrap: wrap; gap: 4px 16px; }
   .feature-title { min-width: 0; }
   .feature-desc { flex: 1 1 100%; order: 3; }

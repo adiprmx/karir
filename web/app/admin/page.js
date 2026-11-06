@@ -169,6 +169,7 @@ export default function Admin() {
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkDone, setBulkDone] = useState(0);
   const [bulkResults, setBulkResults] = useState([]);
+  const [bulkChanges, setBulkChanges] = useState(0);
   const [csvFileName, setCsvFileName] = useState("");
   const [csvValid, setCsvValid] = useState([]);
   const [csvRejected, setCsvRejected] = useState([]);
@@ -255,6 +256,26 @@ export default function Admin() {
         no,
         perusahaan,
         at: new Date().toISOString(),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /* Catat perubahan status ke umpan Yang berubah (koleksi `changes`).
+   * Dipanggil dari cek massal saat portal target ternyata tidak bisa
+   * dibuka. Gagal tulis tidak menggagalkan pemeriksaan: pemanggil
+   * mengabaikan hasilnya. */
+  async function writeChange(c, from, to) {
+    try {
+      await addDoc(collection(db, "changes"), {
+        companyNo: Number(c.no),
+        perusahaan: c.perusahaan,
+        from,
+        to,
+        checkedAt: todayStr(),
+        createdAt: new Date().toISOString(),
       });
       return true;
     } catch {
@@ -414,8 +435,10 @@ export default function Admin() {
     if (targets.length === 0 || bulkRunning) return;
     setBulkRunning(true);
     setBulkResults([]);
+    setBulkChanges(0);
     setBulkDone(0);
     const done = [];
+    let recorded = 0;
     for (let i = 0; i < targets.length; i++) {
       if (i > 0) {
         await new Promise((r) => setTimeout(r, BULK_CHECK_DELAY_MS));
@@ -429,12 +452,20 @@ export default function Admin() {
           body: JSON.stringify({ no: Number(c.no) }),
         });
         const body = await res.json().catch(() => ({}));
+        /* API mengembalikan 200 walau portalnya sendiri gagal dibuka,
+         * jadi `ok` di sini wajib mengikuti hasil ceknya (body.ok),
+         * bukan sekadar respons API. Tanpa ini portal mati terbaca
+         * sebagai "bisa dibuka" dan tidak ada perubahan yang tercatat. */
         entry = res.ok
           ? {
               no: c.no,
               perusahaan: c.perusahaan,
-              ok: true,
+              ok: body.ok === true,
               status: body.status,
+              error:
+                body.ok === true
+                  ? undefined
+                  : body.error || `kode ${body.status}`,
               checkedAt: new Date().toISOString(),
             }
           : {
@@ -458,7 +489,20 @@ export default function Admin() {
       done.push(entry);
       setBulkResults([...done]);
       setBulkDone(i + 1);
+      /* Portal target yang ternyata tidak bisa dibuka: status
+       * tersimpannya tidak lagi cocok dengan hasil cek, jadi
+       * perubahannya dicatat ke umpan. Gagal tulis (mis. aturan
+       * belum terbit) tidak menghentikan pemeriksaan. */
+      if (!entry.ok && typeof entry.status === "number") {
+        const recordedOk = await writeChange(
+          c,
+          c.status,
+          "Portal tidak bisa dibuka",
+        );
+        if (recordedOk) recorded++;
+      }
     }
+    setBulkChanges(recorded);
     setBulkRunning(false);
   }
 
@@ -1062,6 +1106,9 @@ export default function Admin() {
               </li>
             ))}
           </ul>
+        )}
+        {bulkChanges > 0 && (
+          <p className="notice">Perubahan dicatat di umpan Yang berubah.</p>
         )}
       </div>
 

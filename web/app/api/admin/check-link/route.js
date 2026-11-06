@@ -3,9 +3,11 @@
  * Keamanan: URL TIDAK PERNAH diambil dari request. Endpoint hanya menerima
  * nomor perusahaan, lalu memakai link_karir yang tersimpan di Firestore.
  * Jadi tidak bisa dipakai untuk menembak URL sembarangan. Timeout 10 dtk,
- * maksimal 5 redirect, dan batas laju sederhana per IP. */
+ * maksimal 5 redirect, dan batas laju sederhana per IP.
+ * Logika ceknya tinggal di lib/check.js (dipakai bersama cron harian). */
 import { NextResponse } from "next/server";
 import { getCompanyById } from "@/lib/companies";
+import { checkUrl } from "@/lib/check";
 
 const WINDOW_MS = 60 * 1000;
 const MAX_REQ = 10;
@@ -58,59 +60,14 @@ export async function POST(request) {
     );
   }
   const url = company.link_karir;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10_000);
-  try {
-    // HEAD dulu (ringan); kalau server menolak HEAD, coba GET.
-    let res = await fetch(url, {
-      method: "HEAD",
-      redirect: "manual",
-      signal: controller.signal,
-      headers: { "User-Agent": "Karir-LinkCheck/1.0" },
-    });
-    let hops = 0;
-    while (
-      res.status >= 300 &&
-      res.status < 400 &&
-      res.headers.get("location") &&
-      hops < 5
-    ) {
-      const next = new URL(res.headers.get("location"), url).toString();
-      res = await fetch(next, {
-        method: "HEAD",
-        redirect: "manual",
-        signal: controller.signal,
-        headers: { "User-Agent": "Karir-LinkCheck/1.0" },
-      });
-      hops++;
-    }
-    if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, {
-        method: "GET",
-        redirect: "follow",
-        signal: controller.signal,
-        headers: { "User-Agent": "Karir-LinkCheck/1.0" },
-      });
-    }
-    return NextResponse.json({
-      no,
-      url,
-      ok: res.status < 400,
-      status: res.status,
-      finalUrl: res.url || url,
-      checkedAt: new Date().toISOString(),
-    });
-  } catch (err) {
-    return NextResponse.json({
-      no,
-      url,
-      ok: false,
-      status: 0,
-      finalUrl: url,
-      checkedAt: new Date().toISOString(),
-      error: err?.name === "AbortError" ? "Timeout 10 detik." : "Tidak bisa dihubungi.",
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+  const result = await checkUrl(url, { timeoutMs: 10_000 });
+  return NextResponse.json({
+    no,
+    url,
+    ok: result.ok,
+    status: result.status ?? 0,
+    finalUrl: result.finalUrl,
+    checkedAt: new Date().toISOString(),
+    ...(result.ok ? {} : { error: "Tidak bisa dihubungi." }),
+  });
 }

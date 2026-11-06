@@ -45,5 +45,38 @@ service cloud.firestore {
         && request.resource.data.alasan.size() < 500;
       allow update, delete: if false;
     }
+    // Umpan perubahan status (ditulis cron cek ulang harian): siapa pun
+    // boleh membaca, hanya admin yang login boleh mencatat, dan entri
+    // yang sudah tercatat tidak bisa diubah atau dihapus.
+    match /changes/{doc} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll([
+          'companyNo', 'perusahaan', 'from', 'to', 'checkedAt', 'createdAt'
+        ])
+        && request.resource.data.companyNo is int
+        && request.resource.data.perusahaan is string
+        && request.resource.data.perusahaan.size() > 0
+        && request.resource.data.perusahaan.size() < 200
+        && request.resource.data.from in [
+          'Ada lowongan target',
+          'Ada lowongan target (tidak cocok)',
+          'Tidak ada lowongan target',
+          'Tidak ada lowongan terlihat',
+          'Tidak dapat diverifikasi',
+          'Portal tidak bisa dibuka'
+        ]
+        && request.resource.data.to in [
+          'Ada lowongan target',
+          'Ada lowongan target (tidak cocok)',
+          'Tidak ada lowongan target',
+          'Tidak ada lowongan terlihat',
+          'Tidak dapat diverifikasi',
+          'Portal tidak bisa dibuka'
+        ]
+        && request.resource.data.checkedAt is string
+        && request.resource.data.createdAt is string;
+      allow update, delete: if false;
+    }
   }
 }

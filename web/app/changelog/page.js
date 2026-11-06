@@ -16,6 +16,27 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.6.0",
+    date: "6 November 2026",
+    points: [
+      "Karir Hidup: cron mengecek ulang 22 portal target tiap jam 1 pagi, dan perubahan status masuk umpan Yang berubah.",
+      "Logo asli tiap perusahaan dari domain resminya, di daftar target dan halaman detail.",
+      "Tiga foto asli di Beranda (gudang, produksi, cleaning), hitam-putih.",
+      "Cap Terakhir dicek ulang di Beranda dan Dasbor, dengan penanda Segar atau Sudah lama.",
+      "Cek massal admin ikut mencatat perubahan portal yang mati ke umpan yang sama.",
+    ],
+  },
+  {
+    version: "2.5.0",
+    date: "6 November 2026",
+    points: [
+      "Landing nambah seksi Masalah dan hasil: kanal berserakan dan lowongan copas lawan 406 kanal resmi yang dicek langsung.",
+      "Pencarian terakhir: Beranda, Cari, dan Dasbor mengingat pencarianmu dan bisa diulang dengan satu ketukan.",
+      "Pengaturan di /pengaturan: lihat apa yang tersimpan di browsermu dan hapus sebagian atau semuanya.",
+      "Dasbor bilang kalau semua langkah sudah selesai, dan FAQ sekarang bisa dicari.",
+    ],
+  },
+  {
     version: "2.4.0",
     date: "6 November 2026",
     points: [

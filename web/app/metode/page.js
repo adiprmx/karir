@@ -4,6 +4,7 @@ import { getStats } from "@/lib/companies";
 export const dynamic = "force-dynamic";
 import { getLocale } from "@/lib/i18n";
 import { CountUp, StatusDot } from "@/app/visual";
+import Visited from "@/app/metode/visited";
 
 export const metadata = {
   title: "Metode pengecekan",
@@ -94,6 +95,7 @@ export default async function Metode() {
 
   return (
     <div className="wrap">
+      <Visited />
       <div className="page-head anim-fade-up">
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
