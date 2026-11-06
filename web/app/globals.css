@@ -85,6 +85,21 @@ select:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.locale-toggle {
+  margin-left: 12px;
+  font-size: 13px;
+  color: #a1a1aa;
+  white-space: nowrap;
+}
+.locale-toggle a {
+  color: #d4d4d8;
+  text-decoration: none;
+  padding: 8px 2px;
+}
+.locale-toggle a[aria-current="true"] {
+  color: #fff;
+  font-weight: 700;
+}
 
 /* ---------- Footer ---------- */
 .site-footer { background: var(--ink); color: #a1a1aa; margin-top: 96px; }
@@ -370,6 +385,17 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
 
 /* ---------- Responsif ---------- */
 @media (max-width: 860px) {
+  .site-header { position: static; }
+  .header-inner {
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    min-height: 0;
+  }
+  .site-nav { flex-wrap: wrap; margin-left: 0; }
+  .site-nav a { padding: 8px 10px; }
+  .locale-toggle { margin-left: auto; }
   .split { grid-template-columns: 1fr; gap: 40px; }
   .cari-grid { grid-template-columns: 1fr; gap: 24px; }
   .filters { position: static; }

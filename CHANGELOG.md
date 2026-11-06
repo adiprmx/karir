@@ -2,6 +2,18 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.1.0 — 2026-11-06
+
+Aplikasi web dilengkapi jadi produk yang lebih serius.
+
+- Halaman detail per perusahaan (`/perusahaan/[no]`): tautan portal, lokasi, posisi tercatat, catatan cek, perusahaan sejenis, tombol bagikan (salin tautan dan WhatsApp), form laporkan tautan mati, metadata dan JSON-LD per halaman. Perusahaan yang tidak ada mengembalikan 404.
+- Halaman isi: Tentang, Metode, FAQ, dan Perubahan (riwayat versi). Sitemap otomatis (413 URL) dan robots. Manifest web agar situs bisa dipasang sebagai aplikasi.
+- API baru: `GET /api/companies/[no]`, `GET /api/stats`, pencarian bebas `q`, paginasi `offset`, dan `POST /api/admin/check-link` untuk mengecek tautan karir sebuah perusahaan (URL hanya dari data tersimpan, ada timeout 10 detik dan batas laju).
+- Admin panel ditingkatkan: tabel dengan cari, saring status, urutan, dan paginasi 20 baris; panel kualitas data (tanpa tautan, tanpa lokasi, tanggal cek lebih dari 30 hari); impor CSV (validasi per baris, maks 100 baris) dan ekspor CSV/JSON; jejak perubahan di koleksi `audit_logs`; daftar laporan tautan mati dari koleksi `reports`; tombol cek tautan dan perbarui tanggal cek.
+- Antarmuka dua bahasa (Indonesia dan Inggris) lewat saklar ID/EN di header, tersimpan di cookie. Data perusahaan tetap Bahasa Indonesia.
+- Aturan Firestore diperketat dan diterbitkan: tulis `companies` hanya untuk pengguna login dan hanya bila dokumen lolos validasi (9 kolom wajib, nomor angka, status salah satu dari 6 nilai); `audit_logs` hanya bisa dibaca dan dibuat admin; `reports` bisa dibuat siapa pun dalam bentuk yang divalidasi, tidak bisa dibaca publik.
+- Perbaikan keandalan: semua pengambilan data dari Firestore memakai timeout 10 detik, supaya rute jaringan yang mati membuat halaman menampilkan error dengan jelas, bukan menggantung. Halaman 404 dipindahkan dari loading root karena loading root membuat status halaman tidak ditemukan jadi 200. Header di HP kini membungkus rapi tanpa meluber (terukur: lebar gulir sama dengan lebar layar di 360 piksel dan 1280 piksel).
+
 ## 2.0.0 — 2026-11-06
 
 Aplikasi web dibangun ulang jadi full stack.

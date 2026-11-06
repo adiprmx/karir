@@ -38,11 +38,16 @@ Repo ini buat siapa pun yang cari loker. Kamu berdomisili di mana dan mau posisi
 
 ## Aplikasi web
 
-Aplikasi webnya ada di repo ini juga, di folder `web/`, dan berjalan di https://karir-adiprmx.vercel.app/. Isinya tiga layar:
+Aplikasi webnya ada di repo ini juga, di folder `web/`, dan berjalan di https://karir-adiprmx.vercel.app/. Isinya:
 
 - **Beranda.** Pencariannya langsung di depan: ketik domisili dan posisi, lalu lihat rekomendasinya. Di bawahnya ada angka data dan 22 lowongan target yang terverifikasi.
 - **Cari.** Pencarian lengkap dengan filter kategori, status, dan urutan.
 - **Dasbor.** Gambaran data: sebaran status, kategori terbanyak, daftar 22 lowongan target, dan kanal yang perlu dicek ulang. Semua angka dihitung langsung dari data.
+- **Detail perusahaan.** Setiap perusahaan punya halaman sendiri (`/perusahaan/212` misalnya): tautan portal, lokasi, posisi tercatat, catatan cek, perusahaan sejenis, tombol bagikan (salin tautan dan WhatsApp), dan form laporkan tautan mati.
+- **Tentang, Metode, FAQ, Perubahan.** Halaman isi: apa itu Karir, cara pengecekan, jawaban atas pertanyaan umum, dan riwayat versi aplikasi.
+- **Admin.** Panel `/admin` untuk pemilik data: tabel dengan cari, saring, dan paginasi, panel kualitas data, impor dan ekspor CSV, jejak perubahan, daftar laporan tautan mati, dan tombol cek tautan per perusahaan.
+
+Antarmuka tersedia dalam Bahasa Indonesia dan Inggris (saklar ID/EN di kanan atas header). Halaman detail, sitemap, dan robots tersedia untuk mesin pencari; tiap halaman detail membawa data terstruktur JSON-LD.
 
 Hasil diurutkan berdasarkan skor rekomendasi:
 
@@ -59,7 +64,7 @@ Skor bukan janji lowongan. Aplikasi hanya merekomendasikan kanal karir berdasark
 
 Aplikasi tidak memakai akun pengguna, tidak mengumpulkan data pribadi pengunjung, dan tidak memakai analytics. Ada satu akun admin (dibuat pemilik repo di Firebase Console) untuk memperbarui data lewat panel admin di `/admin`. Kendali atas data dan kode ada di repo ini.
 
-Pencarian juga tersedia sebagai API: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang` mengembalikan hasil yang sama dengan halaman Cari, dalam JSON.
+Pencarian juga tersedia sebagai API: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang` mengembalikan hasil yang sama dengan halaman Cari, dalam JSON. Ada juga `GET /api/companies/212` (satu perusahaan), `GET /api/companies?q=Novell` (pencarian bebas), `GET /api/stats` (angka ringkas data), dan `POST /api/admin/check-link` (cek apakah tautan karir sebuah perusahaan masih bisa dibuka; hanya menerima nomor perusahaan, URL diambil dari data yang tersimpan, jadi tidak bisa dipakai menembak URL sembarangan).
 
 ## Stack
 
@@ -67,9 +72,11 @@ Stack aplikasi web ini, lengkap:
 
 - Hosting: Vercel, proyek `karir`, dari repo ini branch `main` folder `web/`, HTTPS aktif. Setiap push ke `main` men-deploy otomatis.
 - Frontend dan backend: Next.js 15 dengan React 19 (App Router). Beranda dan Dasbor di-render di server, halaman Cari di-render di server dari parameter URL, jadi tiap pencarian bisa dibagikan lewat tautan.
-- Database: Firebase Firestore, proyek `karir-9d53a`, lokasi asia-southeast1, paket Spark gratis. Koleksi `companies` berisi 406 dokumen, satu per perusahaan, diimpor dari `data/daftar-link-karir.csv` lewat `web/scripts/import-firestore.mjs`. Aturan Firestore: baca terbuka untuk semua, tulis hanya untuk pengguna yang sudah login.
-- API pencarian server: `GET /api/companies`, logika skor yang sama dengan halaman Cari, berjalan di server.
-- Admin panel: halaman `/admin`, login Firebase Auth (Email/Password), untuk tambah, ubah, dan hapus perusahaan. Akun admin dibuat pemilik repo di Firebase Console, bukan dari aplikasi.
+- Database: Firebase Firestore, proyek `karir-9d53a`, lokasi asia-southeast1, paket Spark gratis. Koleksi `companies` berisi 406 dokumen, satu per perusahaan, diimpor dari `data/daftar-link-karir.csv` lewat `web/scripts/import-firestore.mjs`. Aturan Firestore: baca terbuka untuk semua; tulis hanya untuk pengguna yang sudah login dan hanya bila dokumen lolos validasi (9 kolom wajib, nomor bertipe angka, status salah satu dari 6 nilai). Koleksi `audit_logs` mencatat setiap perubahan data oleh admin (tidak bisa diubah atau dihapus), dan koleksi `reports` menampung laporan tautan mati dari pengunjung (bentuknya divalidasi aturan, tidak bisa dibaca publik).
+- API pencarian server: `GET /api/companies`, logika skor yang sama dengan halaman Cari, berjalan di server. Ditambah `GET /api/companies/[no]`, `GET /api/stats`, `POST /api/admin/check-link`, dan `GET /api/locale`.
+- Admin panel: halaman `/admin`, login Firebase Auth (Email/Password), untuk tambah, ubah, dan hapus perusahaan, plus tabel berpaginasi, panel kualitas data, impor dan ekspor CSV, jejak perubahan, daftar laporan, dan cek tautan. Akun admin dibuat pemilik repo di Firebase Console, bukan dari aplikasi.
+- Bahasa: antarmuka dua bahasa (Indonesia dan Inggris) lewat cookie `karir-locale`, dipilih dari saklar di header. Data perusahaan tetap Bahasa Indonesia.
+- SEO dan PWA: sitemap dan robots dihasilkan otomatis (413 URL: 7 halaman + 406 halaman perusahaan), tiap halaman detail punya metadata dan JSON-LD, dan ada manifest web agar situs bisa dipasang sebagai aplikasi.
 - Data baca aplikasi: lewat Firestore REST API, bukan SDK gRPC.
 - Validasi data: GitHub Actions menjalankan `scripts/validate.py` (Python) setiap ada perubahan pada CSV.
 - Yang tidak dipakai, dan kenapa: Supabase tidak dipakai karena akun sudah mencapai batas 2 proyek gratis yang aktif, dan keduanya sedang live sehingga tidak bisa di-pause atau dipakai untuk repo ini. Vercel KV tidak dipakai karena bukan database sungguhan. Versi statis lama di folder `docs/` (GitHub Pages, HTML/CSS/JS polos) sudah tidak dipakai lagi sebagai aplikasi live; foldernya tetap ada di repo sebagai versi sebelumnya.
