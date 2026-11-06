@@ -62,7 +62,7 @@ export default async function Faq() {
 
       <section className="dash-section anim-fade-up" aria-label="Tanya jawab">
         {QA.map((item) => (
-          <details key={item.q}>
+          <details key={item.q} className="faq-item">
             <summary>{item.q}</summary>
             <p>
               {item.a}

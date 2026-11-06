@@ -9,6 +9,8 @@ const DICT = {
     "nav.home": "Beranda",
     "nav.search": "Cari",
     "nav.dashboard": "Dasbor",
+    "nav.lamaran": "Lamaran",
+    "nav.mulai": "Mulai",
     "nav.about": "Tentang",
     "nav.method": "Metode",
     "nav.faq": "FAQ",
@@ -22,6 +24,41 @@ const DICT = {
     "footer.about": "Tentang Karir",
     "footer.faq": "Pertanyaan umum",
     "footer.changelog": "Riwayat perubahan",
+    "footer.lamaran": "Lamaran",
+    "footer.map": "Peta",
+    "footer.mulai": "Mulai",
+    "landing.trustLabel": "Angka ringkas",
+    "landing.trustChecked": "kanal dicek",
+    "landing.trustTarget": "lowongan target",
+    "landing.trustMismatch": "syarat tidak cocok",
+    "landing.trustDead": "portal tidak bisa dibuka",
+    "landing.step1": "Ketik domisili dan posisi yang kamu cari.",
+    "landing.step2": "Buka kanal resminya dari hasil pencarian.",
+    "landing.step3": "Lacak lamaranmu supaya tidak ada yang terlewat.",
+    "landing.featuresTitle": "Yang bisa kamu lakukan",
+    "landing.featureSearchTitle": "Cari",
+    "landing.featureSearchDesc":
+      "Cari kanal karir berdasarkan domisili dan posisi, diurutkan dari yang paling cocok.",
+    "landing.featureTrackTitle": "Lacak lamaran",
+    "landing.featureTrackDesc":
+      "Tandai perusahaan yang sudah kamu lamar dan lihat perkembangannya. Tersimpan di browser saja.",
+    "landing.featureMapTitle": "Peta lowongan",
+    "landing.featureMapDesc":
+      "Lihat {n} lowongan target di peta, dikelompokkan per kota.",
+    "landing.faqTitle": "Pertanyaan umum",
+    "landing.faq1q": "Bagaimana cara memakai Karir?",
+    "landing.faq1a":
+      "Ketik domisili dan posisi di Beranda, lalu lihat kanal yang paling cocok. Buka portal resminya dari hasil, baca syarat lengkapnya, dan lamar lewat kanal resmi.",
+    "landing.faq2q": "Apakah Karir gratis?",
+    "landing.faq2a":
+      "Ya, gratis. Tidak ada biaya, tidak ada akun, dan tidak ada data pribadi yang diminta.",
+    "landing.faq3q": "Bagaimana data dicek?",
+    "landing.faq3a":
+      "Tiap perusahaan dibuka kanal karir resminya langsung di browser. Tanggal cek dicatat di tiap baris data.",
+    "landing.faqMore": "Lihat semua pertanyaan",
+    "landing.ctaText":
+      "Cari loker dari kanal resmi, tanpa daftar dan tanpa biaya.",
+    "landing.ctaStart": "Mulai cari kerja",
     "home.title": "Lowongan yang dicek, bukan yang dicopas.",
     "home.lede":
       "406 kanal karir resmi perusahaan Indonesia. Ketik domisili dan posisi yang kamu mau, kami tunjukkan kanal yang paling relevan.",
@@ -105,6 +142,8 @@ const DICT = {
     "nav.home": "Home",
     "nav.search": "Search",
     "nav.dashboard": "Dashboard",
+    "nav.lamaran": "Applications",
+    "nav.mulai": "Start",
     "nav.about": "About",
     "nav.method": "Method",
     "nav.faq": "FAQ",
@@ -118,6 +157,41 @@ const DICT = {
     "footer.about": "About Karir",
     "footer.faq": "FAQ",
     "footer.changelog": "Changelog",
+    "footer.lamaran": "Applications",
+    "footer.map": "Map",
+    "footer.mulai": "Start",
+    "landing.trustLabel": "Key numbers",
+    "landing.trustChecked": "channels checked",
+    "landing.trustTarget": "target openings",
+    "landing.trustMismatch": "requirements don't match",
+    "landing.trustDead": "portals unreachable",
+    "landing.step1": "Type the location and role you are looking for.",
+    "landing.step2": "Open the official channel from the search results.",
+    "landing.step3": "Track your applications so nothing gets missed.",
+    "landing.featuresTitle": "What you can do",
+    "landing.featureSearchTitle": "Search",
+    "landing.featureSearchDesc":
+      "Search career channels by location and role, ranked by best match.",
+    "landing.featureTrackTitle": "Track applications",
+    "landing.featureTrackDesc":
+      "Mark the companies you applied to and follow their progress. Stored in your browser only.",
+    "landing.featureMapTitle": "Openings map",
+    "landing.featureMapDesc":
+      "See {n} target openings on a map, grouped by city.",
+    "landing.faqTitle": "Frequently asked questions",
+    "landing.faq1q": "How do I use Karir?",
+    "landing.faq1a":
+      "Type your location and role on the home page, then see the best matching channels. Open the official portal from the results, read the full requirements, and apply through the official channel.",
+    "landing.faq2q": "Is Karir free?",
+    "landing.faq2a":
+      "Yes, free. No fees, no account, and no personal data asked.",
+    "landing.faq3q": "How is the data checked?",
+    "landing.faq3a":
+      "Each company's official career channel is opened directly in the browser. The check date is recorded on every row of data.",
+    "landing.faqMore": "See all questions",
+    "landing.ctaText":
+      "Find openings from official channels, with no sign-up and no fees.",
+    "landing.ctaStart": "Start looking for work",
     "home.title": "Openings that were checked, not copied.",
     "home.lede":
       "406 official career channels of Indonesian companies. Type your location and the role you want, and we show the most relevant channels.",

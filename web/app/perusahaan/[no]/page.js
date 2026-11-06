@@ -4,6 +4,7 @@ import { getCompanyById, getRelated } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import { StatusBadge, safeLink } from "@/app/components";
 import { StatusDot, CategoryIcon } from "@/app/visual";
+import { TrackerControl } from "@/app/tracker";
 import { DetailActions } from "./actions";
 
 const SITE_URL = "https://karir-adiprmx.vercel.app";
@@ -114,6 +115,10 @@ export default async function CompanyDetail({ params }) {
             loading: t(locale, "common.loading"),
           }}
         />
+      </div>
+
+      <div className="anim-fade-up-1">
+        <TrackerControl company={company} />
       </div>
 
       <section className="dash-section anim-fade-up-2" aria-label="Detail perusahaan">

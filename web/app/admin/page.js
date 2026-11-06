@@ -166,6 +166,9 @@ export default function Admin() {
   const [saving, setSaving] = useState(false);
   const [linkCheck, setLinkCheck] = useState(null);
   const [checkingLink, setCheckingLink] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkDone, setBulkDone] = useState(0);
+  const [bulkResults, setBulkResults] = useState([]);
   const [csvFileName, setCsvFileName] = useState("");
   const [csvValid, setCsvValid] = useState([]);
   const [csvRejected, setCsvRejected] = useState([]);
@@ -397,6 +400,66 @@ export default function Admin() {
       setLinkCheck({ ok: false, error: "Tidak bisa menghubungi server." });
     }
     setCheckingLink(false);
+  }
+
+  /* Jeda antar pemeriksaan massal. Batas di server: 10 permintaan per
+   * 60 detik per alamat IP. Jeda 6,5 detik membuat 22 pemeriksaan
+   * selesai dalam sekitar 2,5 menit tanpa kena batas itu. */
+  const BULK_CHECK_DELAY_MS = 6500;
+
+  async function checkBulkTargets() {
+    const targets = companies
+      .filter((c) => c.status === "Ada lowongan target")
+      .sort((a, b) => a.no - b.no);
+    if (targets.length === 0 || bulkRunning) return;
+    setBulkRunning(true);
+    setBulkResults([]);
+    setBulkDone(0);
+    const done = [];
+    for (let i = 0; i < targets.length; i++) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, BULK_CHECK_DELAY_MS));
+      }
+      const c = targets[i];
+      let entry;
+      try {
+        const res = await fetch("/api/admin/check-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ no: Number(c.no) }),
+        });
+        const body = await res.json().catch(() => ({}));
+        entry = res.ok
+          ? {
+              no: c.no,
+              perusahaan: c.perusahaan,
+              ok: true,
+              status: body.status,
+              checkedAt: new Date().toISOString(),
+            }
+          : {
+              no: c.no,
+              perusahaan: c.perusahaan,
+              ok: false,
+              status: null,
+              error: body.error || "Pemeriksaan gagal.",
+              checkedAt: new Date().toISOString(),
+            };
+      } catch {
+        entry = {
+          no: c.no,
+          perusahaan: c.perusahaan,
+          ok: false,
+          status: null,
+          error: "Tidak bisa menghubungi server.",
+          checkedAt: new Date().toISOString(),
+        };
+      }
+      done.push(entry);
+      setBulkResults([...done]);
+      setBulkDone(i + 1);
+    }
+    setBulkRunning(false);
   }
 
   function handleCsvFile(file) {
@@ -663,6 +726,10 @@ export default function Admin() {
     { key: "noLokasi", label: "Tanpa lokasi", count: qualityCounts.noLokasi },
     { key: "stale", label: "Sudah lama tidak dicek", count: qualityCounts.stale },
   ];
+
+  const targetCompanies = companies
+    .filter((c) => c.status === "Ada lowongan target")
+    .sort((a, b) => a.no - b.no);
 
   return (
     <div className="wrap">
@@ -955,6 +1022,47 @@ export default function Admin() {
             )}
           </div>
         </form>
+      </div>
+
+      <div className="filters" style={{ marginTop: 24 }}>
+        <p className="section-label">Cek massal tautan target</p>
+        <p className="section-note">
+          Memeriksa satu per satu tautan {targetCompanies.length} perusahaan
+          yang punya lowongan target. Tiap pemeriksaan dijeda beberapa
+          detik supaya tidak melewati batas server. Tombol tidak bisa
+          ditekan selama pemeriksaan berjalan.
+        </p>
+        <div className="filter-actions">
+          <button
+            className="btn"
+            type="button"
+            onClick={checkBulkTargets}
+            disabled={bulkRunning || targetCompanies.length === 0}
+          >
+            {bulkRunning
+              ? `Memeriksa ${bulkDone} dari ${targetCompanies.length}…`
+              : `Cek ${targetCompanies.length} tautan target`}
+          </button>
+        </div>
+        {bulkDone > 0 && (
+          <p className="notice">
+            {bulkRunning
+              ? `${bulkDone} dari ${targetCompanies.length} sudah diperiksa.`
+              : `Selesai: ${bulkResults.filter((r) => r.ok).length} bisa dibuka, ${bulkResults.filter((r) => !r.ok).length} gagal, dari ${targetCompanies.length} tautan.`}
+          </p>
+        )}
+        {bulkResults.length > 0 && (
+          <ul className="recheck-list">
+            {bulkResults.map((r) => (
+              <li key={r.no}>
+                {formatTime(r.checkedAt)} · {r.no}. {r.perusahaan} ·{" "}
+                {r.ok
+                  ? `bisa dibuka, kode ${r.status}`
+                  : `gagal: ${r.error}`}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="filters" style={{ marginTop: 24 }}>

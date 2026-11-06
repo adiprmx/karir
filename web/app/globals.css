@@ -572,6 +572,117 @@ h3 { font-size: 16px; font-weight: 700; margin: 0; }
   .anim-fade-up, .anim-fade-up-1, .anim-fade-up-2 { animation: none; }
   .dot.pulse { animation: none; }
   .shimmer { animation: none; }
+  .skeleton { animation: none; }
   .bar-fill { transition: none; }
   .index-list a:hover, .example-chip:hover, .btn:hover { transform: none; }
+}
+
+/* Baris hasil aktif (navigasi keyboard di pencarian langsung). */
+.live-item-active { background: var(--chip); }
+
+/* Skeleton loading: kotak abu berdenyut halus. */
+.skeleton {
+  display: block;
+  height: 16px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f4f4f5 25%, #e4e4e7 50%, #f4f4f5 75%);
+  background-size: 200px 100%;
+  animation: shimmerMove 1.1s linear infinite;
+}
+
+/* Aksi di bawah daftar target. */
+.target-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+/* ---------- Landing (Beranda) ---------- */
+/* Satu ritme untuk semua seksi landing: garis tipis di atas, ruang
+ * lega, tanpa kartu dan tanpa dekorasi. */
+.landing-section { padding: 40px 0 8px; border-top: 1px solid var(--line); }
+.landing-section h2 { margin-bottom: 20px; }
+
+/* Baris kepercayaan: 4 angka dari data, dipisah ruang, bukan kartu. */
+.trust-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  border-top: 1px solid var(--line);
+  padding: 28px 0;
+}
+.trust-num {
+  display: block;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.trust-num.ok { color: var(--ok); }
+.trust-num.warn { color: var(--warn); }
+.trust-label { display: block; font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* Fitur: baris bertautan seperti indeks, bukan kartu dan bukan grid. */
+.feature-rows { list-style: none; margin: 0; padding: 0; }
+.feature-rows li { border-top: 1px solid var(--line); }
+.feature-rows li:last-child { border-bottom: 1px solid var(--line); }
+.feature-rows a {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 16px 4px;
+  text-decoration: none;
+  min-height: 44px;
+  transition: background 150ms ease;
+}
+.feature-rows a:hover { background: var(--soft); }
+.feature-title { font-weight: 700; font-size: 15px; min-width: 140px; flex-shrink: 0; }
+.feature-desc { font-size: 14px; color: var(--muted); flex: 1; min-width: 0; }
+.feature-arrow { color: var(--faint); font-size: 15px; flex-shrink: 0; }
+
+/* Cuplikan FAQ: memakai gaya lipat-buka .faq-item yang sudah ada. */
+.faq-teaser .faq-item:first-of-type { border-top: 1px solid var(--line); }
+.faq-more { margin: 20px 0 0; }
+
+/* Penutup CTA: satu kalimat, dua tombol. */
+.cta-close { padding: 40px 0 8px; border-top: 1px solid var(--line); }
+.cta-text { font-size: 17px; max-width: 56ch; margin: 0 0 20px; }
+.cta-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+@media (max-width: 860px) {
+  .trust-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
+  .feature-rows a { flex-wrap: wrap; gap: 4px 16px; }
+  .feature-title { min-width: 0; }
+  .feature-desc { flex: 1 1 100%; order: 3; }
+}
+
+/* Cetak: hanya isi halaman, tanpa chrome situs. */
+@media print {
+  .site-header,
+  .site-footer,
+  .btn,
+  .searchbar,
+  .live-search,
+  .examples,
+  .target-actions,
+  .locale-toggle,
+  .no-print {
+    display: none !important;
+  }
+  .wrap { max-width: 100%; padding: 0; }
+  .hero { padding: 0 0 16px; }
+  .split { display: block; }
+  .split > * { margin-bottom: 24px; }
+  .anim-fade-up,
+  .anim-fade-up-1,
+  .anim-fade-up-2,
+  .anim-fade-in,
+  .anim-fade-in-1,
+  .anim-fade-in-2 {
+    animation: none;
+  }
+  .dot.pulse { animation: none; }
+  a { color: #000; text-decoration: none; }
+  .index-list li { break-inside: avoid; }
 }

@@ -1,9 +1,13 @@
-/* Logika pencarian Karir — fungsi murni, tanpa DOM.
+/* Logika pencarian Karir, fungsi murni, tanpa DOM.
  * Diport dari docs/app.js (versi statis, sudah terverifikasi).
  * Aturan yang sama berlaku di sini: pencocokan substring dengan
  * pengecualian kalimat penyangkalan, skor rekomendasi
  * posisi +50, domisili +30, lowongan terverifikasi +20,
- * tidak cocok +10, portal mati -20, tidak terverifikasi -10. */
+ * tidak cocok +10, portal mati -20, tidak terverifikasi -10.
+ * Sinonim peran: tokenize() memperluas tiap kata kunci dengan
+ * padanannya (mis. cleaner juga cocok dengan cleaning dan
+ * kebersihan), jadi pencari tidak harus menebak kata yang persis
+ * tertulis di data. */
 
 export function normalizeText(value) {
   if (!value) return "";
@@ -15,14 +19,63 @@ export function normalizeText(value) {
     .trim();
 }
 
-export function tokenize(value) {
-  return normalizeText(value).split(" ").filter((t) => t.length > 0);
+/* Kelompok kata yang artinya sama. Tiap kelompok berisi kata kunci
+ * yang bisa diketik pengguna (words) dan bentuk yang dicari di data
+ * (match). Satu kata kunci selalu cocok dengan dirinya sendiri. */
+const SYNONYM_GROUPS = [
+  { words: ["cleaning", "cleaner", "kebersihan"], match: ["cleaning", "cleaner", "kebersihan"] },
+  { words: ["gudang", "warehouse"], match: ["gudang", "warehouse"] },
+  { words: ["helper", "pembantu"], match: ["helper", "pembantu"] },
+  { words: ["produksi", "production", "operator"], match: ["produksi", "production", "operator"] },
+  { words: ["packing", "packer", "kemas"], match: ["packing", "packer", "kemas"] },
+  { words: ["kasir", "cashier"], match: ["kasir", "cashier"] },
+  { words: ["security", "satpam"], match: ["security", "satpam"] },
+  { words: ["driver", "sopir", "pengemudi"], match: ["driver", "sopir", "pengemudi"] },
+  { words: ["office", "boy", "girl", "ob", "og"], match: ["office boy", "office girl", "ob", "og"] },
+  { words: ["admin", "administrasi"], match: ["admin", "administrasi"] },
+  { words: ["crew", "kru"], match: ["crew", "kru"] },
+  { words: ["store", "toko"], match: ["store", "toko"] },
+  { words: ["barista"], match: ["barista"] },
+  { words: ["baker"], match: ["baker"] },
+];
+
+const SYNONYM_LOOKUP = new Map();
+for (const group of SYNONYM_GROUPS) {
+  for (const word of group.words) {
+    SYNONYM_LOOKUP.set(word, [word, ...group.match.filter((m) => m !== word)]);
+  }
 }
 
-export function fieldMatches(field, tokens) {
+/* Perluas satu kata kunci dengan sinonimnya. */
+export function expandToken(token) {
+  return SYNONYM_LOOKUP.get(token) || [token];
+}
+
+/* Pecah kata kunci jadi kelompok token. Tiap kelompok berisi satu
+ * kata kunci beserta sinonimnya; pencocokan lolos bila salah satu
+ * anggota kelompok muncul di teks. */
+export function tokenize(value) {
+  return normalizeText(value)
+    .split(" ")
+    .filter((t) => t.length > 0)
+    .map(expandToken);
+}
+
+/* Pecah kata kunci TANPA perluasan sinonim, untuk pencocokan nama
+ * perusahaan: sinonim tidak boleh memicu mode nama (mis. "warehouse"
+ * tidak boleh hanya menampilkan perusahaan bernama GudangAda). */
+export function tokenizeRaw(value) {
+  return normalizeText(value)
+    .split(" ")
+    .filter((t) => t.length > 0);
+}
+
+export function fieldMatches(field, tokenGroups) {
   const text = normalizeText(field);
-  if (tokens.length === 0) return false;
-  return tokens.every((t) => text.indexOf(t) !== -1);
+  if (tokenGroups.length === 0) return false;
+  return tokenGroups.every((group) =>
+    group.some((t) => text.indexOf(t) !== -1),
+  );
 }
 
 const DENIAL_WORDS = ["tidak", "bukan", "belum", "tanpa", "kedaluwarsa", "kadaluwarsa"];
@@ -39,10 +92,12 @@ function tokenHasAffirmativeOccurrence(text, token) {
   return false;
 }
 
-export function fieldMatchesAffirmative(field, tokens) {
-  if (tokens.length === 0) return false;
+export function fieldMatchesAffirmative(field, tokenGroups) {
+  if (tokenGroups.length === 0) return false;
   const text = normalizeText(field);
-  return tokens.every((t) => tokenHasAffirmativeOccurrence(text, t));
+  return tokenGroups.every((group) =>
+    group.some((t) => tokenHasAffirmativeOccurrence(text, t)),
+  );
 }
 
 export function scoreCompany(company, query) {
@@ -52,7 +107,12 @@ export function scoreCompany(company, query) {
   let nameMatched = false;
 
   if (query.posisiTokens.length > 0) {
-    if (fieldMatches(company.perusahaan, query.posisiTokens)) {
+    if (
+      fieldMatches(
+        company.perusahaan,
+        query.rawPosisiTokens.map((t) => [t]),
+      )
+    ) {
       nameMatched = true;
     } else if (
       fieldMatchesAffirmative(company.posisi, query.posisiTokens) ||
@@ -123,6 +183,7 @@ export function runSearch(companies, query) {
   const q = {
     domisiliTokens: tokenize(query.domisili || ""),
     posisiTokens: tokenize(query.posisi || ""),
+    rawPosisiTokens: tokenizeRaw(query.posisi || ""),
   };
   let scored = companies.map((c) => {
     const s = scoreCompany(c, q);

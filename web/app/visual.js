@@ -181,14 +181,30 @@ export function AnimatedBar({ value, max, color }) {
   );
 }
 
+/* Tombol cetak: memanggil dialog cetak browser. */
+export function PrintButton({ label }) {
+  return (
+    <button
+      type="button"
+      className="btn ghost"
+      onClick={() => window.print()}
+    >
+      {label}
+    </button>
+  );
+}
+
 /* Pencarian langsung di Beranda: ketik, hasil 6 teratas muncul di bawah
- * tanpa pindah halaman. Enter atau tombol tetap mengirim form GET ke /cari. */
+ * tanpa pindah halaman. Enter atau tombol tetap mengirim form GET ke /cari.
+ * Panah bawah/atas memilih hasil, Enter membuka hasil yang dipilih,
+ * Escape menutup daftar. */
 export function LiveSearch({ labels }) {
   const [domisili, setDomisili] = useState("");
   const [posisi, setPosisi] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
   const timer = useRef(null);
   const abort = useRef(null);
 
@@ -220,6 +236,7 @@ export function LiveSearch({ labels }) {
       .then((j) => {
         if (!j) return;
         setResults(j.results || []);
+        setActive(-1);
         setLoading(false);
       })
       .catch(() => {
@@ -227,10 +244,34 @@ export function LiveSearch({ labels }) {
       });
   }
 
+  function onKeyDown(e) {
+    if (e.key === "ArrowDown") {
+      if (!results || results.length === 0) return;
+      e.preventDefault();
+      setOpen(true);
+      setActive((a) => Math.min(a + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      if (!results || results.length === 0) return;
+      e.preventDefault();
+      setActive((a) => Math.max(a - 1, -1));
+    } else if (e.key === "Enter") {
+      if (open && active >= 0 && results && results[active]) {
+        e.preventDefault();
+        window.location.assign(
+          `/perusahaan/${results[active].company.no}`,
+        );
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      setActive(-1);
+    }
+  }
+
   function onChange(setter, other) {
     return (e) => {
       const v = e.target.value;
       setter(v);
+      setActive(-1);
       clearTimeout(timer.current);
       timer.current = setTimeout(
         () => run(setter === setDomisili ? v : domisili, setter === setPosisi ? v : posisi),
@@ -239,6 +280,11 @@ export function LiveSearch({ labels }) {
       void other;
     };
   }
+
+  const activeId =
+    active >= 0 && results && results[active]
+      ? `live-result-${results[active].company.no}`
+      : undefined;
 
   return (
     <div className="live-search">
@@ -252,7 +298,12 @@ export function LiveSearch({ labels }) {
           autoComplete="off"
           value={domisili}
           onChange={onChange(setDomisili)}
+          onKeyDown={onKeyDown}
           onFocus={() => results && setOpen(true)}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="live-results"
+          aria-activedescendant={activeId}
         />
         <label htmlFor="hero-posisi">{labels.posisi}</label>
         <input
@@ -263,12 +314,18 @@ export function LiveSearch({ labels }) {
           autoComplete="off"
           value={posisi}
           onChange={onChange(setPosisi)}
+          onKeyDown={onKeyDown}
           onFocus={() => results && setOpen(true)}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="live-results"
+          aria-activedescendant={activeId}
         />
         <button type="submit">{labels.searchBtn}</button>
       </form>
       {open && (
         <div
+          id="live-results"
           className="live-results"
           onMouseDown={(e) => e.preventDefault()}
           role="listbox"
@@ -288,17 +345,22 @@ export function LiveSearch({ labels }) {
           )}
           {!loading &&
             results &&
-            results.map((e) => (
+            results.map((e, i) => (
               <Link
                 key={e.company.no}
+                id={`live-result-${e.company.no}`}
                 href={`/perusahaan/${e.company.no}`}
-                className="live-item"
+                className={
+                  i === active ? "live-item live-item-active" : "live-item"
+                }
                 role="option"
+                aria-selected={i === active}
               >
                 <StatusDot status={e.company.status} />
                 <span className="live-name">{e.company.perusahaan}</span>
                 <span className="live-meta">
-                  {e.company.lokasi || "—"} · {e.score}
+                  {e.company.lokasi ? `${e.company.lokasi} · ` : ""}
+                  {e.score}
                 </span>
               </Link>
             ))}

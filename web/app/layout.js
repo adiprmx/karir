@@ -57,9 +57,25 @@ export default async function RootLayout({ children }) {
               <Link href="/">{t(locale, "nav.home")}</Link>
               <Link href="/cari">{t(locale, "nav.search")}</Link>
               <Link href="/dasbor">{t(locale, "nav.dashboard")}</Link>
+              <Link href="/lamaran">{t(locale, "nav.lamaran")}</Link>
               <Link href="/tentang">{t(locale, "nav.about")}</Link>
               <Link href="/faq">{t(locale, "nav.faq")}</Link>
             </nav>
+            <Link
+              href="/mulai"
+              className="btn"
+              style={{
+                background: "#fff",
+                color: "#0a0a0a",
+                borderColor: "#fff",
+                padding: "8px 14px",
+                minHeight: 36,
+                fontSize: 14,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {t(locale, "nav.mulai")}
+            </Link>
             <span className="header-count">
               {total ? t(locale, "header.count", { n: total }) : null}
             </span>
@@ -86,6 +102,12 @@ export default async function RootLayout({ children }) {
               <Link href="/faq">{t(locale, "footer.faq")}</Link>
               {" · "}
               <Link href="/changelog">{t(locale, "footer.changelog")}</Link>
+              {" · "}
+              <Link href="/lamaran">{t(locale, "footer.lamaran")}</Link>
+              {" · "}
+              <Link href="/peta">{t(locale, "footer.map")}</Link>
+              {" · "}
+              <Link href="/mulai">{t(locale, "footer.mulai")}</Link>
               {" · "}
               <a
                 href="https://github.com/adiprmx/karir"

@@ -16,6 +16,28 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.4.0",
+    date: "6 November 2026",
+    points: [
+      "Beranda jadi landing page lengkap: angka kepercayaan, cara kerja, fitur, cuplikan FAQ, dan penutup.",
+      "Onboarding di /mulai: isi domisili dan posisi, langsung diarahkan ke hasil yang cocok. Tersimpan di browser saja.",
+      "Dasbor jadi ruang kerja pribadi: sapaan sesuai pilihanmu, langkah berikutnya, dan ringkasan lamaran.",
+      "Tombol Mulai di header, dan alur pengguna tertulis di PRODUCT.md.",
+    ],
+  },
+  {
+    version: "2.3.0",
+    date: "6 November 2026",
+    points: [
+      "Lamaran Saya: lacak lamaran tanpa akun, tersimpan di browser saja, lengkap tanggal dan catatan.",
+      "Peta lowongan: 22 perusahaan target di peta, titik per kota dengan jumlah, klik untuk melihat daftarnya.",
+      "Bagikan daftar target lewat WhatsApp dan cetak daftar target.",
+      "Pencarian langsung bisa dipilih dengan panah keyboard.",
+      "Gambar pratinjau dinamis per perusahaan saat tautan dibagikan.",
+      "Pencarian mengerti sinonim peran, dan admin bisa cek massal 22 tautan target.",
+    ],
+  },
+  {
     version: "2.2.0",
     date: "6 November 2026",
     points: [

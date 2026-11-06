@@ -2,6 +2,29 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.4.0 — 2026-11-06
+
+Landing page, onboarding, dan dasbor pribadi — alur pengguna lengkap.
+
+- Beranda jadi landing page: angka kepercayaan (406 dicek, 22 target, 5 tidak cocok, 66 portal mati), cara kerja 3 langkah, fitur (Cari, Lacak lamaran, Peta lowongan), cuplikan FAQ, dan penutup dengan tombol Mulai.
+- Onboarding di /mulai: isi domisili dan posisi, langsung diarahkan ke hasil yang cocok; tersimpan di browser saja, tanpa akun.
+- Dasbor jadi ruang kerja pribadi: sapaan sesuai pilihan onboarding, langkah berikutnya, ringkasan lamaran, lalu donat dan daftar seperti sebelumnya.
+- Tombol Mulai di header dan tautan Mulai di footer. Alur pengguna tertulis di PRODUCT.md.
+- Sitemap 416 URL (10 halaman + 406 perusahaan).
+
+## 2.3.0 — 2026-11-06
+
+Aplikasi web dilengkapi jadi alat berburu kerja yang lengkap.
+
+- Lamaran Saya: lacak lamaran tanpa akun (Ditandai, Sudah dilamar, Dipanggil, Ditolak, lengkap tanggal dan catatan), tersimpan di browser saja, ringkasan jumlah per status di /lamaran.
+- Peta lowongan: 22 perusahaan target di peta, titik per kota dengan jumlah, klik untuk melihat daftarnya.
+- Bagikan daftar 22 target lewat WhatsApp dan cetak daftar target (gaya cetak sendiri, tanpa header dan tombol).
+- Pencarian langsung bisa dipilih dengan panah keyboard (Atas/Bawah, Enter, Escape).
+- Gambar pratinjau (OG) dinamis per perusahaan, dibuat dengan next/og.
+- Pencarian mengerti sinonim peran (cleaner menemukan Cleaning Service, warehouse menemukan Staff Gudang); pencocokan nama perusahaan tetap memakai kata yang diketik.
+- Admin: cek massal 22 tautan target satu per satu dengan progres (jeda 6,5 detik antar panggilan karena batas 10 permintaan per menit).
+- Sitemap bertambah jadi 415 URL (9 halaman + 406 perusahaan).
+
 ## 2.2.0 — 2026-11-06
 
 Aplikasi web dibuat lebih hidup, lebih visual, dan lebih rapi.

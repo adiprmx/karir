@@ -11,6 +11,19 @@
 
 Indonesian job seekers. They open the app, type where they live and what position they want, and get the official career channels worth opening. They must be able to tell within seconds whether a result is a verified vacancy or just a channel to check.
 
+## Alur pengguna (satu garis lurus, tanpa cabang buntu)
+
+1. Buka situs. Landing page langsung menjelaskan ini apa: 406 kanal karir resmi yang dicek langsung di browser, 22 di antaranya ada lowongan target. Kolom pencarian ada di layar pertama, jadi pengunjung bisa langsung ketik domisili dan posisi tanpa daftar atau login.
+2. Pengunjung baru tekan "Mulai" (tombol di header). Isi dua hal: domisili dan posisi yang dicari. Jawabannya hanya tersimpan di browsernya sendiri (localStorage, tidak dikirim ke mana pun), lalu ia langsung diarahkan ke hasil yang cocok. Bisa dilewati.
+3. Cari (/cari). Hasil diurutkan pakai skor: posisi cocok paling berat (+50), lalu lokasi cocok (+30), lalu status lowongan target (+20). Klik satu perusahaan, masuk ke halaman detailnya.
+4. Detail perusahaan (/perusahaan/[no]). Status, lokasi, posisi, catatan hasil cek, dan tanggal dicek. Tombol "Buka portal karir" mengarah ke situs resmi perusahaan itu. Di bawahnya ada "Lamaran saya": tandai sebagai Ditandai, Sudah dilamar, Dipanggil, atau Ditolak, lengkap tanggal dan catatan (tersimpan di browser saja).
+5. Lamaran Saya (/lamaran). Semua perusahaan yang ditandai terkumpul di satu halaman, dengan hitungan per status. Di sinilah pengguna mengelola proses lamarannya.
+6. Peta (/peta). 22 lowongan target di peta per kota. Klik satu titik, keluar daftar perusahaan di kota itu.
+7. Dasbor (/dasbor). Ruang kerja pribadi: sapaan sesuai domisili dan posisi dari langkah 2, daftar langkah berikutnya (isi pilihan, tandai lamaran pertama, periksa portal resmi), ringkasan lamaran, lalu grafik sebaran status dan daftar target.
+8. Admin (/admin, khusus owner). Login Firebase, lalu ubah data perusahaan, impor dan ekspor CSV, cek massal 22 tautan target, dan lihat laporan tautan mati dari pengunjung plus audit log.
+
+Alur data: Firestore (406 dokumen) → API server → halaman. Tulis data hanya lewat admin panel (tercatat di audit_logs). Tracker lamaran dan pilihan onboarding tidak pernah menyentuh server: localStorage di browser pengguna saja.
+
 ## Direction contract (surface: web/app)
 
 - THESIS: the tool is the hero. The first viewport is a working search, not a headline about a search. The app has clear screens (Beranda, Cari, Dasbor, detail per company, Tentang, Metode, FAQ) behind one navigation, each with one job. It refuses the category default: dark band plus giant headline plus three equal cards plus staggered reveals.

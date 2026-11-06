@@ -9,6 +9,7 @@ import {
   StatusDot,
   CategoryIcon,
 } from "@/app/visual";
+import DashboardPersonal from "@/app/dashboard-personal";
 
 /* Data di-render saat request, bukan saat build. */
 export const dynamic = "force-dynamic";
@@ -107,6 +108,8 @@ export default async function Dasbor() {
         <h1>{t(locale, "dash.title")}</h1>
       </div>
 
+      <DashboardPersonal />
+
       <div className="stat-stack anim-fade-up" aria-label={t(locale, "home.stats")}>
         <div className="stat-row">
           <span className="stat-num">
@@ -148,6 +151,11 @@ export default async function Dasbor() {
         </div>
 
         <div className="anim-fade-up-2">
+          <p style={{ marginBottom: 24 }}>
+            <Link href="/peta">
+              Lihat peta {targets.length} lowongan target →
+            </Link>
+          </p>
           <section className="dash-section" aria-label={t(locale, "dash.targets")}>
             <p className="section-label">
               {t(locale, "dash.targets")} ({targets.length})
