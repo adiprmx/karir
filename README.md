@@ -56,7 +56,7 @@ Klik satu perusahaan buat lihat status, lokasi, dan tanggal ceknya. Cek lagi sya
 </td>
 <td align="center" width="50%">
 <a href="https://karir-adiprmx.vercel.app/perusahaan/212">
-<img src="https://www.google.com/s2/favicons?domain=novellpharm.com&sz=64" width="64" height="64" alt="PT Novell Pharmaceutical Laboratories">
+<img src="assets/logos/novell.png" width="128" alt="PT Novell Pharmaceutical Laboratories">
 <br>PT Novell Pharmaceutical Laboratories
 </a>
 <br>Helper
@@ -136,7 +136,7 @@ Klik satu perusahaan buat lihat status, lokasi, dan tanggal ceknya. Cek lagi sya
 </td>
 <td align="center" width="50%">
 <a href="https://karir-adiprmx.vercel.app/perusahaan/299">
-<span style="display:inline-block;width:64px;height:64px;line-height:64px;background:#52525b;color:#fff;font-size:32px;font-weight:700;text-align:center;border-radius:8px;" title="Angkasa Pura Supports">A</span>
+<img src="assets/logos/angkasa-pura-supports.png" width="128" alt="Angkasa Pura Supports">
 <br>Angkasa Pura Supports
 </a>
 <br>Cleaning Service
@@ -145,7 +145,7 @@ Klik satu perusahaan buat lihat status, lokasi, dan tanggal ceknya. Cek lagi sya
 <tr>
 <td align="center" width="50%">
 <a href="https://karir-adiprmx.vercel.app/perusahaan/301">
-<img src="https://www.google.com/s2/favicons?domain=www.basf.com&sz=64" width="64" height="64" alt="PT BASF Care Chemicals Indonesia">
+<span style="display:inline-block;width:96px;height:64px;background:#004894;border-radius:8px;line-height:64px;text-align:center;"><img src="assets/logos/basf.svg" width="84" alt="BASF" style="vertical-align:middle;"></span>
 <br>PT BASF Care Chemicals Indonesia
 </a>
 <br>Production Operator
@@ -221,15 +221,15 @@ Kanal dicek di browser, dicatat di CSV, lalu tampil di aplikasi dan API.
 
 | Teknologi | Status | Keterangan |
 | --- | --- | --- |
-| Next.js 15 + React 19 | Dipakai | Aplikasi web dan API |
+| Next.js 15 + React 19 | Dipakai | Web dan API |
 | Vercel | Dipakai | Hosting |
-| Firestore | Dipakai | 406 dokumen perusahaan |
+| Firestore | Dipakai | 406 dokumen |
 | Firebase Auth | Dipakai | Login admin saja |
-| Leaflet + OpenStreetMap | Dipakai | Peta lowongan target |
-| Supabase | Tidak dipakai | Akun mentok 2 proyek gratis |
-| Vercel KV | Tidak dipakai | Butuh database dokumen |
-| Payment gateway | Tidak dipakai | Tidak ada pembayaran |
-| Akun pengguna | Tidak dipakai | Data cuma di browser sendiri |
+| Leaflet | Dipakai | Peta lowongan |
+| Supabase | Tidak dipakai | Mentok 2 proyek |
+| Vercel KV | Tidak dipakai | Bukan dokumen |
+| Payment gateway | Tidak dipakai | Tanpa bayar |
+| Akun pengguna | Tidak dipakai | Di browser saja |
 
 Satu baris per perusahaan, 9 kolom: no, perusahaan, kategori, link karir, status, tanggal cek, catatan, lokasi, posisi. File yang sama tersedia sebagai [CSV](data/daftar-link-karir.csv) dan [XLSX](data/daftar-link-karir.xlsx).
 

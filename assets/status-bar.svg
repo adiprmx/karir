@@ -48,7 +48,7 @@
   </g>
   <g class="row r5">
     <text x="0" y="378" font-size="24" font-weight="600" fill="#111111">Ada lowongan target (tidak cocok)</text>
-    <rect class="bar b5" x="0" y="388" width="17.1" height="22" fill="#e5e5e5"/>
-    <text class="num n5" x="31.1" y="409" font-size="28" font-weight="800" fill="#e5e5e5">5</text>
+    <rect class="bar b5" x="0" y="388" width="17.1" height="22" fill="#8c8c8c"/>
+    <text class="num n5" x="31.1" y="409" font-size="28" font-weight="800" fill="#404040">5</text>
   </g>
 </svg>
