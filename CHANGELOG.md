@@ -2,6 +2,27 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.8.1 — 2026-11-07
+
+Cek ulang 22 perusahaan target di portal resmi masing-masing.
+
+- Super Indo (115): Ada lowongan target → Tidak ada lowongan target (DC Staff Gudang Cikarang tidak lagi terlihat; Staff Gudang hanya di Bawen dan Jawa Timur).
+- Novell (212): Ada lowongan target → Tidak ada lowongan terlihat (HELPER/WAREHOUSE STAFF tidak terlihat di portal maupun kanal resmi terbaru).
+- Apotek K-24 (230): Ada lowongan target → Portal tidak bisa dibuka (pengambilan halaman gagal total).
+- ISS Indonesia (240): Ada lowongan target → Tidak dapat diverifikasi (portal hanya menampilkan kerangka SunFish; daftar lowongan tidak terbaca).
+- Ganesha Operation (246): Ada lowongan target → Tidak dapat diverifikasi (halaman tertahan di "Loading..."; daftar lowongan tidak terbaca).
+- Pintarnya (266): Ada lowongan target → Tidak ada lowongan terlihat (peran lama tidak tampak di antara 7 lowongan di beranda; beranda hanya sampel).
+- Lion Air Group (277): Ada lowongan target → Portal tidak bisa dibuka (permintaan ditolak).
+- Hermina Hospitals (287): Ada lowongan target → Ada lowongan target (tidak cocok) (Gudang Umum masih ada, tetapi syarat D3).
+- Shopee Indonesia / SPX Express (293): Ada lowongan target → Tidak dapat diverifikasi (daftar lowongan dirender JavaScript dan tidak terbaca; tiga detail lowongan dari pencarian kedaluwarsa).
+- Angkasa Pura Supports (299): tetap Ada lowongan target (CLEANING SERVICE batas 10 Nov 2026, TRAIN ATTENDANT batas 18 Nov 2026; CHIEF SECURITY GUARD muncul, SEKRETARIS tidak lagi tampil).
+- BASF (301): Ada lowongan target → Tidak ada lowongan terlihat (halaman karir resmi tidak menampilkan daftar lowongan).
+- OCS Group Indonesia (364): Ada lowongan target → Tidak dapat diverifikasi (portal hanya menampilkan splash lisensi SunFish; daftar lowongan tidak terbaca).
+- Accor (376): Ada lowongan target → Ada lowongan target (tidak cocok) (Receiving & Storekeeper masih ada, tetapi syarat Diploma + pengalaman 1 tahun; Storekeeper baru di Mercure Gatot Subroto juga tidak cocok).
+- PT Dexa Medica (386): Ada lowongan target → Tidak dapat diverifikasi (portal tidak berhasil dibaca).
+- Tetap Ada lowongan target: Yamaha (150), EY (162), Roti O (190), Richeese Factory (200), MR DIY (235), Staffinc (263), Fore Coffee (330), Ranch Market (342).
+- Hitungan baru 406 kanal: 9 Ada lowongan target, 7 tidak cocok, 153 Tidak ada lowongan target, 80 Tidak ada lowongan terlihat, 89 Tidak dapat diverifikasi, 68 Portal tidak bisa dibuka.
+
 ## 2.8.0 — 2026-11-07
 
 Rancang ulang tampilan dan pengalaman dari nol.

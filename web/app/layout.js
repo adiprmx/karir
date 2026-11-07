@@ -5,6 +5,7 @@ import "./globals.css";
 import { getStats } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import SiteNav from "./site-nav";
+import AnalyticsTrack from "./analytics-track";
 import { Icon, ToastHost } from "./visual";
 
 /* Plus Jakarta Sans: huruf rancangan studio Indonesia (Tokotype), dibuat
@@ -96,10 +97,14 @@ export default async function RootLayout({ children }) {
         <Suspense fallback={null}>
           <SiteNav labels={labels} locale={locale} />
         </Suspense>
+        <Suspense fallback={null}>
+          <AnalyticsTrack />
+        </Suspense>
         <main id="main">{children}</main>
         <footer className="foot">
           <div className="wrap foot-inner">
             <p className="foot-note">{t(locale, "footer.note")}</p>
+            <p className="foot-note">{t(locale, "footer.privacy")}</p>
             <nav className="foot-links" aria-label="Footer">
               <Link href="/tentang">{t(locale, "footer.about")}</Link>
               <Link href="/metode">{t(locale, "footer.method")}</Link>

@@ -12,6 +12,7 @@ import { useCompanyIndex, rank } from "@/app/company-index";
 import { loadRecentSearch, saveRecentSearch } from "@/app/recent";
 import { CompanyCard, CardSkeletons } from "@/app/company-card";
 import { useTracker } from "@/app/tracker";
+import { trackEvent } from "@/app/analytics-track";
 import { Icon } from "@/app/visual";
 
 const COLS = 29; // 29 x 14 = 406 kotak
@@ -88,6 +89,9 @@ export default function HeroSearch({ labels, nos, targetMask, roles }) {
     const params = new URLSearchParams();
     if (d.trim()) params.set("domisili", d.trim());
     if (p.trim()) params.set("posisi", p.trim());
+    /* Sekali per pencarian yang dikirim, bukan per ketukan. */
+    const q = [d.trim(), p.trim()].filter(Boolean).join(" ").slice(0, 200);
+    if (q) trackEvent({ type: "search", path: "/cari", q });
     saveRecentSearch(d, p);
     const s = params.toString();
     router.push(s ? `/cari?${s}` : "/cari");

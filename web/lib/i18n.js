@@ -19,6 +19,8 @@ const DICT = {
     "header.count": "{n} perusahaan",
     "footer.note":
       "Data dicek langsung di browser pada 4 dan 5 November 2026. Lowongan bisa berubah setelah tanggal cek, selalu periksa portal resminya.",
+    "footer.privacy":
+      "Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai. Kalau masuk, yang tersimpan hanya email, kata pencarian, dan tanda lamaran, dan hanya pemilik akun dan admin yang bisa melihatnya. Tanpa masuk, tidak ada nama atau identitas yang tersimpan.",
     "footer.repo": "Repo GitHub",
     "footer.method": "Metode pengecekan",
     "footer.about": "Tentang Karir",
@@ -223,6 +225,8 @@ const DICT = {
     "header.count": "{n} companies",
     "footer.note":
       "Data checked directly in the browser on 4 and 5 November 2026. Openings can change after the check date, always verify on the official portal.",
+    "footer.privacy":
+      "Signing in is a choice, not a requirement. Without signing in, every feature still works. If you sign in, only your email, your searches, and your application marks are saved, and only you and the admin can see them. Without signing in, no name or identity is saved.",
     "footer.repo": "GitHub repo",
     "footer.method": "Checking method",
     "footer.about": "About Karir",

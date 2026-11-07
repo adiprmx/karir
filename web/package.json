@@ -14,10 +14,10 @@
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start",
-    "test": "node --test lib/search.test.js"
+    "test": "node --test lib/search.test.js lib/analytics.test.js lib/api-token.test.js lib/tracker-sync.test.js lib/index-token.test.js"
   },
   "type": "module",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "devDependencies": {
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.29"

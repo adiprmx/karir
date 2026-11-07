@@ -55,6 +55,282 @@ const CSV_HEADER = [
 const PAGE_SIZE = 20;
 const MAX_IMPORT = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const VISITOR_LIMIT = 1000;
+const VISITOR_DAYS = 30;
+const TRACKER_ACTIONS = ["Ditandai", "Sudah dilamar", "Dipanggil", "Ditolak"];
+
+/* Hari (YYYY-MM-DD) dari satu catatan pengunjung: pakai kolom `day`
+ * bila ada, kalau tidak potong 10 huruf pertama dari `ts`. */
+function eventDay(e) {
+  const d =
+    typeof e.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.day)
+      ? e.day
+      : String(e.ts || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "";
+}
+
+function dayString(date) {
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${m}-${day}`;
+}
+
+function formatDay(day) {
+  const parts = day.split("-");
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  if (Number.isNaN(d.getTime())) return day;
+  return d.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function topCounts(map, keyName) {
+  return [...map.entries()]
+    .map(([key, count]) => ({ [keyName]: key, count }))
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      if (typeof a[keyName] === "number" && typeof b[keyName] === "number")
+        return a[keyName] - b[keyName];
+      return String(a[keyName]).localeCompare(String(b[keyName]), "id");
+    })
+    .slice(0, 10);
+}
+
+/* Ringkasan pengunjung dari catatan mentah. Fungsi murni: tidak
+ * menyentuh jaringan atau state, jadi bisa dites langsung. `today`
+ * bisa diisi tanggal tertentu supaya tes deterministik. Yang dihitung
+ * hanya agregat anonim: alamat pengunjung tidak pernah disimpan atau
+ * ditampilkan. */
+export function aggregateVisitors(events, companies, today = new Date()) {
+  const list = Array.isArray(events) ? events : [];
+  const names = new Map(
+    (Array.isArray(companies) ? companies : []).map((c) => [
+      Number(c.no),
+      c.perusahaan ? String(c.perusahaan) : `No. ${c.no}`,
+    ]),
+  );
+
+  const start = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  start.setDate(start.getDate() - (VISITOR_DAYS - 1));
+  const cutoffStr = dayString(start);
+
+  const perDay = new Map();
+  const paths = new Map();
+  const searches = new Map();
+  const opened = new Map();
+  const tracker = new Map(TRACKER_ACTIONS.map((a) => [a, 0]));
+  const kindsByVisitor = new Map();
+
+  list.forEach((e) => {
+    if (!e || typeof e !== "object") return;
+    const who = e.visitorHash || e.visitor || "";
+    const day = eventDay(e);
+    if (who && day && day >= cutoffStr) {
+      if (!perDay.has(day)) perDay.set(day, new Set());
+      perDay.get(day).add(who);
+    }
+    if (e.type === "pageview" && typeof e.path === "string" && e.path.trim()) {
+      paths.set(e.path, (paths.get(e.path) || 0) + 1);
+    }
+    if (e.type === "search" && typeof e.q === "string" && e.q.trim()) {
+      const q = e.q.trim();
+      searches.set(q, (searches.get(q) || 0) + 1);
+    }
+    if (e.type === "detail" && Number.isInteger(e.companyNo)) {
+      opened.set(e.companyNo, (opened.get(e.companyNo) || 0) + 1);
+    }
+    if (e.type === "tracker_mark" && TRACKER_ACTIONS.includes(e.action)) {
+      tracker.set(e.action, tracker.get(e.action) + 1);
+    }
+    if (typeof e.visitor === "string" && e.visitor) {
+      if (!kindsByVisitor.has(e.visitor))
+        kindsByVisitor.set(e.visitor, new Set());
+      kindsByVisitor.get(e.visitor).add(e.type);
+    }
+  });
+
+  const daily = [];
+  for (let i = VISITOR_DAYS - 1; i >= 0; i--) {
+    const d = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    d.setDate(d.getDate() - i);
+    const key = dayString(d);
+    daily.push({
+      day: key,
+      label: formatDay(key),
+      count: perDay.get(key)?.size || 0,
+    });
+  }
+
+  const totalVisitors = kindsByVisitor.size;
+  const serious = [...kindsByVisitor.values()].filter(
+    (kinds) =>
+      kinds.has("search") && kinds.has("detail") && kinds.has("tracker_mark"),
+  ).length;
+
+  return {
+    total: list.length,
+    daily,
+    topPaths: topCounts(paths, "path"),
+    topSearches: topCounts(searches, "q"),
+    topCompanies: topCounts(opened, "no").map((row) => ({
+      no: row.no,
+      name: names.get(row.no) || `No. ${row.no}`,
+      count: row.count,
+    })),
+    tracker: TRACKER_ACTIONS.map((action) => ({
+      action,
+      count: tracker.get(action),
+    })),
+    serious: {
+      count: serious,
+      total: totalVisitors,
+      percent:
+        totalVisitors === 0 ? 0 : Math.round((serious / totalVisitors) * 100),
+    },
+  };
+}
+
+/* Aktivitas akun yang masuk, dipisah dari tamu. Fungsi murni.
+ * `events` catatan pengunjung (boleh membawa `uid` bila ada pengguna
+ * yang masuk), `profiles` daftar profil akun { id/uid, email,
+ * displayName }. Tamu dihitung sebagai agregat tanpa identitas.
+ * "Butuh beneran": mencari peran spesifik, membuka detail, dan
+ * menandai lamaran, sama seperti hitungan serius di aggregateVisitors,
+ * hanya dipisah akun masuk vs tamu. */
+export function aggregateAccountActivity(events, profiles) {
+  const list = Array.isArray(events) ? events : [];
+  const profileByUid = new Map(
+    (Array.isArray(profiles) ? profiles : []).map((p) => [
+      String(p.id ?? p.uid ?? ""),
+      p,
+    ]),
+  );
+  const byUid = new Map();
+  const guestKinds = new Map();
+  const guests = { searches: 0, opened: 0, tracker: 0, total: 0 };
+
+  list.forEach((e) => {
+    if (!e || typeof e !== "object") return;
+    const isSearch = e.type === "search";
+    const isDetail = e.type === "detail";
+    const isTracker = e.type === "tracker_mark";
+    const uid =
+      typeof e.uid === "string" && e.uid ? e.uid : "";
+    if (uid) {
+      if (!byUid.has(uid)) {
+        byUid.set(uid, {
+          uid,
+          searches: 0,
+          opened: 0,
+          tracker: 0,
+          total: 0,
+          kinds: new Set(),
+        });
+      }
+      const r = byUid.get(uid);
+      r.total++;
+      if (isSearch) r.searches++;
+      if (isDetail) r.opened++;
+      if (isTracker) r.tracker++;
+      r.kinds.add(e.type);
+    } else {
+      const key = e.visitorHash || e.visitor || "tamu";
+      if (!guestKinds.has(key)) guestKinds.set(key, new Set());
+      guestKinds.get(key).add(e.type);
+      guests.total++;
+      if (isSearch) guests.searches++;
+      if (isDetail) guests.opened++;
+      if (isTracker) guests.tracker++;
+    }
+  });
+
+  const isSerious = (kinds) =>
+    kinds.has("search") && kinds.has("detail") && kinds.has("tracker_mark");
+
+  const accounts = [...byUid.values()]
+    .map((r) => {
+      const p = profileByUid.get(r.uid);
+      return {
+        uid: r.uid,
+        email: p && p.email ? String(p.email) : "",
+        displayName: p && p.displayName ? String(p.displayName) : "",
+        searches: r.searches,
+        opened: r.opened,
+        tracker: r.tracker,
+        total: r.total,
+        serious: isSerious(r.kinds),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.total - a.total ||
+        a.email.localeCompare(b.email, "id") ||
+        a.uid.localeCompare(b.uid),
+    )
+    .slice(0, 10);
+
+  return {
+    accounts,
+    totalLogin: byUid.size,
+    seriousLogin: [...byUid.values()].filter((r) => isSerious(r.kinds))
+      .length,
+    guests: {
+      ...guests,
+      totalVisitors: guestKinds.size,
+      serious: [...guestKinds.values()].filter((k) => isSerious(k)).length,
+    },
+  };
+}
+
+/* Sinyal kemungkinan bot, hanya untuk dilihat admin, bukan untuk
+ * memblokir otomatis. Fungsi murni. `top`: pengunjung paling aktif
+ * berdasarkan jumlah aktivitas. `noPageview`: pengunjung dengan
+ * minimal 3 aktivitas dan nol pageview. `flagged`: jumlah aktivitas
+ * bertanda uaFlag dari server; bila field itu belum ada di data,
+ * hasFlagField false dan angkanya 0. */
+export function aggregateBotSignals(events) {
+  const list = Array.isArray(events) ? events : [];
+  const byVisitor = new Map();
+  let flagged = 0;
+  let hasFlagField = false;
+  list.forEach((e) => {
+    if (!e || typeof e !== "object") return;
+    if ("uaFlag" in e) hasFlagField = true;
+    if (e.uaFlag === true) flagged++;
+    const key = e.visitorHash || e.visitor || "";
+    if (!key) return;
+    if (!byVisitor.has(key)) {
+      byVisitor.set(key, { key, count: 0, pageviews: 0 });
+    }
+    const r = byVisitor.get(key);
+    r.count++;
+    if (e.type === "pageview") r.pageviews++;
+  });
+  const all = [...byVisitor.values()];
+  return {
+    top: [...all]
+      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+      .slice(0, 10),
+    noPageview: all
+      .filter((r) => r.count >= 3 && r.pageviews === 0)
+      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+      .slice(0, 10),
+    noPageviewTotal: all.filter((r) => r.count >= 3 && r.pageviews === 0)
+      .length,
+    flagged,
+    hasFlagField,
+  };
+}
 
 function todayStr() {
   const d = new Date();
@@ -180,6 +456,12 @@ export default function Admin() {
   const [auditError, setAuditError] = useState("");
   const [reports, setReports] = useState([]);
   const [reportsError, setReportsError] = useState("");
+  const [visitorEvents, setVisitorEvents] = useState([]);
+  const [loadingVisitors, setLoadingVisitors] = useState(false);
+  const [visitorsError, setVisitorsError] = useState("");
+  const [visitorsCapped, setVisitorsCapped] = useState(false);
+  const [userProfiles, setUserProfiles] = useState([]);
+  const [profilesError, setProfilesError] = useState("");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -227,11 +509,46 @@ export default function Admin() {
     }
   }
 
+  async function loadVisitors() {
+    setLoadingVisitors(true);
+    setVisitorsError("");
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, "analytics_events"),
+          orderBy("ts", "desc"),
+          limit(VISITOR_LIMIT),
+        ),
+      );
+      setVisitorEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setVisitorsCapped(snap.size >= VISITOR_LIMIT);
+    } catch {
+      setVisitorsError(
+        "Data pengunjung belum bisa dibaca. Terbitkan dulu aturan analytics_events di Firebase Console.",
+      );
+    }
+    setLoadingVisitors(false);
+  }
+
+  async function loadProfiles() {
+    setProfilesError("");
+    try {
+      const snap = await getDocs(
+        query(collection(db, "user_profiles"), limit(500)),
+      );
+      setUserProfiles(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch {
+      setProfilesError("Profil akun tidak bisa dibaca.");
+    }
+  }
+
   useEffect(() => {
     if (!user) return;
     loadCompanies();
     loadAudit();
     loadReports();
+    loadVisitors();
+    loadProfiles();
   }, [user]);
 
   useEffect(() => {
@@ -743,6 +1060,13 @@ export default function Admin() {
     stale: companies.filter(isStale).length,
   };
 
+  const visitorSummary = aggregateVisitors(visitorEvents, companies);
+  const accountActivity = aggregateAccountActivity(
+    visitorEvents,
+    userProfiles,
+  );
+  const botSignals = aggregateBotSignals(visitorEvents);
+
   let shown = companies.filter((c) => {
     const q = filter.trim().toLowerCase();
     if (q && !`${c.perusahaan} ${c.no}`.toLowerCase().includes(q)) return false;
@@ -1205,6 +1529,312 @@ export default function Admin() {
               </li>
             ))}
           </ul>
+        )}
+      </div>
+
+      <div className="filters" style={{ marginTop: 24 }}>
+        <p className="section-label">Pengunjung</p>
+        <p className="section-note">
+          Ringkasan kunjungan 30 hari terakhir. Angka dihitung dari catatan
+          yang masuk, tanpa menyimpan alamat pengunjung.
+        </p>
+        {visitorsError && <p className="notice">{visitorsError}</p>}
+        {loadingVisitors && (
+          <div className="state">
+            <strong>Memuat data pengunjung…</strong>
+          </div>
+        )}
+        {!loadingVisitors &&
+          !visitorsError &&
+          visitorEvents.length === 0 && (
+            <p className="notice">
+              Belum ada data pengunjung. Pencatatan mulai berjalan setelah
+              aturan pengunjung diterbitkan.
+            </p>
+          )}
+        {!loadingVisitors &&
+          !visitorsError &&
+          visitorEvents.length > 0 && (
+            <>
+              <div className="stat-row">
+                <span className="stat-num num">
+                  {visitorSummary.serious.count} dari{" "}
+                  {visitorSummary.serious.total}
+                </span>
+                <span className="stat-label">
+                  pengunjung ({visitorSummary.serious.percent}%) mencari
+                  peran spesifik, membuka detail, dan menandai lamaran.
+                </span>
+              </div>
+
+              <p>
+                <strong>Pengunjung per hari</strong>
+              </p>
+              <table className="results-table">
+                <thead>
+                  <tr>
+                    <th>Hari</th>
+                    <th>Pengunjung</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visitorSummary.daily.map((d) => (
+                    <tr key={d.day}>
+                      <td data-label="Hari">{d.label}</td>
+                      <td data-label="Pengunjung" className="num">
+                        {d.count}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <p>
+                <strong>Halaman paling sering dibuka</strong>
+              </p>
+              {visitorSummary.topPaths.length === 0 ? (
+                <p className="section-note">
+                  Belum ada halaman yang tercatat dibuka.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Halaman</th>
+                      <th>Dibuka</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visitorSummary.topPaths.map((row) => (
+                      <tr key={row.path}>
+                        <td data-label="Halaman">{row.path}</td>
+                        <td data-label="Dibuka" className="num">
+                          {row.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <p>
+                <strong>Kata yang paling sering dicari</strong>
+              </p>
+              {visitorSummary.topSearches.length === 0 ? (
+                <p className="section-note">
+                  Belum ada pencarian yang tercatat.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Kata yang dicari</th>
+                      <th>Dicari</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visitorSummary.topSearches.map((row) => (
+                      <tr key={row.q}>
+                        <td data-label="Kata yang dicari">{row.q}</td>
+                        <td data-label="Dicari" className="num">
+                          {row.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <p>
+                <strong>Perusahaan paling sering dibuka</strong>
+              </p>
+              {visitorSummary.topCompanies.length === 0 ? (
+                <p className="section-note">
+                  Belum ada detail perusahaan yang dibuka.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Perusahaan</th>
+                      <th>Dibuka</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visitorSummary.topCompanies.map((row) => (
+                      <tr key={row.no}>
+                        <td data-label="Perusahaan">
+                          {row.no}. {row.name}
+                        </td>
+                        <td data-label="Dibuka" className="num">
+                          {row.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <p>
+                <strong>Penanda lamaran</strong>
+              </p>
+              <table className="results-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Jumlah</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visitorSummary.tracker.map((row) => (
+                    <tr key={row.action}>
+                      <td data-label="Status">{row.action}</td>
+                      <td data-label="Jumlah" className="num">
+                        {row.count}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <p>
+                <strong>Akun paling aktif</strong>
+              </p>
+              <p className="section-note">
+                Akun yang masuk dan paling sering memakai situs. Tamu
+                dihitung terpisah tanpa nama.
+              </p>
+              {profilesError && <p className="notice">{profilesError}</p>}
+              <p className="notice">
+                Yang butuh beneran: {accountActivity.seriousLogin} akun
+                masuk dan {accountActivity.guests.serious} tamu dari{" "}
+                {accountActivity.guests.totalVisitors} tamu, mencari peran
+                spesifik, membuka detail, dan menandai lamaran.
+              </p>
+              {accountActivity.accounts.length === 0 ? (
+                <p className="section-note">
+                  Belum ada akun yang masuk dan tercatat aktif.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Akun</th>
+                      <th>Pencarian</th>
+                      <th>Dibuka</th>
+                      <th>Ditandai</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accountActivity.accounts.map((row) => (
+                      <tr key={row.uid}>
+                        <td data-label="Akun">
+                          {row.displayName ? `${row.displayName} · ` : ""}
+                          {row.email ||
+                            `Akun tanpa email tersimpan (${row.uid.slice(0, 8)})`}
+                        </td>
+                        <td data-label="Pencarian" className="num">
+                          {row.searches}
+                        </td>
+                        <td data-label="Dibuka" className="num">
+                          {row.opened}
+                        </td>
+                        <td data-label="Ditandai" className="num">
+                          {row.tracker}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p className="section-note">
+                Tamu: {accountActivity.guests.searches} pencarian,{" "}
+                {accountActivity.guests.opened} detail dibuka,{" "}
+                {accountActivity.guests.tracker} lamaran ditandai, dari{" "}
+                {accountActivity.guests.total} aktivitas.
+              </p>
+
+              <p>
+                <strong>Kemungkinan bot</strong>
+              </p>
+              <p className="section-note">
+                Hanya untuk dilihat. Tidak ada yang diblokir otomatis
+                dari sini.
+              </p>
+              <p className="notice">
+                Aktivitas bertanda otomatis: {botSignals.flagged}.
+                {!botSignals.hasFlagField &&
+                  " Penanda dari server belum ada di data ini, jadi angkanya 0."}
+              </p>
+              <p>
+                <strong>Pengunjung paling aktif</strong>
+              </p>
+              {botSignals.top.length === 0 ? (
+                <p className="section-note">
+                  Belum ada aktivitas pengunjung yang tercatat.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Pengunjung</th>
+                      <th>Aktivitas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {botSignals.top.map((row) => (
+                      <tr key={row.key}>
+                        <td data-label="Pengunjung">
+                          {row.key.slice(0, 12)}
+                        </td>
+                        <td data-label="Aktivitas" className="num">
+                          {row.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p>
+                <strong>Tanpa membuka halaman</strong>
+              </p>
+              <p className="section-note">
+                Pengunjung dengan 3 aktivitas atau lebih dan nol halaman
+                yang dibuka: {botSignals.noPageviewTotal}.
+              </p>
+              {botSignals.noPageview.length === 0 ? (
+                <p className="section-note">
+                  Tidak ada pengunjung dengan 3 aktivitas atau lebih tanpa
+                  membuka halaman.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Pengunjung</th>
+                      <th>Aktivitas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {botSignals.noPageview.map((row) => (
+                      <tr key={row.key}>
+                        <td data-label="Pengunjung">
+                          {row.key.slice(0, 12)}
+                        </td>
+                        <td data-label="Aktivitas" className="num">
+                          {row.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
+          )}
+        {visitorsCapped && !visitorsError && (
+          <p className="section-note">
+            Angka di atas dihitung dari 1000 aktivitas terakhir.
+          </p>
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { getTargets } from "@/lib/companies";
+import { getTargetsOrSeed } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import { matchCity } from "@/lib/cities";
 import MapClient from "@/app/map-client";
@@ -13,7 +13,7 @@ export const metadata = {
 };
 
 export default async function Peta() {
-  const [targets, locale] = await Promise.all([getTargets(), getLocale()]);
+  const [targets, locale] = await Promise.all([getTargetsOrSeed(), getLocale()]);
   const byCity = new Map();
   const other = [];
   for (const c of targets) {

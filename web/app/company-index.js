@@ -6,20 +6,21 @@
  * tetapi tanpa menunggu jaringan tiap kali mengetik. */
 import { useCallback, useEffect, useState } from "react";
 import { runSearch } from "@/lib/search";
+import { createIndexFetcher } from "@/lib/index-token";
 
 let cached = null;
 let inflight = null;
+/* Satu pemakai izin untuk semua pemanggil loadIndex: izin diminta
+ * sekali, dipakai ulang sampai hampir habis (lihat lib/index-token). */
+const indexFetcher = createIndexFetcher();
 
 export function loadIndex() {
   if (cached) return Promise.resolve(cached);
   if (!inflight) {
-    inflight = fetch("/api/index")
-      .then((r) => {
-        if (!r.ok) throw new Error("gagal");
-        return r.json();
-      })
-      .then((j) => {
-        cached = Array.isArray(j.companies) ? j.companies : [];
+    inflight = indexFetcher
+      .fetchIndex()
+      .then((list) => {
+        cached = list;
         return cached;
       })
       .finally(() => {

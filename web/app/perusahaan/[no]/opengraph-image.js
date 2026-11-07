@@ -1,12 +1,12 @@
 import { ImageResponse } from "next/og";
-import { getCompanyById } from "@/lib/companies";
+import { getCompanyByIdOrSeed } from "@/lib/companies";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function Image({ params }) {
   const { no } = await params;
-  const company = await getCompanyById(no);
+  const company = await getCompanyByIdOrSeed(no);
   const name = company ? company.perusahaan : "Karir";
   const status = company ? company.status : "";
   return new ImageResponse(

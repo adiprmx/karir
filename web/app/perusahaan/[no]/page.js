@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCompanyById, getRelated } from "@/lib/companies";
+import { getCompanyByIdOrSeed, getRelatedOrSeed } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import {
   STATUS_EXPLAIN,
@@ -27,7 +27,7 @@ function shortDescription(company) {
 
 export async function generateMetadata({ params }) {
   const { no } = await params;
-  const company = await getCompanyById(no);
+  const company = await getCompanyByIdOrSeed(no);
   if (!company) notFound();
   const description = shortDescription(company);
   return {
@@ -45,11 +45,11 @@ export async function generateMetadata({ params }) {
 export default async function CompanyDetail({ params }) {
   const { no } = await params;
   const [company, locale] = await Promise.all([
-    getCompanyById(no),
+    getCompanyByIdOrSeed(no),
     getLocale(),
   ]);
   if (!company) notFound();
-  const related = await getRelated(company, 4);
+  const related = await getRelatedOrSeed(company, 4);
   const hasLink = safeLink(company.link_karir);
   const url = `${SITE_URL}/perusahaan/${company.no}`;
   const description = shortDescription(company);

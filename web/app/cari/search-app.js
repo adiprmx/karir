@@ -16,6 +16,7 @@ import {
 } from "react";
 import { useCompanyIndex, rank } from "@/app/company-index";
 import { saveRecentSearch } from "@/app/recent";
+import { trackEvent } from "@/app/analytics-track";
 import { CompanyCard, CardSkeletons } from "@/app/company-card";
 import { useTracker } from "@/app/tracker";
 import { Icon, Sheet, reducedMotion } from "@/app/visual";
@@ -101,6 +102,10 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
   const { entries, toggle } = useTracker();
   const listRef = useRef(null);
   const prevTops = useRef(new Map());
+  /* Tanda pencarian/filter terakhir yang sudah dikirim, supaya satu
+   * penerapan yang sama tidak terkirim dua kali. */
+  const lastSentSig = useRef(null);
+  const firstApplied = useRef(true);
 
   const set = useCallback((patch) => {
     setState((s) => ({ ...s, ...patch }));
@@ -114,7 +119,10 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
   );
 
   /* Alamat ikut berubah (tanpa menumpuk riwayat) dan pencarian terakhir
-   * disimpan, keduanya setelah pengguna berhenti mengetik. */
+   * disimpan, keduanya setelah pengguna berhenti mengetik. Titik yang
+   * sama dipakai untuk mengirim satu event pencarian/filter: hanya
+   * bila state benar-benar diterapkan (sesudah debounce 600 mdtk),
+   * bukan per ketukan. */
   useEffect(() => {
     const id = setTimeout(() => {
       const qs = new URLSearchParams();
@@ -126,6 +134,35 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
       const s = qs.toString();
       window.history.replaceState(null, "", s ? `/cari?${s}` : "/cari");
       saveRecentSearch(state.domisili, state.posisi);
+      /* Lewati kiriman pertama: itu isi awal dari alamat halaman,
+       * bukan perubahan yang dibuat pengguna di halaman ini. */
+      if (firstApplied.current) {
+        firstApplied.current = false;
+        lastSentSig.current = [
+          state.domisili.trim(),
+          state.posisi.trim(),
+          state.kategori,
+          state.status,
+        ].join("|");
+        return;
+      }
+      const sig = [
+        state.domisili.trim(),
+        state.posisi.trim(),
+        state.kategori,
+        state.status,
+      ].join("|");
+      if (sig === lastSentSig.current) return;
+      lastSentSig.current = sig;
+      const keyword = [state.domisili.trim(), state.posisi.trim()]
+        .filter(Boolean)
+        .join(" ")
+        .slice(0, 200);
+      if (keyword) {
+        trackEvent({ type: "search", path: "/cari", q: keyword });
+      } else if (state.kategori || state.status) {
+        trackEvent({ type: "filter", path: "/cari" });
+      }
     }, 600);
     return () => clearTimeout(id);
   }, [state]);

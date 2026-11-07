@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Icon, Sheet } from "./visual";
 import { useTracker } from "./tracker";
+import AuthPanel, { AuthWatcher, useAuthUser } from "./auth-panel";
 
 function isActive(pathname, href) {
   if (href === "/") return pathname === "/";
@@ -70,6 +71,12 @@ export default function SiteNav({ labels, locale }) {
   const [menu, setMenu] = useState(false);
   const { entries } = useTracker();
   const tracked = Object.keys(entries || {}).length;
+  const authUser = useAuthUser();
+  const authLabel = authUser
+    ? (authUser.displayName || authUser.email || "Akun")
+        .split("@")[0]
+        .slice(0, 12) || "Akun"
+    : "Masuk";
   const close = useCallback(() => setMenu(false), []);
 
   useEffect(() => setMenu(false), [pathname]);
@@ -93,6 +100,7 @@ export default function SiteNav({ labels, locale }) {
 
   return (
     <>
+      <AuthWatcher />
       <header className="topbar">
         <div className="wrap topbar-in">
           <Link href="/" className="brand" aria-label="Karir, beranda">
@@ -115,6 +123,17 @@ export default function SiteNav({ labels, locale }) {
           </nav>
           <div className="topbar-end">
             {labels.count && <span className="topbar-count num">{labels.count}</span>}
+            <button
+              type="button"
+              className="btn small ghost"
+              onClick={() => setMenu(true)}
+              aria-label={
+                authUser ? `Akun ${authUser.email}` : "Masuk atau daftar"
+              }
+            >
+              <Icon name="user" size={16} />
+              {authLabel}
+            </button>
             <LocaleSwitch locale={locale} />
             <ThemeToggle label={labels.theme} />
             <Link href="/mulai" className="btn small top-cta">
@@ -155,6 +174,7 @@ export default function SiteNav({ labels, locale }) {
       </nav>
 
       <Sheet open={menu} onClose={close} title={labels.menu}>
+        <AuthPanel />
         <ul className="menu-list">
           {more.map((m) => (
             <li key={m.href}>

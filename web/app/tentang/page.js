@@ -1,4 +1,4 @@
-import { getStats } from "@/lib/companies";
+import { getStatsOrSeed } from "@/lib/companies";
 import { getLocale } from "@/lib/i18n";
 import { CountUp } from "@/app/visual";
 
@@ -21,7 +21,7 @@ const COPY = {
 
 export default async function Tentang() {
   const locale = await getLocale();
-  const stats = await getStats();
+  const stats = await getStatsOrSeed();
   const total = stats.total;
   const targets = stats.byStatus["Ada lowongan target"] || 0;
   const notFit = stats.byStatus["Ada lowongan target (tidak cocok)"] || 0;

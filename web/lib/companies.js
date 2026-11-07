@@ -89,10 +89,37 @@ export async function getCompanyById(no) {
   return docToCompany(d);
 }
 
+/* Cadangan lokal: snapshot repo `data/companies.json` (406 baris, dicek
+ * 4-5 Nov 2026). Dipakai HALAMAN saat Firestore tidak bisa dijangkau,
+ * supaya pengunjung tetap melihat data asli (dengan tanggal cek aslinya),
+ * bukan halaman error 500. API tetap memakai getCompanies() yang melempar
+ * supaya jawaban 503-nya jujur saat data live tidak bisa dimuat.
+ * Impor dinamis supaya berkas JSON tidak ikut ke bundle klien. */
+async function loadSeed() {
+  const { default: seed } = await import("@/data/companies.json");
+  return seed;
+}
+
+export async function getCompaniesOrSeed() {
+  try {
+    return await getCompanies();
+  } catch {
+    return loadSeed();
+  }
+}
+
+export async function getCompanyByIdOrSeed(no) {
+  try {
+    return await getCompanyById(no);
+  } catch {
+    const seed = await loadSeed();
+    return seed.find((c) => c.no === Number(no)) || null;
+  }
+}
+
 /* Perusahaan sejenis: kategori sama, bukan dirinya sendiri, yang punya
  * lowongan target dulu, lalu nama A-Z. */
-export async function getRelated(company, n = 6) {
-  const companies = await getCompanies();
+function computeRelated(companies, company, n = 6) {
   const same = companies.filter(
     (c) => c.kategori === company.kategori && c.no !== company.no,
   );
@@ -104,9 +131,16 @@ export async function getRelated(company, n = 6) {
   return same.slice(0, n);
 }
 
+export async function getRelated(company, n = 6) {
+  return computeRelated(await getCompanies(), company, n);
+}
+
+export async function getRelatedOrSeed(company, n = 6) {
+  return computeRelated(await getCompaniesOrSeed(), company, n);
+}
+
 /* Jumlah baris yang tanggal ceknya sudah lebih dari 30 hari. */
-export async function getStaleCount() {
-  const companies = await getCompanies();
+function computeStaleCount(companies) {
   const now = Date.now();
   const DAY = 24 * 60 * 60 * 1000;
   return companies.filter((c) => {
@@ -116,20 +150,38 @@ export async function getStaleCount() {
   }).length;
 }
 
-export async function getTargets() {
-  const companies = await getCompanies();
+export async function getStaleCount() {
+  return computeStaleCount(await getCompanies());
+}
+
+function computeTargets(companies) {
   return companies
     .filter((c) => c.status === "Ada lowongan target")
     .sort((a, b) => a.perusahaan.localeCompare(b.perusahaan, "id"));
 }
 
-export async function getCategories() {
-  const companies = await getCompanies();
+export async function getTargets() {
+  return computeTargets(await getCompanies());
+}
+
+export async function getTargetsOrSeed() {
+  return computeTargets(await getCompaniesOrSeed());
+}
+
+function computeCategories(companies) {
   const seen = new Map();
   companies.forEach((c) => {
     if (c.kategori) seen.set(c.kategori, (seen.get(c.kategori) || 0) + 1);
   });
   return [...seen.keys()].sort((a, b) => a.localeCompare(b, "id"));
+}
+
+export async function getCategories() {
+  return computeCategories(await getCompanies());
+}
+
+export async function getCategoriesOrSeed() {
+  return computeCategories(await getCompaniesOrSeed());
 }
 
 export const STATUS_ORDER = [
@@ -141,8 +193,7 @@ export const STATUS_ORDER = [
   "Portal tidak bisa dibuka",
 ];
 
-export async function getStats() {
-  const companies = await getCompanies();
+function computeStats(companies) {
   const total = companies.length;
   const byStatus = {};
   STATUS_ORDER.forEach((s) => {
@@ -153,4 +204,12 @@ export async function getStats() {
     if (c.tanggal_cek) byDate[c.tanggal_cek] = (byDate[c.tanggal_cek] || 0) + 1;
   });
   return { total, byStatus, byDate };
+}
+
+export async function getStats() {
+  return computeStats(await getCompanies());
+}
+
+export async function getStatsOrSeed() {
+  return computeStats(await getCompaniesOrSeed());
 }

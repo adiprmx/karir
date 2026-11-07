@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCompanies, getTargets, getStats } from "@/lib/companies";
+import { getCompaniesOrSeed, getTargetsOrSeed, getStatsOrSeed } from "@/lib/companies";
 import { runSearch } from "@/lib/search";
 import { getLocale, t } from "@/lib/i18n";
 import { CountUp, Icon, PrintButton, Reveal } from "@/app/visual";
@@ -25,9 +25,9 @@ const ROLE_NAMES = [
 
 export default async function Beranda() {
   const [companies, stats, targets, locale] = await Promise.all([
-    getCompanies(),
-    getStats(),
-    getTargets(),
+    getCompaniesOrSeed(),
+    getStatsOrSeed(),
+    getTargetsOrSeed(),
     getLocale(),
   ]);
 

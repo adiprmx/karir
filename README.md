@@ -2,7 +2,7 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Daftar ini berisi 406 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026. Hasilnya: 22 perusahaan memiliki lowongan untuk peran target.</p>
+<p align="center">Daftar ini berisi 406 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026. Hasilnya: 9 perusahaan masih memiliki lowongan untuk peran target. 22 perusahaan target dicek ulang pada 7 November 2026.</p>
 
 Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, Crew Store.
 
@@ -18,7 +18,7 @@ Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Pa
 
 Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) untuk mencari dari domisili dan posisi, lalu mengurutkan hasil dengan skor kecocokan. [Peta](https://karir-adiprmx.vercel.app/peta) menampilkan 22 target per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) menyimpan tandaan lamaran di browser saja. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode). Pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
 
-<h2 align="center">22 perusahaan dengan lowongan target</h2>
+<h2 align="center">22 perusahaan target yang dicek ulang</h2>
 
 Klik logo untuk membuka halaman perusahaan.
 
@@ -38,7 +38,7 @@ Klik logo untuk membuka halaman perusahaan.
 
 <h2 align="center">Hasil cek 406 kanal</h2>
 
-22 dari 406 kanal ada lowongan target.
+9 dari 406 kanal ada lowongan target. 22 perusahaan target dicek ulang pada 7 November 2026.
 
 <p align="center">
   <img src="assets/status-bar.svg" alt="Sebaran status 406 perusahaan" width="100%">
@@ -46,20 +46,20 @@ Klik logo untuk membuka halaman perusahaan.
 
 | Status | Jumlah |
 | --- | --- |
-| Ada lowongan target | 22 |
-| Ada lowongan, syarat tidak cocok | 5 |
-| Tidak ada lowongan target | 152 |
-| Tidak ada lowongan terlihat | 77 |
-| Tidak dapat diverifikasi | 84 |
-| Portal tidak bisa dibuka | 66 |
+| Ada lowongan target | 9 |
+| Ada lowongan, syarat tidak cocok | 7 |
+| Tidak ada lowongan target | 153 |
+| Tidak ada lowongan terlihat | 80 |
+| Tidak dapat diverifikasi | 89 |
+| Portal tidak bisa dibuka | 68 |
 
 4 perusahaan tidak punya tautan karena situs resminya tidak ketemu. Tautannya tidak ditebak: Olive Fried Chicken (204), PT Dwi Indah (315), PT Cintas Sentul Raya (321), PT Best Logistics Service Indonesia (355, BLSI).
 
 <h2 align="center">Paling cocok</h2>
 
-- [PT Novell Pharmaceutical Laboratories](https://karir-adiprmx.vercel.app/perusahaan/212): HELPER, Gunung Putri Bogor. Satu-satunya dari 22 target yang penempatannya tertulis Gunung Putri.
-- [Ganesha Operation](https://karir-adiprmx.vercel.app/perusahaan/246): Office Boy, Bogor dan Cibinong. Syarat SMA dan tanpa pengalaman. Baru lulus dan belum pernah kerja bisa langsung daftar.
+- [Angkasa Pura Supports](https://karir-adiprmx.vercel.app/perusahaan/299): CLEANING SERVICE, batas 10 November 2026; TRAIN ATTENDANT, batas 18 November 2026.
 - [Roti O](https://karir-adiprmx.vercel.app/perusahaan/190): Pelaksana Gudang, Kalideres, Jakarta Barat. Judul ini tercatat setara Staff Gudang.
+- [Fore Coffee](https://karir-adiprmx.vercel.app/perusahaan/330): Barista (Part-Time), seluruh Indonesia. SMA/SMK, lulusan baru boleh daftar.
 
 <h2 align="center">Dari kanal ke aplikasi</h2>
 
@@ -91,7 +91,7 @@ Dokumen: [PRODUCT.md](docs/PRODUCT.md), [DESIGN.md](docs/DESIGN.md), [METODE.md]
 
 Datanya dari kapan?
 
-Dicek langsung di browser tanggal 4 dan 5 November 2026. 81 kanal dicek tanggal 4, 325 tanggal 5.
+Dicek langsung di browser tanggal 4 dan 5 November 2026. 81 kanal dicek tanggal 4, 325 tanggal 5. 22 perusahaan target dicek ulang pada 7 November 2026.
 
 Kapan dicek ulang?
 
@@ -103,6 +103,6 @@ Buka halaman perusahaan di aplikasi, lalu pakai tombol Laporkan tautan mati. Ata
 
 <h2 align="center">Lisensi</h2>
 
-Versi 2.8.0, 7 November 2026.
+Versi 2.8.1, 7 November 2026.
 
 Kode dan skrip di repo ini berlisensi MIT, dan data di folder data berlisensi CC BY 4.0.

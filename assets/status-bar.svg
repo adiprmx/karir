@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="700" height="428" viewBox="0 0 700 428" role="img" aria-label="Sebaran status 406 kanal karir: 152 tidak ada lowongan target, 84 tidak dapat diverifikasi, 77 tidak ada lowongan terlihat, 66 portal tidak bisa dibuka, 22 ada lowongan target, 5 tidak cocok">
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="428" viewBox="0 0 700 428" role="img" aria-label="Sebaran status 406 kanal karir: 153 tidak ada lowongan target, 89 tidak dapat diverifikasi, 80 tidak ada lowongan terlihat, 68 portal tidak bisa dibuka, 9 ada lowongan target, 7 ada lowongan target (tidak cocok)">
   <title>Sebaran status 406 kanal karir</title>
   <style>
     text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
@@ -23,32 +23,32 @@
   <rect width="700" height="428" fill="#ffffff"/>
   <g class="row r0">
     <text x="0" y="48" font-size="24" font-weight="600" fill="#111111">Tidak ada lowongan target</text>
-    <rect class="bar b0" x="0" y="58" width="520.0" height="22" fill="#525252"/>
-    <text class="num n0" x="534.0" y="79" font-size="28" font-weight="800" fill="#525252">152</text>
+    <rect class="bar b0" x="0" y="58" width="523.4" height="22" fill="#525252"/>
+    <text class="num n0" x="537.4" y="79" font-size="28" font-weight="800" fill="#525252">153</text>
   </g>
   <g class="row r1">
     <text x="0" y="114" font-size="24" font-weight="600" fill="#111111">Tidak dapat diverifikasi</text>
-    <rect class="bar b1" x="0" y="124" width="287.4" height="22" fill="#737373"/>
-    <text class="num n1" x="301.4" y="145" font-size="28" font-weight="800" fill="#737373">84</text>
+    <rect class="bar b1" x="0" y="124" width="304.5" height="22" fill="#737373"/>
+    <text class="num n1" x="318.5" y="145" font-size="28" font-weight="800" fill="#737373">89</text>
   </g>
   <g class="row r2">
     <text x="0" y="180" font-size="24" font-weight="600" fill="#111111">Tidak ada lowongan terlihat</text>
-    <rect class="bar b2" x="0" y="190" width="263.4" height="22" fill="#a3a3a3"/>
-    <text class="num n2" x="277.4" y="211" font-size="28" font-weight="800" fill="#a3a3a3">77</text>
+    <rect class="bar b2" x="0" y="190" width="273.7" height="22" fill="#a3a3a3"/>
+    <text class="num n2" x="287.7" y="211" font-size="28" font-weight="800" fill="#a3a3a3">80</text>
   </g>
   <g class="row r3">
     <text x="0" y="246" font-size="24" font-weight="600" fill="#111111">Portal tidak bisa dibuka</text>
-    <rect class="bar b3" x="0" y="256" width="225.8" height="22" fill="#c9c9c9"/>
-    <text class="num n3" x="239.8" y="277" font-size="28" font-weight="800" fill="#c9c9c9">66</text>
+    <rect class="bar b3" x="0" y="256" width="232.6" height="22" fill="#c9c9c9"/>
+    <text class="num n3" x="246.6" y="277" font-size="28" font-weight="800" fill="#c9c9c9">68</text>
   </g>
   <g class="row r4">
     <text x="0" y="312" font-size="24" font-weight="600" fill="#111111">Ada lowongan target</text>
-    <rect class="bar b4" x="0" y="322" width="75.3" height="22" fill="#16a34a"/>
-    <text class="num n4" x="89.3" y="343" font-size="28" font-weight="800" fill="#16a34a">22</text>
+    <rect class="bar b4" x="0" y="322" width="30.8" height="22" fill="#16a34a"/>
+    <text class="num n4" x="44.8" y="343" font-size="28" font-weight="800" fill="#16a34a">9</text>
   </g>
   <g class="row r5">
     <text x="0" y="378" font-size="24" font-weight="600" fill="#111111">Ada lowongan target (tidak cocok)</text>
-    <rect class="bar b5" x="0" y="388" width="17.1" height="22" fill="#8c8c8c"/>
-    <text class="num n5" x="31.1" y="409" font-size="28" font-weight="800" fill="#404040">5</text>
+    <rect class="bar b5" x="0" y="388" width="23.9" height="22" fill="#8c8c8c"/>
+    <text class="num n5" x="37.9" y="409" font-size="28" font-weight="800" fill="#404040">7</text>
   </g>
 </svg>

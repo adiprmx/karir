@@ -1,20 +1,21 @@
 "use client";
 
-/* Pelacak lamaran Karir: 100% lokal, tanpa akun, tanpa server.
- * Semua tersimpan di localStorage browser pengguna saja, dengan kunci
- * "karir-lamaran". Bentuk data per perusahaan: {no, status, tanggal,
- * catatan}. Setiap tulis mengirim event "karir-tracker-change" supaya
- * komponen lain yang memakai useTracker ikut update. */
-import { useCallback, useEffect, useState } from "react";
+/* Pelacak lamaran Karir: tersimpan di localStorage browser pengguna,
+ * dengan kunci "karir-lamaran". Bentuk data per perusahaan: {no, status,
+ * tanggal, catatan}. Setiap tulis mengirim event "karir-tracker-change"
+ * supaya komponen lain yang memakai useTracker ikut update.
+ *
+ * Masuk itu pilihan. Bila ada pengguna yang masuk, pelacak lokalnya
+ * digabung sekali dengan yang tersimpan di akun (lib/tracker-sync),
+ * supaya lamaran tidak hilang bila ganti perangkat. Salinan lokal
+ * tetap ada, dan saat keluar pengiriman ke akun berhenti. */
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon, showToast } from "@/app/visual";
+import { trackEvent } from "@/app/analytics-track";
+import { TRACKER_STATUSES } from "@/lib/tracker-sync";
 
 export const TRACKER_KEY = "karir-lamaran";
-export const TRACKER_STATUSES = [
-  "Ditandai",
-  "Sudah dilamar",
-  "Dipanggil",
-  "Ditolak",
-];
+export { TRACKER_STATUSES };
 
 function readEntries() {
   if (typeof window === "undefined") return {};
@@ -47,9 +48,33 @@ export function todayLocal() {
   return d.toISOString().slice(0, 10);
 }
 
+/* Ubah hasil gabung (bentuk akun: companyNo) ke bentuk lokal
+ * (bentuk localStorage: no). Halaman lamaran memakai e.no untuk
+ * urutan dan ubah status, jadi field ini wajib ada. */
+function toLocalEntries(merged) {
+  const out = {};
+  Object.values(merged || {}).forEach((e) => {
+    const no = Number(e.companyNo ?? e.no);
+    if (!Number.isInteger(no) || no < 1) return;
+    out[String(no)] = {
+      no,
+      status: e.status,
+      tanggal: e.tanggal || "",
+      catatan: e.catatan || "",
+    };
+  });
+  return out;
+}
+
+/* Penjaga sync antar komponen: satu akun hanya disinkronkan sekali
+ * per muat halaman, walau useTracker dipakai di beberapa tempat. */
+let syncedUid = null;
+let syncRunning = null;
+
 export function useTracker() {
   const [entries, setEntries] = useState({});
   const [loaded, setLoaded] = useState(false);
+  const [synced, setSynced] = useState(false);
 
   useEffect(() => {
     setEntries(readEntries());
@@ -60,6 +85,58 @@ export function useTracker() {
     return () => {
       window.removeEventListener("karir-tracker-change", onChange);
       window.removeEventListener("storage", onChange);
+    };
+  }, []);
+
+  /* Saat ada pengguna yang masuk, gabungkan pelacak lokal dengan
+   * yang tersimpan di akun, sekali saja. Hasil gabungan ditulis ke
+   * akun dan kembali ke perangkat ini. Saat keluar, pengiriman ke
+   * akun berhenti dan pelacak lokal tetap jalan. Gagal sync tidak
+   * mengganggu pelacak lokal. */
+  useEffect(() => {
+    let unsub = () => {};
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ onAuthStateChanged }, { auth }] = await Promise.all([
+          import("firebase/auth"),
+          import("@/lib/firebase"),
+        ]);
+        if (cancelled) return;
+        unsub = onAuthStateChanged(auth, (u) => {
+          if (!u) {
+            syncedUid = null;
+            setSynced(false);
+            return;
+          }
+          if (syncedUid === u.uid) {
+            setSynced(true);
+            return;
+          }
+          if (syncRunning) return;
+          syncRunning = (async () => {
+            try {
+              const { syncTrackers } = await import("@/lib/tracker-sync");
+              const res = await syncTrackers(u.uid, readEntries());
+              if (res && res.ok) {
+                syncedUid = u.uid;
+                setSynced(true);
+                if (res.merged) writeEntries(toLocalEntries(res.merged));
+              }
+            } catch {
+              /* Pelacak lokal tetap jalan. */
+            }
+          })().finally(() => {
+            syncRunning = null;
+          });
+        });
+      } catch {
+        /* Auth tidak tersedia: pelacak lokal tetap jalan. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unsub();
     };
   }, []);
 
@@ -88,6 +165,16 @@ export function useTracker() {
           catatan: "",
         },
       });
+      /* Sekali saat menandai; melepas tanda tidak dikirim. */
+      if (ok) {
+        trackEvent({
+          type: "tracker_mark",
+          path:
+            typeof window !== "undefined" ? window.location.pathname : "",
+          companyNo: company.no,
+          action: "Ditandai",
+        });
+      }
       if (ok) {
         showToast(`${company.perusahaan} ditandai.`, "/lamaran", "Lihat");
       } else {
@@ -101,17 +188,29 @@ export function useTracker() {
     }
   }, []);
 
-  return { entries, loaded, save, remove, toggle };
+  return { entries, loaded, synced, save, remove, toggle };
 }
 
 /* Kontrol pelacak di halaman detail: pilih status satu ketukan (langsung
  * tersimpan), lalu tanggal dan catatan muncul. Menyentuh status adalah
  * niat melacak; hanya melihat halaman tidak menyimpan apa pun. */
 export function TrackerControl({ company }) {
-  const { entries, loaded, save, remove } = useTracker();
+  const { entries, loaded, synced, save, remove } = useTracker();
   const entry = entries[String(company.no)];
   const [tanggal, setTanggal] = useState(todayLocal());
   const [catatan, setCatatan] = useState("");
+  /* Detail dikirim sekali saat komponen mount. Ref penjaga supaya
+   * StrictMode (mount ganda di dev) tidak mengirim dua kali. */
+  const detailSent = useRef(false);
+  useEffect(() => {
+    if (detailSent.current) return;
+    detailSent.current = true;
+    trackEvent({
+      type: "detail",
+      path: `/perusahaan/${company.no}`,
+      companyNo: company.no,
+    });
+  }, [company.no]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -126,6 +225,16 @@ export function TrackerControl({ company }) {
       tanggal: (patch.tanggal ?? tanggal) || todayLocal(),
       catatan: String(patch.catatan ?? catatan).trim().slice(0, 200),
     });
+    /* Hanya saat status disimpan; ubah tanggal/catatan saja tidak
+     * dikirim. */
+    if (ok && patch.status) {
+      trackEvent({
+        type: "tracker_mark",
+        path: `/perusahaan/${company.no}`,
+        companyNo: company.no,
+        action: patch.status,
+      });
+    }
     showToast(ok ? "Tersimpan di browser ini." : "Browser menolak menyimpan.");
   }
 
@@ -209,7 +318,9 @@ export function TrackerControl({ company }) {
             </p>
           )}
           <p className="hint">
-            Tersimpan di browser ini saja, tidak dikirim ke mana pun.
+            {synced
+              ? "Tersimpan di browser ini dan di akun."
+              : "Tersimpan di browser ini saja. Masuk dari menu untuk menyimpan ke akun juga."}
           </p>
         </>
       )}

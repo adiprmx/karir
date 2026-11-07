@@ -1,4 +1,4 @@
-import { getCompanies } from "@/lib/companies";
+import { getCompaniesOrSeed } from "@/lib/companies";
 
 /* Di-render saat request, bukan saat build, supaya build tidak gagal
  * bila Firestore tidak bisa dijangkau dari mesin build. */
@@ -21,7 +21,7 @@ const STATIC_PAGES = [
 ];
 
 export default async function sitemap() {
-  const companies = await getCompanies();
+  const companies = await getCompaniesOrSeed();
   return [
     ...STATIC_PAGES.map((p) => ({
       url: `${BASE}${p.path}`,

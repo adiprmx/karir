@@ -1,4 +1,4 @@
-import { getCategories, STATUS_ORDER } from "@/lib/companies";
+import { getCategoriesOrSeed, STATUS_ORDER } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import SearchApp from "./search-app";
 
@@ -13,7 +13,7 @@ export async function generateMetadata() {
 export default async function Cari({ searchParams }) {
   const params = await searchParams;
   const pick = (k) => (typeof params[k] === "string" ? params[k] : "");
-  const [categories, locale] = await Promise.all([getCategories(), getLocale()]);
+  const [categories, locale] = await Promise.all([getCategoriesOrSeed(), getLocale()]);
   const labels = {
     title: t(locale, "search.title"),
     sortNote: t(locale, "search.sortNote"),

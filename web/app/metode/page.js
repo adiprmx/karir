@@ -1,4 +1,4 @@
-import { getStats } from "@/lib/companies";
+import { getStatsOrSeed } from "@/lib/companies";
 
 /* Data di-render saat request, bukan saat build. */
 export const dynamic = "force-dynamic";
@@ -91,7 +91,7 @@ function numClass(status) {
 }
 
 export default async function Metode() {
-  const [locale, stats] = await Promise.all([getLocale(), getStats()]);
+  const [locale, stats] = await Promise.all([getLocale(), getStatsOrSeed()]);
 
   return (
     <div className="wrap">

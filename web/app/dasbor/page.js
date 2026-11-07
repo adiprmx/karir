@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCompanies, getStats, getTargets, STATUS_ORDER } from "@/lib/companies";
+import { getCompaniesOrSeed, getStatsOrSeed, getTargetsOrSeed, STATUS_ORDER } from "@/lib/companies";
 import { countBy, topEntries } from "@/lib/search";
 import { getLocale, t } from "@/lib/i18n";
 import { CountUp, Icon, Reveal, StatusStamp } from "@/app/visual";
@@ -69,9 +69,9 @@ function RecheckList({ title, status, list, locale }) {
 
 export default async function Dasbor() {
   const [companies, stats, targets, locale] = await Promise.all([
-    getCompanies(),
-    getStats(),
-    getTargets(),
+    getCompaniesOrSeed(),
+    getStatsOrSeed(),
+    getTargetsOrSeed(),
     getLocale(),
   ]);
   const total = stats.total;
