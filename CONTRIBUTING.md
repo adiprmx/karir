@@ -39,7 +39,7 @@ Skrip ini memeriksa jumlah baris, nama kolom, kosakata status, format tanggal, d
 
 Perubahan pada aplikasi web di `web/` mengikuti aturan yang sama seperti data: satu perubahan per pull request, dan deskripsinya menjelaskan apa yang berubah dan kenapa.
 
-- Ikuti `DESIGN.md`: monokrom hitam, abu, putih; warna hanya untuk fungsi dan status; tanpa gradasi dan tanpa font baru.
+- Ikuti `docs/DESIGN.md`: monokrom hitam, abu, putih; warna hanya untuk fungsi dan status; tanpa gradasi dan tanpa font baru.
 - Jangan menambah dependensi tanpa alasan yang ditulis di deskripsi pull request.
 - Sebelum mengirim pull request untuk perubahan kode, jalankan dari folder `web/`:
 
@@ -51,4 +51,4 @@ Pull request yang gagal build tidak digabungkan sampai diperbaiki. Jangan pernah
 
 ## Kode etik
 
-Ikuti `CODE_OF_CONDUCT.md`. Diskusi yang kasar, spam lowongan palsu, dan promosi berbayar tidak diterima.
+Diskusi yang kasar, spam lowongan palsu, dan promosi berbayar tidak diterima. Pelanggaran dilaporkan lewat issue; pengelola bisa menghapus komentar, menutup issue atau pull request, dan memblokir akun yang berulang kali melanggar. Jangan menyebarkan data pribadi siapa pun di issue atau pull request.
