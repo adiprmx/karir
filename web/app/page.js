@@ -113,6 +113,33 @@ export default async function Beranda() {
         />
       </section>
 
+      <Reveal className="photo-strip">
+        <figure>
+          <img
+            src="https://images.unsplash.com/photo-1553413077-190dd305871c?q=80&w=800&auto=format&fit=crop"
+            alt="Pekerja mengangkat kardus di dalam gudang"
+            loading="lazy"
+          />
+          <figcaption>Gudang</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=800&auto=format&fit=crop"
+            alt="Pekerja memeriksa mesin di lini produksi"
+            loading="lazy"
+          />
+          <figcaption>Produksi</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=800&auto=format&fit=crop"
+            alt="Petugas cleaning membersihkan lantai"
+            loading="lazy"
+          />
+          <figcaption>Cleaning</figcaption>
+        </figure>
+      </Reveal>
+
       <section className="sec" aria-labelledby="target-h">
         <Reveal>
           <div className="sec-head">

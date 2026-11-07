@@ -217,6 +217,52 @@ mark {
   font-size: 14px;
   margin-top: 12px;
 }
+
+/* ---------- Strip foto beranda ---------- */
+.photo-strip {
+  margin-top: clamp(28px, 5vw, 48px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.photo-strip figure {
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--r-m);
+  border: 1px solid var(--line);
+  background: var(--sunken);
+}
+.photo-strip img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  filter: grayscale(1);
+}
+.photo-strip figcaption {
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--surface);
+}
+@media (max-width: 640px) {
+  .photo-strip {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    margin-inline: calc(clamp(16px, 4vw, 32px) * -1);
+    padding-inline: clamp(16px, 4vw, 32px);
+    padding-bottom: 4px;
+  }
+  .photo-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .photo-strip figure {
+    flex: 0 0 240px;
+    scroll-snap-align: start;
+  }
+}
 .empty-line {
   color: var(--muted);
 }
