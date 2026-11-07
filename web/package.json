@@ -1,13 +1,12 @@
 {
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
     "firebase": "^13.2.0",
     "leaflet": "^1.9.4",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
-  "description": "Karir \u2014 alat cari kanal lowongan kerja. Next.js + Supabase.",
+  "description": "Karir — alat cari kanal lowongan kerja. Next.js + Supabase.",
   "name": "karir-web",
   "private": true,
   "scripts": {

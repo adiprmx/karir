@@ -22,18 +22,22 @@ no side stripes, no decoration that is not data.
 - Hero: left-aligned headline (max two lines desktop), one short subtext,
   the working search form as the dominant element, tappable example chips.
 - Stats: a plain figure strip with hairline dividers, no cards.
-- Vacancies: horizontal scroll-snap rail of compact cards, sized to content.
-- How it works: a numbered list with hairline dividers, no cards.
+- Vacancies: an index list of the 22 targets with filter chips per role group
+  (Gudang, Cleaning, Produksi, Toko, Lainnya), two-line rows (name on top,
+  position and location below), company logo on the left, status dot.
 - Dashboard: data bars (label, track, count) plus hairline-divided lists.
-- Search results: a two-column card grid on desktop, one column on mobile,
-  with `minmax(0, 1fr)` tracks and `overflow-wrap: anywhere` so long URLs
+- Search results: a table (`ResultsTable`) with filter rail on the side,
+  `minmax(0, 1fr)` tracks and `overflow-wrap: anywhere` so long URLs
   and lokasi strings never push the page wider.
 
 ## Motion
 
-One authored moment: the stat figures count up from 0 to their real value
-over 800ms with cubic ease-out, and views fade in with a 4px rise on switch.
-Both collapse to instant under `prefers-reduced-motion`. Nothing else moves.
+Sections reveal as they scroll into view (IntersectionObserver, 14px rise
+over 600ms, once). Stat figures count up only when visible. Photos zoom
+slightly on hover, buttons press to scale 0.98, the live-search dropdown and
+FAQ answers open with a short fade, the header stays pinned while scrolling.
+All motion collapses to instant under `prefers-reduced-motion`. Nothing else
+moves.
 
 ## States
 

@@ -3,7 +3,7 @@
 ## Product truth
 
 - Karir is a directory of 406 official career channels of Indonesian companies, each opened and checked live in a browser on 4–5 Nov 2026.
-- The web app is full stack: Next.js 15 + React 19 on Vercel (https://karir-adiprmx.vercel.app/), Firestore database (`karir-9d53a`, 406 documents), server search API, admin panel at `/admin`. The old static version in folder `docs/` (GitHub Pages) is kept only as a previous version. No user accounts, no personal data, no analytics, no external fonts. Motion is restrained: one fade-up entrance per section, animated counters and bars, a pulsing dot only for verified targets, and live search results as you type.
+- The web app is full stack: Next.js 15 + React 19 on Vercel (https://karir-adiprmx.vercel.app/), Firestore database (`karir-9d53a`, 406 documents), server search API, admin panel at `/admin`. The old static version in folder `docs/` (GitHub Pages) is kept only as a previous version. No user accounts, no personal data, no analytics, no external fonts. Motion is restrained: sections reveal as they scroll into view, counters rise only when visible, a pulsing dot only for verified targets, photos zoom slightly on hover, buttons press to scale 0.98, and live search results as you type.
 - Data is honest: vacancy findings were checked for warehouse/production/cleaning/office boy/packing/crew store roles. Other roles are recommended as channels with an honest "not yet verified" label. Denial sentences in the data never count as matches.
 - Budget is zero rupiah. The owner has no VPS. Control stays with the owner and the assistant only.
 
