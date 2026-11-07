@@ -1,22 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="460" viewBox="0 0 1200 460">
   <rect width="1200" height="460" fill="#050505"/>
-  <text x="70" y="56" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" letter-spacing="4" fill="#a1a1aa">adiprmx / karir</text>
-  <text x="1130" y="56" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" letter-spacing="4" fill="#71717a">DICEK LANGSUNG DI BROWSER</text>
-  <line x1="70" y1="78" x2="1130" y2="78" stroke="#262626" stroke-width="1"/>
-  <line x1="790" y1="120" x2="790" y2="330" stroke="#1f1f1f" stroke-width="2"/>
-  <text x="70" y="222" font-family="Arial, Helvetica, sans-serif" font-size="150" font-weight="800" letter-spacing="5" fill="#ffffff">KARIR</text>
-  <rect x="72" y="242" width="110" height="6" fill="#ffffff"/>
-  <text x="70" y="292" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="400" fill="#a1a1aa">Kanal karir resmi perusahaan Indonesia</text>
-  <text x="70" y="328" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#71717a">Gudang · produksi · cleaning · office boy · packing · crew store</text>
-  <text x="995" y="232" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="185" font-weight="800" fill="#16a34a">22</text>
-  <text x="995" y="278" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="400" letter-spacing="4" fill="#a1a1aa">LOWONGAN TARGET</text>
-  <text x="995" y="314" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="400" fill="#71717a">dari 406 kanal diperiksa</text>
+  <line x1="740" y1="120" x2="740" y2="340" stroke="#1f1f1f" stroke-width="2"/>
+  <text x="70" y="275" font-family="Arial, Helvetica, sans-serif" font-size="170" font-weight="800" letter-spacing="5" fill="#ffffff">KARIR</text>
+  <rect x="72" y="295" width="110" height="6" fill="#ffffff"/>
+  <text x="970" y="265" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="200" font-weight="800" fill="#16a34a">22</text>
+  <text x="970" y="325" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="400" letter-spacing="1" fill="#a1a1aa">LOWONGAN TARGET</text>
   <rect x="0" y="392" width="449" height="14" fill="#52525b"/>
   <rect x="449" y="392" width="228" height="14" fill="#3f3f46"/>
   <rect x="677" y="392" width="248" height="14" fill="#27272a"/>
   <rect x="925" y="392" width="195" height="14" fill="#71717a"/>
   <rect x="1120" y="392" width="65" height="14" fill="#16a34a"/>
   <rect x="1185" y="392" width="15" height="14" fill="#a1a1aa"/>
-  <text x="70" y="438" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" letter-spacing="3" fill="#71717a">SEBARAN STATUS · HIJAU = ADA LOWONGAN TARGET</text>
-  <text x="1130" y="438" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" letter-spacing="2" fill="#71717a">4 DAN 5 NOVEMBER 2026</text>
 </svg>

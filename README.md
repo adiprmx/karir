@@ -15,9 +15,11 @@
 
 <p align="center">Versi 2.7.0 · 6 November 2026 · <a href="CHANGELOG.md">Riwayat perubahan</a></p>
 
-| 406 | 22 | 5 | 66 |
-| --- | --- | --- | --- |
-| kanal diperiksa | ada lowongan target | syarat tidak cocok | portal tidak bisa dibuka |
+| 406 | 22 |
+| --- | --- |
+| kanal diperiksa | ada lowongan target |
+| 5 | 66 |
+| syarat tidak cocok | portal tidak bisa dibuka |
 
 ## 01 Cara pakai
 
@@ -46,8 +48,8 @@ Setiap kanal dibuka langsung di browser lewat navigasi situs resmi perusahaan. C
 
 ```mermaid
 flowchart TD
-    A[406 kanal karir resmi] --> B[Dibuka dan diperiksa di browser]
-    B --> C[Data CSV dan XLSX]
+    A[406 kanal karir] --> B[Diperiksa di browser]
+    B --> C[CSV dan XLSX]
     C --> D[Firestore: 406 dokumen]
     D --> E[Aplikasi web dan API]
     E --> F[Pengunjung cari loker]
@@ -58,10 +60,12 @@ Kalau mau mengolah datanya sendiri, buka `data/daftar-link-karir.csv`, saring ko
 ```python
 import pandas as pd
 
-url = "https://raw.githubusercontent.com/adiprmx/karir/main/data/daftar-link-karir.csv"
+base = "https://raw.githubusercontent.com/adiprmx/karir"
+url = f"{base}/main/data/daftar-link-karir.csv"
 df = pd.read_csv(url)
 target = df[df.status == "Ada lowongan target"]
-print(target[["perusahaan", "link_karir", "lokasi"]].to_string(index=False))
+cols = ["perusahaan", "link_karir", "lokasi"]
+print(target[cols].to_string(index=False))
 ```
 
 ## 03 Aplikasi web
@@ -105,16 +109,16 @@ Pencarian juga tersedia sebagai API: `GET /api/companies?domisili=Bogor&posisi=H
 
 | Teknologi | Status | Keterangan |
 | --- | --- | --- |
-| Next.js 15 + React 19 | Dipakai | Frontend dan backend, App Router; Beranda dan Dasbor di-render di server, halaman Cari di-render dari parameter URL sehingga tiap pencarian bisa dibagikan lewat tautan |
-| Vercel | Dipakai | Hosting, proyek `karir`, rootDirectory `web`; setiap push ke `main` men-deploy otomatis |
+| Next.js 15 + React 19 | Dipakai | Frontend dan backend, App Router; Beranda dan Dasbor di-render di server, halaman Cari dari parameter URL, jadi bisa dibagikan |
+| Vercel | Dipakai | Hosting, proyek `karir`, rootDirectory `web`; push ke `main` men-deploy otomatis |
 | Firestore, proyek `karir-9d53a`, asia-southeast1, paket Spark | Dipakai | Koleksi `companies` berisi 406 dokumen, satu per perusahaan; dibaca aplikasi lewat REST API |
-| Firebase Auth | Dipakai | Login admin saja, Email/Password; akun admin dibuat pemilik repo di Firebase Console |
+| Firebase Auth | Dipakai | Login admin saja, Email/Password; akun admin dibuat di Firebase Console |
 | Leaflet 1.9.4 + OpenStreetMap | Dipakai | Peta 22 lowongan target |
 | next/og | Dipakai | Gambar pratinjau dinamis per perusahaan |
-| Supabase | Tidak dipakai | Akun sudah mencapai batas 2 proyek gratis yang aktif, dan keduanya sedang live |
-| Vercel KV | Tidak dipakai | Data ini butuh database dokumen dengan query dan aturan tulis |
+| Supabase | Tidak dipakai | Akun mentok 2 proyek gratis yang aktif, keduanya sedang live |
+| Vercel KV | Tidak dipakai | Butuh database dokumen dengan query dan aturan tulis |
 | Payment gateway | Tidak dipakai | Aplikasi tidak memungut pembayaran apa pun |
-| Akun pengguna | Tidak dipakai | Aplikasi sengaja tanpa akun; data pribadi pengguna hanya tersimpan di browsernya sendiri |
+| Akun pengguna | Tidak dipakai | Sengaja tanpa akun; data pengguna hanya tersimpan di browsernya sendiri |
 
 Aturan Firestore: baca terbuka untuk semua; tulis hanya untuk pengguna yang sudah login dan hanya bila dokumen lolos validasi (9 kolom wajib, nomor bertipe angka, status salah satu dari 6 nilai). Koleksi `audit_logs` mencatat setiap perubahan data oleh admin dan tidak bisa diubah atau dihapus. Koleksi `reports` menampung laporan tautan mati dari pengunjung dalam bentuk yang divalidasi aturan.
 
@@ -127,7 +131,7 @@ Satu baris per perusahaan, 9 kolom:
 | no | Nomor urut | 212 |
 | perusahaan | Nama perusahaan | PT Novell Pharmaceutical Laboratories |
 | kategori | Jenis perusahaan | Manufaktur |
-| link_karir | Tautan kanal karir resmi | https://novellpharm.com/index.php?mod=professional |
+| link_karir | Tautan kanal karir resmi | [novellpharm.com](https://novellpharm.com/index.php?mod=professional) |
 | status | Hasil cek | Ada lowongan target |
 | tanggal_cek | Tanggal pengecekan | 2026-11-05 |
 | catatan | Catatan hasil cek | Judul persis HELPER, penempatan Gunung Putri Bogor |
