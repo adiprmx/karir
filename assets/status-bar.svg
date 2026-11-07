@@ -1,22 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="700" height="340" viewBox="0 0 700 340">
-  <g font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#262626">
-    <text x="0" y="37">Tidak ada lowongan target</text>
-    <rect x="385" y="14" width="230" height="30" fill="#52525b"/>
-    <text x="690" y="37" text-anchor="end" font-size="26" font-weight="700">152</text>
-    <text x="0" y="93">Tidak dapat diverifikasi</text>
-    <rect x="385" y="70" width="127" height="30" fill="#27272a"/>
-    <text x="690" y="93" text-anchor="end" font-size="26" font-weight="700">84</text>
-    <text x="0" y="149">Tidak ada lowongan terlihat</text>
-    <rect x="385" y="126" width="117" height="30" fill="#3f3f46"/>
-    <text x="690" y="149" text-anchor="end" font-size="26" font-weight="700">77</text>
-    <text x="0" y="205">Portal tidak bisa dibuka</text>
-    <rect x="385" y="182" width="100" height="30" fill="#71717a"/>
-    <text x="690" y="205" text-anchor="end" font-size="26" font-weight="700">66</text>
-    <text x="0" y="261">Ada lowongan target</text>
-    <rect x="385" y="238" width="33" height="30" fill="#16a34a"/>
-    <text x="690" y="261" text-anchor="end" font-size="26" font-weight="700">22</text>
-    <text x="0" y="317">Ada lowongan target (tidak cocok)</text>
-    <rect x="385" y="294" width="8" height="30" fill="#a1a1aa"/>
-    <text x="690" y="317" text-anchor="end" font-size="26" font-weight="700">5</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="428" viewBox="0 0 700 428" role="img" aria-label="Sebaran status 406 kanal karir: 152 tidak ada lowongan target, 84 tidak dapat diverifikasi, 77 tidak ada lowongan terlihat, 66 portal tidak bisa dibuka, 22 ada lowongan target, 5 tidak cocok">
+  <title>Sebaran status 406 kanal karir</title>
+  <style>
+    text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+    .row { animation: rowin 0.6s cubic-bezier(0.16,1,0.3,1) both; }
+    .r0 { animation-delay: 0.05s; } .r1 { animation-delay: 0.2s; } .r2 { animation-delay: 0.35s; }
+    .r3 { animation-delay: 0.5s; } .r4 { animation-delay: 0.65s; } .r5 { animation-delay: 0.8s; }
+    .bar { transform-box: fill-box; transform-origin: left center; transform: scaleX(0); animation: grow 0.8s cubic-bezier(0.16,1,0.3,1) both; }
+    .num { opacity: 0; animation: fadein 0.5s ease both; }
+    .b0 { animation-delay: 0.15s; } .n0 { animation-delay: 0.45s; }
+    .b1 { animation-delay: 0.33s; } .n1 { animation-delay: 0.63s; }
+    .b2 { animation-delay: 0.51s; } .n2 { animation-delay: 0.81s; }
+    .b3 { animation-delay: 0.69s; } .n3 { animation-delay: 0.99s; }
+    .b4 { animation-delay: 0.87s; } .n4 { animation-delay: 1.17s; }
+    .b5 { animation-delay: 1.05s; } .n5 { animation-delay: 1.35s; }
+    @keyframes rowin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; }
+}
+  </style>
+  <rect width="700" height="428" fill="#ffffff"/>
+  <g class="row r0">
+    <text x="0" y="48" font-size="24" font-weight="600" fill="#111111">Tidak ada lowongan target</text>
+    <rect class="bar b0" x="0" y="58" width="520.0" height="22" fill="#525252"/>
+    <text class="num n0" x="534.0" y="79" font-size="28" font-weight="800" fill="#525252">152</text>
+  </g>
+  <g class="row r1">
+    <text x="0" y="114" font-size="24" font-weight="600" fill="#111111">Tidak dapat diverifikasi</text>
+    <rect class="bar b1" x="0" y="124" width="287.4" height="22" fill="#737373"/>
+    <text class="num n1" x="301.4" y="145" font-size="28" font-weight="800" fill="#737373">84</text>
+  </g>
+  <g class="row r2">
+    <text x="0" y="180" font-size="24" font-weight="600" fill="#111111">Tidak ada lowongan terlihat</text>
+    <rect class="bar b2" x="0" y="190" width="263.4" height="22" fill="#a3a3a3"/>
+    <text class="num n2" x="277.4" y="211" font-size="28" font-weight="800" fill="#a3a3a3">77</text>
+  </g>
+  <g class="row r3">
+    <text x="0" y="246" font-size="24" font-weight="600" fill="#111111">Portal tidak bisa dibuka</text>
+    <rect class="bar b3" x="0" y="256" width="225.8" height="22" fill="#c9c9c9"/>
+    <text class="num n3" x="239.8" y="277" font-size="28" font-weight="800" fill="#c9c9c9">66</text>
+  </g>
+  <g class="row r4">
+    <text x="0" y="312" font-size="24" font-weight="600" fill="#111111">Ada lowongan target</text>
+    <rect class="bar b4" x="0" y="322" width="75.3" height="22" fill="#16a34a"/>
+    <text class="num n4" x="89.3" y="343" font-size="28" font-weight="800" fill="#16a34a">22</text>
+  </g>
+  <g class="row r5">
+    <text x="0" y="378" font-size="24" font-weight="600" fill="#111111">Ada lowongan target (tidak cocok)</text>
+    <rect class="bar b5" x="0" y="388" width="17.1" height="22" fill="#e5e5e5"/>
+    <text class="num n5" x="31.1" y="409" font-size="28" font-weight="800" fill="#e5e5e5">5</text>
   </g>
 </svg>

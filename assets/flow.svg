@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="624" viewBox="0 0 640 624" role="img" aria-label="Alur Karir: kanal karir resmi, diperiksa di browser, data CSV dan XLSX, Firestore 406 dokumen, aplikasi web dan API, pengunjung cari loker">
+  <title>Alur Karir — dari kanal resmi ke pengunjung</title>
+  <style>
+    text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+    .step, .arrow { opacity: 0; animation: stepin 0.6s cubic-bezier(0.16,1,0.3,1) both; }
+    .s0 { animation-delay: 0.15s; } .a0 { animation-delay: 0.40s; }
+    .s1 { animation-delay: 0.50s; } .a1 { animation-delay: 0.75s; }
+    .s2 { animation-delay: 0.85s; } .a2 { animation-delay: 1.10s; }
+    .s3 { animation-delay: 1.20s; } .a3 { animation-delay: 1.45s; }
+    .s4 { animation-delay: 1.55s; } .a4 { animation-delay: 1.80s; }
+    .s5 { animation-delay: 1.90s; }
+    @keyframes stepin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; }
+}
+  </style>
+  <rect width="640" height="624" fill="#ffffff"/>
+  <g class="step s0">
+    <rect x="24" y="16" width="72" height="72" rx="12" fill="#ffffff" stroke="#111111" stroke-width="2.5"/>
+    <circle cx="54" cy="46" r="17" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="66" y1="58" x2="80" y2="72" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="120" y="48" font-size="26" font-weight="700" fill="#111111">Kanal karir resmi</text>
+    <text x="120" y="76" font-size="20" font-weight="400" fill="#525252">406 kanal perusahaan dibuka satu per satu</text>
+  </g>
+  <g class="arrow a0">
+    <line x1="60" y1="92" x2="60" y2="108" stroke="#a3a3a3" stroke-width="3"/>
+    <path d="M 53 108 L 60 116 L 67 108 Z" fill="#a3a3a3"/>
+  </g>
+  <g class="step s1">
+    <rect x="24" y="120" width="72" height="72" rx="12" fill="#ffffff" stroke="#111111" stroke-width="2.5"/>
+    <rect x="38" y="138" width="44" height="36" rx="4" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="38" y1="150" x2="82" y2="150" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="144" r="1.5" fill="#111111" stroke="none"/><circle cx="53" cy="144" r="1.5" fill="#111111" stroke="none"/><line x1="48" y1="163" x2="72" y2="163" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="120" y="152" font-size="26" font-weight="700" fill="#111111">Diperiksa di browser</text>
+    <text x="120" y="180" font-size="20" font-weight="400" fill="#525252">Portal dibuka dan lowongannya dibaca langsung</text>
+  </g>
+  <g class="arrow a1">
+    <line x1="60" y1="196" x2="60" y2="212" stroke="#a3a3a3" stroke-width="3"/>
+    <path d="M 53 212 L 60 220 L 67 212 Z" fill="#a3a3a3"/>
+  </g>
+  <g class="step s2">
+    <rect x="24" y="224" width="72" height="72" rx="12" fill="#ffffff" stroke="#111111" stroke-width="2.5"/>
+    <rect x="38" y="242" width="44" height="36" rx="4" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="38" y1="254" x2="82" y2="254" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="38" y1="266" x2="82" y2="266" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="60" y1="242" x2="60" y2="278" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="120" y="256" font-size="26" font-weight="700" fill="#111111">Data CSV dan XLSX</text>
+    <text x="120" y="284" font-size="20" font-weight="400" fill="#525252">Hasil cek dicatat rapi per perusahaan</text>
+  </g>
+  <g class="arrow a2">
+    <line x1="60" y1="300" x2="60" y2="316" stroke="#a3a3a3" stroke-width="3"/>
+    <path d="M 53 316 L 60 324 L 67 316 Z" fill="#a3a3a3"/>
+  </g>
+  <g class="step s3">
+    <rect x="24" y="328" width="72" height="72" rx="12" fill="#ffffff" stroke="#111111" stroke-width="2.5"/>
+    <path d="M 40 348 A 20 8 0 0 0 80 348 L 80 380 A 20 8 0 0 1 40 380 Z" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M 40 348 A 20 8 0 0 0 80 348" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M 40 364 A 20 8 0 0 0 80 364" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="120" y="360" font-size="26" font-weight="700" fill="#111111">Firestore · 406 dokumen</text>
+    <text x="120" y="388" font-size="20" font-weight="400" fill="#525252">Data tersimpan sebagai dokumen</text>
+  </g>
+  <g class="arrow a3">
+    <line x1="60" y1="404" x2="60" y2="420" stroke="#a3a3a3" stroke-width="3"/>
+    <path d="M 53 420 L 60 428 L 67 420 Z" fill="#a3a3a3"/>
+  </g>
+  <g class="step s4">
+    <rect x="24" y="432" width="72" height="72" rx="12" fill="#ffffff" stroke="#111111" stroke-width="2.5"/>
+    <path d="M 60 446 C 71 458 71 474 60 480 C 49 474 49 458 60 446 Z" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="60" cy="464" r="4.5" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M 49 470 L 40 480 L 51 478 Z" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M 71 470 L 80 480 L 69 478 Z" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M 56 482 L 60 492 L 64 482 Z" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="120" y="464" font-size="26" font-weight="700" fill="#111111">Aplikasi web dan API</text>
+    <text x="120" y="492" font-size="20" font-weight="400" fill="#525252">Pencarian dan data disajikan lewat web</text>
+  </g>
+  <g class="arrow a4">
+    <line x1="60" y1="508" x2="60" y2="524" stroke="#a3a3a3" stroke-width="3"/>
+    <path d="M 53 524 L 60 532 L 67 524 Z" fill="#a3a3a3"/>
+  </g>
+  <g class="step s5">
+    <rect x="24" y="536" width="72" height="72" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2.5"/>
+    <circle cx="60" cy="563" r="10" stroke="#16a34a" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M 40 592 A 20 16 0 0 1 80 592" stroke="#16a34a" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="120" y="568" font-size="26" font-weight="700" fill="#16a34a">Pengunjung cari loker</text>
+    <text x="120" y="596" font-size="20" font-weight="400" fill="#525252">Ketik domisili dan posisi, buka portal resmi</text>
+  </g>
+</svg>

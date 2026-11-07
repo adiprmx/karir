@@ -2,32 +2,197 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">
-  <a href="https://github.com/adiprmx/karir/actions/workflows/validate.yml"><img src="https://github.com/adiprmx/karir/actions/workflows/validate.yml/badge.svg" alt="Validasi data"></a>
-  <a href="https://github.com/adiprmx/karir/actions/workflows/app.yml"><img src="https://github.com/adiprmx/karir/actions/workflows/app.yml/badge.svg" alt="Aplikasi web"></a>
-  <a href="https://github.com/adiprmx/karir/blob/main/LICENSE"><img src="https://img.shields.io/github/license/adiprmx/karir" alt="Lisensi MIT"></a>
-  <img src="https://img.shields.io/badge/perusahaan-406-black" alt="406 perusahaan">
-</p>
+<p align="center">406 kanal karir resmi, dicek satu per satu di browser. 22 di antaranya ada lowongan buat gudang, produksi, cleaning, office boy, packing, dan crew store.</p>
 
-<p align="center">Karir adalah daftar kanal karir resmi 406 perusahaan Indonesia. Setiap kanal dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026. Dari 406 perusahaan itu, 22 tercatat ada lowongan target saat dicek, untuk peran gudang, produksi, cleaning, office boy, packing, dan crew store.</p>
+<h3 align="center"><a href="https://karir-adiprmx.vercel.app/">Cari loker sekarang</a></h3>
 
-<p align="center"><a href="https://karir-adiprmx.vercel.app/">Cari loker di aplikasi web</a></p>
+<p align="center">Tanpa akun, tanpa login, tanpa pembayaran.<br>
+Dicek langsung di browser tanggal 4-5 November 2026.</p>
 
-<p align="center">Versi 2.7.0 · 6 November 2026 · <a href="CHANGELOG.md">Riwayat perubahan</a></p>
+## 22 perusahaan dengan lowongan target
 
-| 406 | 22 |
-| --- | --- |
-| kanal diperiksa | ada lowongan target |
-| 5 | 66 |
-| syarat tidak cocok | portal tidak bisa dibuka |
+Klik satu perusahaan buat lihat status, lokasi, dan tanggal ceknya. Cek lagi syarat lengkapnya di portal resmi sebelum melamar.
 
-## 01 Cara pakai
+<table>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/115">
+<img src="https://www.google.com/s2/favicons?domain=superindo.jobseeker.software&sz=64" width="64" height="64" alt="Super Indo">
+<br>Super Indo
+</a>
+<br>DC Staff Gudang
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/150">
+<img src="https://www.google.com/s2/favicons?domain=www.yamaha-motor.co.id&sz=64" width="64" height="64" alt="Yamaha">
+<br>Yamaha
+</a>
+<br>Operator Produksi
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/162">
+<img src="https://www.google.com/s2/favicons?domain=careers.ey.com&sz=64" width="64" height="64" alt="EY">
+<br>EY
+</a>
+<br>Office Boy
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/190">
+<img src="https://www.google.com/s2/favicons?domain=rotio.id&sz=64" width="64" height="64" alt="Roti O">
+<br>Roti O
+</a>
+<br>Pelaksana Gudang
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/200">
+<img src="https://www.google.com/s2/favicons?domain=richeesefactory.com&sz=64" width="64" height="64" alt="Richeese Factory">
+<br>Richeese Factory
+</a>
+<br>Crew Outlet
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/212">
+<img src="https://www.google.com/s2/favicons?domain=novellpharm.com&sz=64" width="64" height="64" alt="PT Novell Pharmaceutical Laboratories">
+<br>PT Novell Pharmaceutical Laboratories
+</a>
+<br>Helper
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/230">
+<img src="https://www.google.com/s2/favicons?domain=apotek-k24.com&sz=64" width="64" height="64" alt="Apotek K-24">
+<br>Apotek K-24
+</a>
+<br>Helper Gudang
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/235">
+<img src="https://www.google.com/s2/favicons?domain=www.mrdiy.com&sz=64" width="64" height="64" alt="MR DIY Indonesia">
+<br>MR DIY Indonesia
+</a>
+<br>Store Crew
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/240">
+<img src="https://www.google.com/s2/favicons?domain=issworld.com&sz=64" width="64" height="64" alt="ISS Indonesia">
+<br>ISS Indonesia
+</a>
+<br>Cleaning Services
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/246">
+<img src="https://www.google.com/s2/favicons?domain=career.ganeshaoperation.com&sz=64" width="64" height="64" alt="Ganesha Operation">
+<br>Ganesha Operation
+</a>
+<br>Office Boy
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/263">
+<img src="https://www.google.com/s2/favicons?domain=staffinc.co&sz=64" width="64" height="64" alt="Staffinc">
+<br>Staffinc
+</a>
+<br>Warehouse Staff
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/266">
+<img src="https://www.google.com/s2/favicons?domain=pintarnya.com&sz=64" width="64" height="64" alt="Pintarnya">
+<br>Pintarnya
+</a>
+<br>Office Boy
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/277">
+<img src="https://www.google.com/s2/favicons?domain=www.lionair.co.id&sz=64" width="64" height="64" alt="Lion Air Group">
+<br>Lion Air Group
+</a>
+<br>Cleaning &amp; Gardening
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/287">
+<img src="https://www.google.com/s2/favicons?domain=herminahospitals.com&sz=64" width="64" height="64" alt="Hermina Hospitals">
+<br>Hermina Hospitals
+</a>
+<br>Gudang Umum
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/293">
+<img src="https://www.google.com/s2/favicons?domain=careers.shopee.co.id&sz=64" width="64" height="64" alt="Shopee Indonesia / SPX Express">
+<br>Shopee Indonesia / SPX Express
+</a>
+<br>Shift Lead - Warehouse
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/299">
+<span style="display:inline-block;width:64px;height:64px;line-height:64px;background:#52525b;color:#fff;font-size:32px;font-weight:700;text-align:center;border-radius:8px;" title="Angkasa Pura Supports">A</span>
+<br>Angkasa Pura Supports
+</a>
+<br>Cleaning Service
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/301">
+<img src="https://www.google.com/s2/favicons?domain=www.basf.com&sz=64" width="64" height="64" alt="PT BASF Care Chemicals Indonesia">
+<br>PT BASF Care Chemicals Indonesia
+</a>
+<br>Production Operator
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/330">
+<img src="https://www.google.com/s2/favicons?domain=fore.coffee&sz=64" width="64" height="64" alt="Fore Coffee">
+<br>Fore Coffee
+</a>
+<br>Barista
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/342">
+<img src="https://www.google.com/s2/favicons?domain=ranchmarket.jobseeker.software&sz=64" width="64" height="64" alt="Ranch Market &amp; Farmers Market">
+<br>Ranch Market &amp; Farmers Market
+</a>
+<br>Operational Cashier
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/364">
+<img src="https://www.google.com/s2/favicons?domain=ocs.com&sz=64" width="64" height="64" alt="OCS Group Indonesia">
+<br>OCS Group Indonesia
+</a>
+<br>Cleaner
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/376">
+<img src="https://www.google.com/s2/favicons?domain=careers.accor.com&sz=64" width="64" height="64" alt="Accor">
+<br>Accor
+</a>
+<br>Receiving &amp; Storekeeper
+</td>
+<td align="center" width="50%">
+<a href="https://karir-adiprmx.vercel.app/perusahaan/386">
+<img src="https://www.google.com/s2/favicons?domain=www.dexagroupcareer.com&sz=64" width="64" height="64" alt="PT Dexa Medica (Dexa Group)">
+<br>PT Dexa Medica (Dexa Group)
+</a>
+<br>Production Staff
+</td>
+</tr>
+</table>
 
-1. Buka https://karir-adiprmx.vercel.app/, ketik domisili dan posisi di kolom pencarian, lalu buka halaman perusahaan untuk melihat status, lokasi, posisi, dan tanggal cek.
-2. Lamar lewat tombol "Buka portal karir" yang mengarah ke situs resmi perusahaan itu. Rekrutmen yang sah tidak memungut biaya.
-3. Pengunjung baru bisa tekan "Mulai" di header, isi domisili dan posisi, lalu langsung diarahkan ke hasil yang cocok. Jawabannya hanya tersimpan di browser sendiri, tanpa akun dan tanpa login. Bisa dilewati.
-
-## 02 Data
+## Hasil cek 406 kanal
 
 <p align="center">
   <img src="assets/status-bar.svg" alt="Sebaran status 406 perusahaan" width="100%">
@@ -36,150 +201,47 @@
 | Status | Jumlah |
 | --- | --- |
 | Ada lowongan target | 22 |
-| Ada lowongan target (tidak cocok) | 5 |
+| Ada lowongan, syarat tidak cocok | 5 |
 | Tidak ada lowongan target | 152 |
 | Tidak ada lowongan terlihat | 77 |
 | Tidak dapat diverifikasi | 84 |
 | Portal tidak bisa dibuka | 66 |
 
-Empat baris tidak punya tautan karena tidak ditemukan situs resmi perusahaan. Tautannya tidak ditebak.
+4 perusahaan tidak punya tautan karena situs resminya tidak ketemu. Tautannya tidak ditebak.
 
-Setiap kanal dibuka langsung di browser lewat navigasi situs resmi perusahaan. Cuplikan pencarian, postingan pihak ketiga, dan tautan pemendek tidak dipakai sebagai bukti. Pengecekan hanya membuka halaman: tidak ada yang dilamar, tidak ada akun yang dibuat, tidak ada login, dan tidak ada data pribadi yang dimasukkan. Penjelasan lengkap ada di `docs/METODE.md`, daftar lengkap lowongan target ada di `docs/TEMUAN.md`.
+## Dari kanal ke aplikasi
 
-```mermaid
-flowchart TD
-    A[406 kanal karir] --> B[Diperiksa di browser]
-    B --> C[CSV dan XLSX]
-    C --> D[Firestore: 406 dokumen]
-    D --> E[Aplikasi web dan API]
-    E --> F[Pengunjung cari loker]
-```
+<p align="center">
+  <img src="assets/flow.svg" alt="Alur data dari kanal karir ke aplikasi" width="100%">
+</p>
 
-Kalau mau mengolah datanya sendiri, buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar.
+Kanal dicek di browser, dicatat di CSV, lalu tampil di aplikasi dan API.
 
-```python
-import pandas as pd
-
-base = "https://raw.githubusercontent.com/adiprmx/karir"
-url = f"{base}/main/data/daftar-link-karir.csv"
-df = pd.read_csv(url)
-target = df[df.status == "Ada lowongan target"]
-cols = ["perusahaan", "link_karir", "lokasi"]
-print(target[cols].to_string(index=False))
-```
-
-## 03 Aplikasi web
-
-Pencarian ada di Beranda: ketik domisili dan posisi, 6 hasil teratas muncul di bawah kolom tanpa pindah halaman, bisa dipilih dengan panah keyboard. Halaman `/cari` menambah filter kategori, status, dan urutan.
-
-Pencarian mengerti sinonim peran: ketik "cleaner" menemukan "Cleaning Service", "warehouse" menemukan "Staff Gudang". Pencocokan nama perusahaan tetap memakai kata yang diketik, bukan sinonimnya.
-
-Lamaran dilacak di `/lamaran` tanpa akun: tandai perusahaan sebagai Ditandai, Sudah dilamar, Dipanggil, atau Ditolak, lengkap tanggal dan catatan. Semuanya tersimpan di browser pengguna saja (localStorage), tidak dikirim ke mana pun. Peta di `/peta` menaruh 18 perusahaan target per kota (4 sisanya tidak punya lokasi spesifik dan tampil di daftar Lokasi lain), klik satu titik untuk melihat daftarnya. Dasbor di `/dasbor` menyapa sesuai pilihan onboarding, menunjukkan langkah berikutnya dan ringkasan lamaran, lalu grafik sebaran status dan daftar target.
-
-Admin ada di `/admin`, khusus pemilik data. Login Firebase, lalu ubah data perusahaan, impor dan ekspor CSV, cek massal 22 tautan target, dan lihat laporan tautan mati dari pengunjung plus audit log. Setiap jam 01:00 WIB, cron mengecek ulang 22 portal target; perubahan status masuk umpan "Yang berubah" di Beranda. Portal yang tadinya mati lalu hidup lagi dicatat sebagai "Tidak dapat diverifikasi" sampai dicek ulang manusia, karena cek tautan hanya membuktikan portal bisa dibuka, bukan lowongannya masih ada.
-
-Aplikasi tidak memakai akun pengguna, tidak mengumpulkan data pribadi pengunjung, dan tidak memakai analytics. Antarmuka tersedia dalam Bahasa Indonesia dan Inggris lewat saklar ID/EN di header. Sitemap otomatis berisi 417 URL (11 halaman + 406 halaman perusahaan), dan tiap halaman detail membawa data terstruktur JSON-LD.
-
-<details>
-<summary>Cara skor dihitung</summary>
-
-Hasil diurutkan pakai skor:
-
-| Kecocokan | Skor |
-| --- | --- |
-| Posisi cocok dengan data | +50 |
-| Domisili cocok dengan data | +30 |
-| Lowongan terverifikasi | +20 |
-| Lowongan target, syarat tidak cocok | +10 |
-| Portal tidak bisa dibuka | −20 |
-| Tidak dapat diverifikasi | −10 |
-
-Skor bukan janji lowongan. Aplikasi hanya merekomendasikan kanal karir berdasarkan data yang tercatat. Kalau posisi yang dicari tidak tercatat di data sebuah perusahaan, kartunya tetap tampil dengan label peran itu belum terverifikasi, dan pengunjung diminta cek langsung di portalnya. Kalimat penyangkalan di data, misalnya "tidak ada penyebutan Bogor/Depok", tidak dihitung sebagai kecocokan.
-
-</details>
-
-<details>
-<summary>Endpoint API</summary>
-
-Pencarian juga tersedia sebagai API: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang` mengembalikan hasil yang sama dengan halaman Cari, dalam JSON. Ada juga `GET /api/companies/212` (satu perusahaan), `GET /api/companies?q=Novell` (pencarian bebas), `GET /api/stats` (angka ringkas data), `GET /api/changes` (umpan perubahan), dan `POST /api/admin/check-link` (cek apakah tautan karir sebuah perusahaan masih bisa dibuka; hanya menerima nomor perusahaan, URL diambil dari data yang tersimpan).
-
-</details>
-
-## 04 Stack
+## Data dan dokumen
 
 | Teknologi | Status | Keterangan |
 | --- | --- | --- |
-| Next.js 15 + React 19 | Dipakai | Frontend dan backend, App Router; Beranda dan Dasbor di-render di server, halaman Cari dari parameter URL, jadi bisa dibagikan |
-| Vercel | Dipakai | Hosting, proyek `karir`, rootDirectory `web`; push ke `main` men-deploy otomatis |
-| Firestore, proyek `karir-9d53a`, asia-southeast1, paket Spark | Dipakai | Koleksi `companies` berisi 406 dokumen, satu per perusahaan; dibaca aplikasi lewat REST API |
-| Firebase Auth | Dipakai | Login admin saja, Email/Password; akun admin dibuat di Firebase Console |
-| Leaflet 1.9.4 + OpenStreetMap | Dipakai | Peta 22 lowongan target |
-| next/og | Dipakai | Gambar pratinjau dinamis per perusahaan |
-| Supabase | Tidak dipakai | Akun mentok 2 proyek gratis yang aktif, keduanya sedang live |
-| Vercel KV | Tidak dipakai | Butuh database dokumen dengan query dan aturan tulis |
-| Payment gateway | Tidak dipakai | Aplikasi tidak memungut pembayaran apa pun |
-| Akun pengguna | Tidak dipakai | Sengaja tanpa akun; data pengguna hanya tersimpan di browsernya sendiri |
+| Next.js 15 + React 19 | Dipakai | Aplikasi web dan API |
+| Vercel | Dipakai | Hosting |
+| Firestore | Dipakai | 406 dokumen perusahaan |
+| Firebase Auth | Dipakai | Login admin saja |
+| Leaflet + OpenStreetMap | Dipakai | Peta lowongan target |
+| Supabase | Tidak dipakai | Akun mentok 2 proyek gratis |
+| Vercel KV | Tidak dipakai | Butuh database dokumen |
+| Payment gateway | Tidak dipakai | Tidak ada pembayaran |
+| Akun pengguna | Tidak dipakai | Data cuma di browser sendiri |
 
-Aturan Firestore: baca terbuka untuk semua; tulis hanya untuk pengguna yang sudah login dan hanya bila dokumen lolos validasi (9 kolom wajib, nomor bertipe angka, status salah satu dari 6 nilai). Koleksi `audit_logs` mencatat setiap perubahan data oleh admin dan tidak bisa diubah atau dihapus. Koleksi `reports` menampung laporan tautan mati dari pengunjung dalam bentuk yang divalidasi aturan.
+Satu baris per perusahaan, 9 kolom: no, perusahaan, kategori, link karir, status, tanggal cek, catatan, lokasi, posisi. File yang sama tersedia sebagai [CSV](data/daftar-link-karir.csv) dan [XLSX](data/daftar-link-karir.xlsx).
 
-## 05 Skema data
+- [SECURITY.md](SECURITY.md) buat lapor celah keamanan
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) alur data dan keputusan arsitektur
+- [API.md](docs/API.md) dokumentasi endpoint
+- [ROADMAP.md](ROADMAP.md) rencana kerja yang masih jalan
+- [CHANGELOG.md](CHANGELOG.md) riwayat perubahan per versi
+- [PRODUCT.md](PRODUCT.md) alur pengguna dan arah produk
+- [DESIGN.md](DESIGN.md) bahasa visual aplikasi
+- [CONTRIBUTING.md](CONTRIBUTING.md) aturan berkontribusi
 
-Satu baris per perusahaan, 9 kolom:
+Versi 2.7.0, 6 November 2026.
 
-| Kolom | Isi | Contoh |
-| --- | --- | --- |
-| no | Nomor urut | 212 |
-| perusahaan | Nama perusahaan | PT Novell Pharmaceutical Laboratories |
-| kategori | Jenis perusahaan | Manufaktur |
-| link_karir | Tautan kanal karir resmi | [novellpharm.com](https://novellpharm.com/index.php?mod=professional) |
-| status | Hasil cek | Ada lowongan target |
-| tanggal_cek | Tanggal pengecekan | 2026-11-05 |
-| catatan | Catatan hasil cek | Judul persis HELPER, penempatan Gunung Putri Bogor |
-| lokasi | Lokasi perusahaan atau lowongan | Gunung Putri Bogor |
-| posisi | Peran target yang ditemukan | HELPER, WAREHOUSE STAFF |
-
-File `data/daftar-link-karir.xlsx` isinya sama, ditambah sheet Petunjuk. Riwayat perubahan ada di `CHANGELOG.md`.
-
-## 06 Struktur repo
-
-| Jalur | Isi |
-| --- | --- |
-| `data/` | CSV dan XLSX, 406 perusahaan |
-| `web/` | Aplikasi Next.js |
-| `docs/` | `METODE.md`, `TEMUAN.md`, `ARCHITECTURE.md`, `API.md`, dan versi statis lama |
-| `scripts/` | `validate.py`, validasi CSV |
-| `assets/` | Banner dan grafik status |
-| `.github/` | Workflow validasi data, template issue dan pull request |
-| `SECURITY.md` | Cara melaporkan celah keamanan |
-| `ROADMAP.md` | Rencana dan status pekerjaan yang masih jalan |
-
-## 07 Menjalankan lokal
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-Buka http://localhost:3000. Aplikasi butuh `web/.env.local` berisi enam variabel `NEXT_PUBLIC_FIREBASE_*`: `API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `STORAGE_BUCKET`, `MESSAGING_SENDER_ID`, dan `APP_ID`. Nilainya dari Firebase Console, proyek `karir-9d53a`. Contohnya ada di `web/.env.example`.
-
-## 08 Dokumen
-
-- [METODE.md](docs/METODE.md): cara tiap kanal dicek.
-- [TEMUAN.md](docs/TEMUAN.md): daftar lengkap 22 lowongan target.
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md): alur data dan keputusan arsitektur.
-- [API.md](docs/API.md): dokumentasi endpoint.
-- [ROADMAP.md](ROADMAP.md): rencana dan status pekerjaan yang masih jalan.
-- [SECURITY.md](SECURITY.md): cara melaporkan celah keamanan.
-- [CHANGELOG.md](CHANGELOG.md): riwayat perubahan per versi.
-- [PRODUCT.md](PRODUCT.md): alur pengguna dan arah produk.
-- [DESIGN.md](DESIGN.md): bahasa visual aplikasi.
-- [CONTRIBUTING.md](CONTRIBUTING.md): aturan berkontribusi.
-
-## 09 Berkontribusi
-
-Usulan perusahaan baru, koreksi tautan, dan hasil cek ulang diterima lewat issue dan pull request. Setiap perubahan data harus dibuktikan dengan tautan halaman resmi yang dibuka langsung. Aturannya ada di `CONTRIBUTING.md`.
-
-## Lisensi
-
-Kode dan skrip: MIT, lihat `LICENSE`. Data di `data/`: CC BY 4.0.
+Kode dan skrip: MIT, lihat LICENSE. Data di data/: CC BY 4.0.
