@@ -16,6 +16,8 @@
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.82; } }
     @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; }
+  .seg { transform: scaleX(1) !important; }
+  .odo { transform: translateY(-3960px) !important; }
 }
   </style>
   <defs>

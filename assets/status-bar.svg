@@ -17,7 +17,7 @@
     @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
     @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
     @media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; }
+  * { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
   </style>
   <rect width="700" height="428" fill="#ffffff"/>

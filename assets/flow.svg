@@ -11,7 +11,7 @@
     .s5 { animation-delay: 1.90s; }
     @keyframes stepin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     @media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; }
+  * { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
   </style>
   <rect width="640" height="624" fill="#ffffff"/>
