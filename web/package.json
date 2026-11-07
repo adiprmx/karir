@@ -6,14 +6,15 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
-  "description": "Karir — alat cari kanal lowongan kerja. Next.js + Supabase.",
+  "description": "Karir: alat cari kanal lowongan kerja. Next.js + Firestore.",
   "name": "karir-web",
   "private": true,
   "scripts": {
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --test lib/search.test.js"
   },
   "type": "module",
   "version": "2.7.0"

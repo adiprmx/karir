@@ -2,6 +2,10 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## Belum dirilis
+
+Repo dilengkapi: README dan banner baru, SECURITY.md, docs/ARCHITECTURE.md, docs/API.md, ROADMAP.md, indeks docs/, web/.env.example, 27 tes unit mesin pencarian (npm test), workflow CI aplikasi (tes + build tiap push), dependabot, deskripsi package.json diperbaiki (Firestore, bukan Supabase).
+
 ## 2.7.0 — 2026-11-06
 
 Rombakan tampilan: halaman bergerak dan tersusun.

@@ -1,0 +1,42 @@
+# CI aplikasi web Karir: tes unit + build Next.js.
+# Langkah build memakai nilai NEXT_PUBLIC_FIREBASE_* dummy, bukan secret.
+# Alasannya: halaman /admin mengimpor lib/firebase.js, dan initializeApp
+# jalan saat modul dimuat; tanpa apiKey, build gagal dengan
+# auth/invalid-api-key saat prerender. Nilai dummy cukup untuk membangun
+# aplikasi, karena build tidak memanggil Firebase sama sekali; kunci asli
+# hanya ada di Vercel dan di .env.local lokal, dan keduanya tidak dipakai
+# di sini. Nilai dummy ini bukan kunci asli dan tidak membuka apa pun.
+name: App
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        working-directory: web
+        run: npm ci
+      - name: Test
+        working-directory: web
+        run: npm test
+      - name: Build
+        working-directory: web
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: AIzaDummyDummyDummyDummyDummyDummy12
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: karir-9d53a.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: karir-9d53a
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: karir-9d53a.firebasestorage.app
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          NEXT_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000000000"
+        run: npm run build

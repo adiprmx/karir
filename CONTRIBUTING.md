@@ -35,6 +35,20 @@ python3 scripts/validate.py
 
 Skrip ini memeriksa jumlah baris, nama kolom, kosakata status, format tanggal, dan duplikat nama perusahaan di `data/daftar-link-karir.csv`. Pull request yang gagal validasi tidak digabungkan sampai diperbaiki.
 
+## Perubahan kode
+
+Perubahan pada aplikasi web di `web/` mengikuti aturan yang sama seperti data: satu perubahan per pull request, dan deskripsinya menjelaskan apa yang berubah dan kenapa.
+
+- Ikuti `DESIGN.md`: monokrom hitam, abu, putih; warna hanya untuk fungsi dan status; tanpa gradasi dan tanpa font baru.
+- Jangan menambah dependensi tanpa alasan yang ditulis di deskripsi pull request.
+- Sebelum mengirim pull request untuk perubahan kode, jalankan dari folder `web/`:
+
+```bash
+npm run build
+```
+
+Pull request yang gagal build tidak digabungkan sampai diperbaiki. Jangan pernah menulis nilai Firebase asli ke `web/.env.example`; file itu hanya berisi placeholder.
+
 ## Kode etik
 
 Ikuti `CODE_OF_CONDUCT.md`. Diskusi yang kasar, spam lowongan palsu, dan promosi berbayar tidak diterima.

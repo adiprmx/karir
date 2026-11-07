@@ -12,13 +12,19 @@
 
 <p align="center"><a href="https://karir-adiprmx.vercel.app/">Cari loker di aplikasi web</a></p>
 
-## Cari loker
+<p align="center">Versi 2.7.0 · 6 November 2026 · <a href="CHANGELOG.md">Riwayat perubahan</a></p>
 
-Buka https://karir-adiprmx.vercel.app/, ketik domisili dan posisi di kolom pencarian, lalu buka halaman perusahaan untuk melihat status, lokasi, posisi, dan tanggal cek. Lamar lewat tombol "Buka portal karir" yang mengarah ke situs resmi perusahaan itu. Rekrutmen yang sah tidak memungut biaya.
+| 406 | 22 | 5 | 66 |
+| --- | --- | --- | --- |
+| kanal diperiksa | ada lowongan target | syarat tidak cocok | portal tidak bisa dibuka |
 
-Pengunjung baru bisa tekan "Mulai" di header, isi domisili dan posisi, lalu langsung diarahkan ke hasil yang cocok. Jawabannya hanya tersimpan di browser sendiri, tanpa akun dan tanpa login. Bisa dilewati.
+## 01 Cara pakai
 
-## Data
+1. Buka https://karir-adiprmx.vercel.app/, ketik domisili dan posisi di kolom pencarian, lalu buka halaman perusahaan untuk melihat status, lokasi, posisi, dan tanggal cek.
+2. Lamar lewat tombol "Buka portal karir" yang mengarah ke situs resmi perusahaan itu. Rekrutmen yang sah tidak memungut biaya.
+3. Pengunjung baru bisa tekan "Mulai" di header, isi domisili dan posisi, lalu langsung diarahkan ke hasil yang cocok. Jawabannya hanya tersimpan di browser sendiri, tanpa akun dan tanpa login. Bisa dilewati.
+
+## 02 Data
 
 <p align="center">
   <img src="assets/status-bar.svg" alt="Sebaran status 406 perusahaan" width="100%">
@@ -37,6 +43,15 @@ Empat baris tidak punya tautan karena tidak ditemukan situs resmi perusahaan. Ta
 
 Setiap kanal dibuka langsung di browser lewat navigasi situs resmi perusahaan. Cuplikan pencarian, postingan pihak ketiga, dan tautan pemendek tidak dipakai sebagai bukti. Pengecekan hanya membuka halaman: tidak ada yang dilamar, tidak ada akun yang dibuat, tidak ada login, dan tidak ada data pribadi yang dimasukkan. Penjelasan lengkap ada di `docs/METODE.md`, daftar lengkap lowongan target ada di `docs/TEMUAN.md`.
 
+```mermaid
+flowchart LR
+    A[406 kanal karir resmi] --> B[Dibuka dan diperiksa di browser]
+    B --> C[Data CSV dan XLSX]
+    C --> D[Firestore: 406 dokumen]
+    D --> E[Aplikasi web dan API]
+    E --> F[Pengunjung cari loker]
+```
+
 Kalau mau mengolah datanya sendiri, buka `data/daftar-link-karir.csv`, saring kolom `status` ke "Ada lowongan target", lalu buka tautan karirnya dan baca syarat lengkapnya sebelum melamar.
 
 ```python
@@ -48,9 +63,22 @@ target = df[df.status == "Ada lowongan target"]
 print(target[["perusahaan", "link_karir", "lokasi"]].to_string(index=False))
 ```
 
-## Aplikasi web
+## 03 Aplikasi web
 
-Pencarian ada di Beranda: ketik domisili dan posisi, 6 hasil teratas muncul di bawah kolom tanpa pindah halaman, bisa dipilih dengan panah keyboard. Halaman `/cari` menambah filter kategori, status, dan urutan. Hasil diurutkan pakai skor:
+Pencarian ada di Beranda: ketik domisili dan posisi, 6 hasil teratas muncul di bawah kolom tanpa pindah halaman, bisa dipilih dengan panah keyboard. Halaman `/cari` menambah filter kategori, status, dan urutan.
+
+Pencarian mengerti sinonim peran: ketik "cleaner" menemukan "Cleaning Service", "warehouse" menemukan "Staff Gudang". Pencocokan nama perusahaan tetap memakai kata yang diketik, bukan sinonimnya.
+
+Lamaran dilacak di `/lamaran` tanpa akun: tandai perusahaan sebagai Ditandai, Sudah dilamar, Dipanggil, atau Ditolak, lengkap tanggal dan catatan. Semuanya tersimpan di browser pengguna saja (localStorage), tidak dikirim ke mana pun. Peta di `/peta` menaruh 18 perusahaan target per kota (4 sisanya tidak punya lokasi spesifik dan tampil di daftar Lokasi lain), klik satu titik untuk melihat daftarnya. Dasbor di `/dasbor` menyapa sesuai pilihan onboarding, menunjukkan langkah berikutnya dan ringkasan lamaran, lalu grafik sebaran status dan daftar target.
+
+Admin ada di `/admin`, khusus pemilik data. Login Firebase, lalu ubah data perusahaan, impor dan ekspor CSV, cek massal 22 tautan target, dan lihat laporan tautan mati dari pengunjung plus audit log. Setiap jam 01:00 WIB, cron mengecek ulang 22 portal target; perubahan status masuk umpan "Yang berubah" di Beranda. Portal yang tadinya mati lalu hidup lagi dicatat sebagai "Tidak dapat diverifikasi" sampai dicek ulang manusia, karena cek tautan hanya membuktikan portal bisa dibuka, bukan lowongannya masih ada.
+
+Aplikasi tidak memakai akun pengguna, tidak mengumpulkan data pribadi pengunjung, dan tidak memakai analytics. Antarmuka tersedia dalam Bahasa Indonesia dan Inggris lewat saklar ID/EN di header. Sitemap otomatis berisi 417 URL (11 halaman + 406 halaman perusahaan), dan tiap halaman detail membawa data terstruktur JSON-LD.
+
+<details>
+<summary>Cara skor dihitung</summary>
+
+Hasil diurutkan pakai skor:
 
 | Kecocokan | Skor |
 | --- | --- |
@@ -63,17 +91,16 @@ Pencarian ada di Beranda: ketik domisili dan posisi, 6 hasil teratas muncul di b
 
 Skor bukan janji lowongan. Aplikasi hanya merekomendasikan kanal karir berdasarkan data yang tercatat. Kalau posisi yang dicari tidak tercatat di data sebuah perusahaan, kartunya tetap tampil dengan label peran itu belum terverifikasi, dan pengunjung diminta cek langsung di portalnya. Kalimat penyangkalan di data, misalnya "tidak ada penyebutan Bogor/Depok", tidak dihitung sebagai kecocokan.
 
-Pencarian mengerti sinonim peran: ketik "cleaner" menemukan "Cleaning Service", "warehouse" menemukan "Staff Gudang". Pencocokan nama perusahaan tetap memakai kata yang diketik, bukan sinonimnya.
+</details>
 
-Lamaran dilacak di `/lamaran` tanpa akun: tandai perusahaan sebagai Ditandai, Sudah dilamar, Dipanggil, atau Ditolak, lengkap tanggal dan catatan. Semuanya tersimpan di browser pengguna saja (localStorage), tidak dikirim ke mana pun. Peta di `/peta` menaruh 18 perusahaan target per kota (4 sisanya tidak punya lokasi spesifik dan tampil di daftar Lokasi lain), klik satu titik untuk melihat daftarnya. Dasbor di `/dasbor` menyapa sesuai pilihan onboarding, menunjukkan langkah berikutnya dan ringkasan lamaran, lalu grafik sebaran status dan daftar target.
-
-Admin ada di `/admin`, khusus pemilik data. Login Firebase, lalu ubah data perusahaan, impor dan ekspor CSV, cek massal 22 tautan target, dan lihat laporan tautan mati dari pengunjung plus audit log. Setiap jam 01:00 WIB, cron mengecek ulang 22 portal target; perubahan status masuk umpan "Yang berubah" di Beranda. Portal yang tadinya mati lalu hidup lagi dicatat sebagai "Tidak dapat diverifikasi" sampai dicek ulang manusia, karena cek tautan hanya membuktikan portal bisa dibuka, bukan lowongannya masih ada.
-
-Aplikasi tidak memakai akun pengguna, tidak mengumpulkan data pribadi pengunjung, dan tidak memakai analytics. Antarmuka tersedia dalam Bahasa Indonesia dan Inggris lewat saklar ID/EN di header. Sitemap otomatis berisi 417 URL (11 halaman + 406 halaman perusahaan), dan tiap halaman detail membawa data terstruktur JSON-LD.
+<details>
+<summary>Endpoint API</summary>
 
 Pencarian juga tersedia sebagai API: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang` mengembalikan hasil yang sama dengan halaman Cari, dalam JSON. Ada juga `GET /api/companies/212` (satu perusahaan), `GET /api/companies?q=Novell` (pencarian bebas), `GET /api/stats` (angka ringkas data), `GET /api/changes` (umpan perubahan), dan `POST /api/admin/check-link` (cek apakah tautan karir sebuah perusahaan masih bisa dibuka; hanya menerima nomor perusahaan, URL diambil dari data yang tersimpan).
 
-## Stack
+</details>
+
+## 04 Stack
 
 | Teknologi | Status | Keterangan |
 | --- | --- | --- |
@@ -90,7 +117,7 @@ Pencarian juga tersedia sebagai API: `GET /api/companies?domisili=Bogor&posisi=H
 
 Aturan Firestore: baca terbuka untuk semua; tulis hanya untuk pengguna yang sudah login dan hanya bila dokumen lolos validasi (9 kolom wajib, nomor bertipe angka, status salah satu dari 6 nilai). Koleksi `audit_logs` mencatat setiap perubahan data oleh admin dan tidak bisa diubah atau dihapus. Koleksi `reports` menampung laporan tautan mati dari pengunjung dalam bentuk yang divalidasi aturan.
 
-## Skema data
+## 05 Skema data
 
 Satu baris per perusahaan, 9 kolom:
 
@@ -108,18 +135,20 @@ Satu baris per perusahaan, 9 kolom:
 
 File `data/daftar-link-karir.xlsx` isinya sama, ditambah sheet Petunjuk. Riwayat perubahan ada di `CHANGELOG.md`.
 
-## Struktur repo
+## 06 Struktur repo
 
-| Folder | Isi |
+| Jalur | Isi |
 | --- | --- |
 | `data/` | CSV dan XLSX, 406 perusahaan |
 | `web/` | Aplikasi Next.js |
-| `docs/` | `METODE.md`, `TEMUAN.md`, dan versi statis lama |
+| `docs/` | `METODE.md`, `TEMUAN.md`, `ARCHITECTURE.md`, `API.md`, dan versi statis lama |
 | `scripts/` | `validate.py`, validasi CSV |
 | `assets/` | Banner dan grafik status |
 | `.github/` | Workflow validasi data, template issue dan pull request |
+| `SECURITY.md` | Cara melaporkan celah keamanan |
+| `ROADMAP.md` | Rencana dan status pekerjaan yang masih jalan |
 
-## Menjalankan lokal
+## 07 Menjalankan lokal
 
 ```bash
 cd web
@@ -127,9 +156,22 @@ npm install
 npm run dev
 ```
 
-Buka http://localhost:3000. Aplikasi butuh `web/.env.local` berisi enam variabel `NEXT_PUBLIC_FIREBASE_*`: `API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `STORAGE_BUCKET`, `MESSAGING_SENDER_ID`, dan `APP_ID`. Nilainya dari Firebase Console, proyek `karir-9d53a`.
+Buka http://localhost:3000. Aplikasi butuh `web/.env.local` berisi enam variabel `NEXT_PUBLIC_FIREBASE_*`: `API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `STORAGE_BUCKET`, `MESSAGING_SENDER_ID`, dan `APP_ID`. Nilainya dari Firebase Console, proyek `karir-9d53a`. Contohnya ada di `web/.env.example`.
 
-## Berkontribusi
+## 08 Dokumen
+
+- [METODE.md](docs/METODE.md): cara tiap kanal dicek.
+- [TEMUAN.md](docs/TEMUAN.md): daftar lengkap 22 lowongan target.
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md): alur data dan keputusan arsitektur.
+- [API.md](docs/API.md): dokumentasi endpoint.
+- [ROADMAP.md](ROADMAP.md): rencana dan status pekerjaan yang masih jalan.
+- [SECURITY.md](SECURITY.md): cara melaporkan celah keamanan.
+- [CHANGELOG.md](CHANGELOG.md): riwayat perubahan per versi.
+- [PRODUCT.md](PRODUCT.md): alur pengguna dan arah produk.
+- [DESIGN.md](DESIGN.md): bahasa visual aplikasi.
+- [CONTRIBUTING.md](CONTRIBUTING.md): aturan berkontribusi.
+
+## 09 Berkontribusi
 
 Usulan perusahaan baru, koreksi tautan, dan hasil cek ulang diterima lewat issue dan pull request. Setiap perubahan data harus dibuktikan dengan tautan halaman resmi yang dibuka langsung. Aturannya ada di `CONTRIBUTING.md`.
 
