@@ -16,6 +16,16 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.8.1",
+    date: "7 November 2026",
+    points: [
+      "22 perusahaan target dicek ulang satu per satu di portal resminya. Yang masih punya lowongan target kini 9, dari sebelumnya 22.",
+      "Masuk jadi pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap jalan. Yang masuk bisa menyimpan tanda lamaran di akun supaya tidak hilang bila data browser dihapus.",
+      "Indeks perusahaan kini dijaga token dan batas akses, supaya situs tidak dipakai diam-diam sebagai layanan data oleh program otomatis.",
+      "Halaman tetap tampil dari data cadangan bila basis data lambat atau mati, dan tidak lagi menampilkan galat 500.",
+    ],
+  },
+  {
     version: "2.8.0",
     date: "7 November 2026",
     points: [
