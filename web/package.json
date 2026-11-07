@@ -12,10 +12,14 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "lint": "next lint",
+    "lint": "eslint .",
     "start": "next start",
     "test": "node --test lib/search.test.js"
   },
   "type": "module",
-  "version": "2.7.0"
+  "version": "2.7.0",
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.29"
+  }
 }

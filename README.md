@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/adiprmx/karir/actions/workflows/validate.yml"><img src="https://github.com/adiprmx/karir/actions/workflows/validate.yml/badge.svg" alt="Validasi data"></a>
+  <a href="https://github.com/adiprmx/karir/actions/workflows/app.yml"><img src="https://github.com/adiprmx/karir/actions/workflows/app.yml/badge.svg" alt="Aplikasi web"></a>
   <a href="https://github.com/adiprmx/karir/blob/main/LICENSE"><img src="https://img.shields.io/github/license/adiprmx/karir" alt="Lisensi MIT"></a>
   <img src="https://img.shields.io/badge/perusahaan-406-black" alt="406 perusahaan">
 </p>
@@ -44,7 +45,7 @@ Empat baris tidak punya tautan karena tidak ditemukan situs resmi perusahaan. Ta
 Setiap kanal dibuka langsung di browser lewat navigasi situs resmi perusahaan. Cuplikan pencarian, postingan pihak ketiga, dan tautan pemendek tidak dipakai sebagai bukti. Pengecekan hanya membuka halaman: tidak ada yang dilamar, tidak ada akun yang dibuat, tidak ada login, dan tidak ada data pribadi yang dimasukkan. Penjelasan lengkap ada di `docs/METODE.md`, daftar lengkap lowongan target ada di `docs/TEMUAN.md`.
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[406 kanal karir resmi] --> B[Dibuka dan diperiksa di browser]
     B --> C[Data CSV dan XLSX]
     C --> D[Firestore: 406 dokumen]

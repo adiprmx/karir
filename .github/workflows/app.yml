@@ -1,4 +1,4 @@
-# CI aplikasi web Karir: tes unit + build Next.js.
+# CI aplikasi web Karir: tes unit + lint + build Next.js + tes asap.
 # Langkah build memakai nilai NEXT_PUBLIC_FIREBASE_* dummy, bukan secret.
 # Alasannya: halaman /admin mengimpor lib/firebase.js, dan initializeApp
 # jalan saat modul dimuat; tanpa apiKey, build gagal dengan
@@ -6,6 +6,11 @@
 # aplikasi, karena build tidak memanggil Firebase sama sekali; kunci asli
 # hanya ada di Vercel dan di .env.local lokal, dan keduanya tidak dipakai
 # di sini. Nilai dummy ini bukan kunci asli dan tidak membuka apa pun.
+# Langkah Smoke menjalankan server production dari hasil build lalu
+# memeriksa 4 endpoint lewat web/scripts/smoke-check.mjs. Dua cek data
+# (/api/stats dan /api/companies) dilewati bila server menjawab 503,
+# karena kunci dummy tidak bisa membaca Firestore; / dan /changelog
+# harus lolos. Server dimatikan lagi di akhir langkah.
 name: App
 
 on:
@@ -30,6 +35,9 @@ jobs:
       - name: Test
         working-directory: web
         run: npm test
+      - name: Lint
+        working-directory: web
+        run: npm run lint
       - name: Build
         working-directory: web
         env:
@@ -40,3 +48,31 @@ jobs:
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
           NEXT_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000000000"
         run: npm run build
+      - name: Smoke
+        working-directory: web
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: AIzaDummyDummyDummyDummyDummyDummy12
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: karir-9d53a.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: karir-9d53a
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: karir-9d53a.firebasestorage.app
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          NEXT_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000000000"
+          BASE_URL: http://localhost:3000
+        run: |
+          npx next start -p 3000 > /tmp/next-smoke.log 2>&1 &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/changelog > /dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          STATUS=0
+          node scripts/smoke-check.mjs || STATUS=$?
+          kill $SERVER_PID 2>/dev/null || true
+          pkill -f "[n]ext-server" 2>/dev/null || true
+          if [ "$STATUS" -ne 0 ]; then
+            echo "--- log server ---"
+            tail -20 /tmp/next-smoke.log || true
+          fi
+          exit $STATUS
