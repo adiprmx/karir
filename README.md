@@ -2,7 +2,9 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Gue bikin daftar ini pas lagi cari kerja. Daripada buka satu-satu portal perusahaan dan lupa mana yang sudah dicek, gue buka 406 kanal karir resmi di browser tanggal 4 dan 5 November 2026, terus gue catat hasilnya di satu tempat. Hasilnya: cuma 22 yang waktu itu ada lowongan buat Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, dan Crew Store.</p>
+<p align="center">Daftar ini berisi 406 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026. Hasilnya: 22 perusahaan memiliki lowongan untuk peran target.</p>
+
+Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, Crew Store.
 
 <h3 align="center"><a href="https://karir-adiprmx.vercel.app/">Cari loker sekarang</a></h3>
 
@@ -14,11 +16,11 @@
 2. Ketik domisili dan posisi yang dicari, lalu baca status tiap perusahaan beserta tanggal ceknya.
 3. Kalau ada yang cocok, buka portal resmi perusahaan itu dari tautan yang tercantum dan lamar di sana. Karir tidak menerima lamaran.
 
-Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) buat cari dari domisili dan posisi lalu urutkan pakai skor kecocokan, dan [Peta](https://karir-adiprmx.vercel.app/peta) buat lihat 22 target per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) buat tandai lamaran yang tersimpan di browser saja. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode), pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
+Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) untuk mencari dari domisili dan posisi, lalu mengurutkan hasil dengan skor kecocokan. [Peta](https://karir-adiprmx.vercel.app/peta) menampilkan 22 target per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) menyimpan tandaan lamaran di browser saja. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode). Pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
 
 <h2 align="center">22 perusahaan dengan lowongan target</h2>
 
-Dari 406 kanal, ini 22 yang waktu dicek pas ada lowongan buat peran target. Klik logonya buat buka halaman detailnya, terus lamar di portal resmi perusahaannya, bukan di sini.
+Klik logo untuk membuka halaman perusahaan.
 
 <table>
 <tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/115"><img src="https://www.google.com/s2/favicons?domain=superindo.jobseeker.software&sz=64" width="48" height="48" alt="Super Indo"><br>Super Indo</a><br>DC Staff Gudang</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/150"><img src="https://www.google.com/s2/favicons?domain=www.yamaha-motor.co.id&sz=64" width="48" height="48" alt="Yamaha"><br>Yamaha</a><br>Operator Produksi</td></tr>
@@ -36,7 +38,7 @@ Dari 406 kanal, ini 22 yang waktu dicek pas ada lowongan buat peran target. Klik
 
 <h2 align="center">Hasil cek 406 kanal</h2>
 
-Dari 406 kanal, cuma 22 yang ada lowongan target. Sisanya kebagi begini.
+22 dari 406 kanal ada lowongan target.
 
 <p align="center">
   <img src="assets/status-bar.svg" alt="Sebaran status 406 perusahaan" width="100%">
@@ -55,15 +57,13 @@ Dari 406 kanal, cuma 22 yang ada lowongan target. Sisanya kebagi begini.
 
 <h2 align="center">Paling cocok</h2>
 
-Dari 22 itu, tiga ini yang syarat dan lokasinya paling jelas tertulis, jadi tidak perlu menebak.
-
 - [PT Novell Pharmaceutical Laboratories](https://karir-adiprmx.vercel.app/perusahaan/212): HELPER, Gunung Putri Bogor. Satu-satunya dari 22 target yang penempatannya tertulis Gunung Putri.
-- [Ganesha Operation](https://karir-adiprmx.vercel.app/perusahaan/246): Office Boy, Bogor dan Cibinong. Syarat SMA dan tanpa pengalaman, jadi yang baru lulus dan belum pernah kerja bisa langsung daftar.
-- [Roti O](https://karir-adiprmx.vercel.app/perusahaan/190): Pelaksana Gudang, Kalideres, Jakarta Barat. Judul ini tercatat sebagai setara Staff Gudang, jadi jangan kelewat cuma karena namanya beda.
+- [Ganesha Operation](https://karir-adiprmx.vercel.app/perusahaan/246): Office Boy, Bogor dan Cibinong. Syarat SMA dan tanpa pengalaman. Baru lulus dan belum pernah kerja bisa langsung daftar.
+- [Roti O](https://karir-adiprmx.vercel.app/perusahaan/190): Pelaksana Gudang, Kalideres, Jakarta Barat. Judul ini tercatat setara Staff Gudang.
 
 <h2 align="center">Dari kanal ke aplikasi</h2>
 
-Gue buka tiap kanal di browser dan catat hasilnya di CSV. CSV itu yang tampil di aplikasi dan API.
+Setiap kanal dibuka di browser dan hasilnya dicatat di CSV. CSV itu yang tampil di aplikasi dan API.
 
 <p align="center">
   <img src="assets/flow.svg" alt="Alur data dari kanal karir ke aplikasi" width="320">
@@ -71,7 +71,7 @@ Gue buka tiap kanal di browser dan catat hasilnya di CSV. CSV itu yang tampil di
 
 <h2 align="center">Data dan dokumen</h2>
 
-Satu baris per perusahaan, 9 kolom: no, perusahaan, kategori, link karir, status, tanggal cek, catatan, lokasi, posisi. Data mentahnya di sini: [daftar-link-karir.csv](data/daftar-link-karir.csv) dan [daftar-link-karir.xlsx](data/daftar-link-karir.xlsx).
+Data mentah tersedia dalam dua format: [daftar-link-karir.csv](data/daftar-link-karir.csv) dan [daftar-link-karir.xlsx](data/daftar-link-karir.xlsx). Satu baris per perusahaan, berisi status, tanggal cek, lokasi, dan posisi.
 
 | Teknologi | Status | Keterangan |
 | --- | --- | --- |
@@ -89,11 +89,15 @@ Dokumen: [PRODUCT.md](docs/PRODUCT.md), [DESIGN.md](docs/DESIGN.md), [METODE.md]
 
 <h2 align="center">FAQ</h2>
 
-Datanya dari kapan, dan kapan dicek ulang?
+Datanya dari kapan?
 
-Dicek langsung di browser tanggal 4 dan 5 November 2026. 81 kanal dicek tanggal 4, 325 tanggal 5. Cek ulang otomatis tiap jam 01:00 WIB belum jalan, cron-nya masih jawab 503, karena tiga langkah di Firebase Console belum selesai: terbitkan aturan Firestore, pasang service account dan CRON_SECRET, dan buat akun admin. Sampai ketiganya selesai, umpan perubahan di aplikasi kosong.
+Dicek langsung di browser tanggal 4 dan 5 November 2026. 81 kanal dicek tanggal 4, 325 tanggal 5.
 
-Gimana cara lapor tautan mati?
+Kapan dicek ulang?
+
+Cek ulang otomatis tiap jam 01:00 WIB belum jalan. Cron masih jawab 503 karena tiga langkah di Firebase Console belum selesai: terbitkan aturan Firestore, pasang service account dan CRON_SECRET, buat akun admin. Sampai ketiganya selesai, umpan perubahan di aplikasi kosong.
+
+Bagaimana cara melaporkan tautan mati?
 
 Buka halaman perusahaan di aplikasi, lalu pakai tombol Laporkan tautan mati. Atau buka issue di repo pakai template [Koreksi data](https://github.com/adiprmx/karir/issues/new?template=koreksi.md). Pertanyaan lain ada di [halaman FAQ aplikasi](https://karir-adiprmx.vercel.app/faq).
 
