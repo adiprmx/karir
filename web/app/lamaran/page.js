@@ -1,216 +1,173 @@
 "use client";
 
 /* Halaman "Lamaran Saya": daftar perusahaan yang dilacak pengguna.
- * Data perusahaan diambil dari API, data lacakannya dari localStorage
- * (lihat app/tracker.js). Tidak ada akun, tidak ada data yang dikirim
- * ke server. */
-import { useEffect, useState } from "react";
+ * Data perusahaan diambil dari indeks (/api/index), data lacakannya dari
+ * localStorage (lihat app/tracker.js). Tidak ada akun, tidak ada data
+ * yang dikirim ke server. Status bisa diganti langsung dari kartu. */
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { TRACKER_STATUSES, useTracker } from "@/app/tracker";
-import { CountUp, Reveal } from "@/app/visual";
-
-const STATUS_BADGE = {
-  Dipanggil: "badge ok",
-  Ditolak: "badge warn",
-};
+import { useCompanyIndex } from "@/app/company-index";
+import { Icon, Reveal, showToast } from "@/app/visual";
+import { CompanyLogo } from "@/lib/logos";
+import { safeLink } from "@/app/components";
 
 export default function Lamaran() {
-  const { entries, loaded, remove } = useTracker();
-  const [companies, setCompanies] = useState(null);
-  const [loadState, setLoadState] = useState("loading");
-  const [attempt, setAttempt] = useState(0);
+  const { entries, loaded, save, remove } = useTracker();
+  const { index, state, start } = useCompanyIndex({ eager: true });
+  const [tab, setTab] = useState("Semua");
 
-  useEffect(() => {
-    let cancelled = false;
-    const ctrl = new AbortController();
-    const timer = window.setTimeout(() => ctrl.abort(), 10000);
-    async function load() {
-      try {
-        // API membatasi limit 400 per panggilan, total perusahaan 406:
-        // dua panggilan paralel supaya tidak ada yang terlewat.
-        const [a, b] = await Promise.all([
-          fetch("/api/companies?limit=400&offset=0", {
-            signal: ctrl.signal,
-          }).then((r) => {
-            if (!r.ok) throw new Error("gagal");
-            return r.json();
-          }),
-          fetch("/api/companies?limit=400&offset=400", {
-            signal: ctrl.signal,
-          }).then((r) => {
-            if (!r.ok) throw new Error("gagal");
-            return r.json();
-          }),
-        ]);
-        if (cancelled) return;
-        const map = new Map();
-        for (const e of [...(a.results || []), ...(b.results || [])]) {
-          map.set(e.company.no, e.company);
-        }
-        setCompanies(map);
-        setLoadState("ok");
-      } catch {
-        if (!cancelled) setLoadState("error");
-      } finally {
-        window.clearTimeout(timer);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-      ctrl.abort();
-    };
-  }, [attempt]);
+  const byNo = useMemo(() => {
+    const m = new Map();
+    for (const c of index || []) m.set(c.no, c);
+    return m;
+  }, [index]);
 
   const tracked = Object.values(entries).sort((a, b) => {
     const d = String(b.tanggal || "").localeCompare(String(a.tanggal || ""));
     if (d !== 0) return d;
-    return String(a.no).localeCompare(String(b.no));
+    return Number(a.no) - Number(b.no);
   });
-  const countByStatus = (s) =>
-    tracked.filter((e) => e.status === s).length;
+  const count = (s) => tracked.filter((e) => e.status === s).length;
+  const shown = tab === "Semua" ? tracked : tracked.filter((e) => e.status === tab);
+
+  function changeStatus(e, status) {
+    save(e.no, { status, tanggal: e.tanggal, catatan: e.catatan || "" });
+  }
 
   return (
     <div className="wrap">
-      <Reveal>
       <div className="page-head">
         <h1>Lamaran Saya</h1>
         <p className="lede">
-          Perusahaan yang kamu tandai dan lamar. Semua tersimpan di browser
-          ini saja.
+          Perusahaan yang kamu tandai dan lamar. Semua tersimpan di browser ini
+          saja.
         </p>
       </div>
-      </Reveal>
 
-      <Reveal delay={80}>
-      <section className="dash-section" aria-label="Ringkasan">
-        <div className="stat-stack">
-          <div className="stat-row">
-            <span className="stat-num num">
-              <CountUp value={loaded ? tracked.length : 0} />
-            </span>
-            <span className="stat-label">Total dilacak</span>
-          </div>
-          {TRACKER_STATUSES.map((s) => (
-            <div className="stat-row" key={s}>
-              <span
-                className={
-                  s === "Dipanggil"
-                    ? "stat-num ok num"
-                    : s === "Ditolak"
-                      ? "stat-num warn num"
-                      : "stat-num num"
-                }
-              >
-                <CountUp value={loaded ? countByStatus(s) : 0} />
+      <Reveal>
+        <div className="tabs-scroll" role="tablist" aria-label="Saring lamaran">
+          {["Semua", ...TRACKER_STATUSES].map((s) => (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={tab === s}
+              className="tab-pill"
+              onClick={() => setTab(s)}
+            >
+              {s}
+              <span className="chip-count num">
+                {loaded ? (s === "Semua" ? tracked.length : count(s)) : 0}
               </span>
-              <span className="stat-label">{s}</span>
-            </div>
+            </button>
           ))}
         </div>
-      </section>
       </Reveal>
 
-      <Reveal delay={120}>
-      <section aria-label="Daftar lamaran">
-        {!loaded || loadState === "loading" ? (
-          <div className="live-loading">
-            <span className="shimmer" />
-            <span className="shimmer" />
-            <span className="shimmer" />
-          </div>
-        ) : loadState === "error" ? (
-          <div className="state">
-            <strong>Data perusahaan tidak bisa dimuat.</strong>
-            <p>Periksa koneksimu, lalu coba lagi.</p>
-            <p style={{ marginTop: 16 }}>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  setLoadState("loading");
-                  setAttempt((n) => n + 1);
-                }}
-              >
-                Coba lagi
-              </button>
-            </p>
+      <section aria-label="Daftar lamaran" style={{ marginTop: 20 }}>
+        {!loaded || (tracked.length > 0 && state === "loading") ? (
+          <div className="co-list" aria-hidden="true">
+            <div className="skeleton" style={{ height: 112 }} />
+            <div className="skeleton" style={{ height: 112 }} />
           </div>
         ) : tracked.length === 0 ? (
           <div className="state">
             <strong>Belum ada lamaran yang dilacak.</strong>
             <p>
-              Tandai perusahaan dari halaman detailnya, atau cari dulu
-              perusahaan yang mau dilamar.
+              Ketuk ikon tanda di kartu perusahaan, atau cari dulu perusahaan
+              yang mau dilamar.
             </p>
-            <p style={{ marginTop: 16 }}>
-              <Link className="btn" href="/cari">
-                Cari perusahaan
-              </Link>
-            </p>
+            <Link className="btn" href="/cari">
+              Cari perusahaan
+              <Icon name="arrow" size={18} />
+            </Link>
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="state">
+            <strong>Tidak ada lamaran berstatus “{tab}”.</strong>
+            <button type="button" className="btn ghost" onClick={() => setTab("Semua")}>
+              Lihat semua
+            </button>
           </div>
         ) : (
-          <ul className="recheck-list">
-            {tracked.map((e) => {
-              const c = companies ? companies.get(Number(e.no)) : null;
-              const name = c ? c.perusahaan : `Perusahaan No. ${e.no}`;
-              const meta = c
-                ? [c.kategori, e.tanggal].filter(Boolean).join(" · ")
-                : e.tanggal || "";
+          <ul className="apps">
+            {shown.map((e, i) => {
+              const c = byNo.get(Number(e.no));
               return (
-                <li
-                  key={e.no}
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <Link
-                        href={`/perusahaan/${e.no}`}
-                        style={{ overflowWrap: "anywhere" }}
-                      >
-                        {name}
-                      </Link>
-                      <span className={STATUS_BADGE[e.status] || "badge"}>
-                        {e.status}
-                      </span>
-                    </span>
-                    {meta && <span className="cell-sub">{meta}</span>}
-                    {e.catatan && (
-                      <span className="cell-sub">{e.catatan}</span>
+                <li className="app-card" key={e.no} style={{ "--i": Math.min(i, 8) }}>
+                  <div className="app-top">
+                    {c ? (
+                      <CompanyLogo linkKarir={c.link_karir} name={c.perusahaan} size={44} />
+                    ) : (
+                      <span className="logo" style={{ width: 44, height: 44 }} />
                     )}
-                    {!c && (
-                      <span className="cell-sub">
-                        Perusahaan ini tidak lagi ada di data.
+                    <div className="app-title">
+                      <Link href={`/perusahaan/${e.no}`}>
+                        {c ? c.perusahaan : `Perusahaan No. ${e.no}`}
+                      </Link>
+                      <span className="co-cat">
+                        {[c && c.kategori, e.tanggal].filter(Boolean).join(" · ")}
                       </span>
+                    </div>
+                    {c && safeLink(c.link_karir) && c.status !== "Portal tidak bisa dibuka" && (
+                      <a
+                        className="icon-btn"
+                        href={c.link_karir}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Buka portal karir ${c.perusahaan}`}
+                      >
+                        <Icon name="ext" size={18} />
+                      </a>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    style={{ padding: "8px 14px", flexShrink: 0 }}
-                    onClick={() => remove(e.no)}
-                  >
-                    Hapus
-                  </button>
+                  {e.catatan && <p className="app-note">{e.catatan}</p>}
+                  {!c && state === "ok" && (
+                    <p className="app-note">Perusahaan ini tidak lagi ada di data.</p>
+                  )}
+                  <div className="app-bottom">
+                    <div className="field slim">
+                      <label htmlFor={`st-${e.no}`}>Status</label>
+                      <select
+                        id={`st-${e.no}`}
+                        value={e.status}
+                        onChange={(ev) => changeStatus(e, ev.target.value)}
+                      >
+                        {TRACKER_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn ghost small"
+                      onClick={() => {
+                        remove(e.no);
+                        showToast("Dihapus dari lamaran.");
+                      }}
+                    >
+                      <Icon name="trash" size={16} />
+                      Hapus
+                    </button>
+                  </div>
                 </li>
               );
             })}
           </ul>
         )}
+        {state === "error" && tracked.length > 0 && (
+          <p className="note-line">
+            <Icon name="info" size={16} />
+            Nama perusahaan belum bisa dimuat.{" "}
+            <button type="button" className="linkish" onClick={start}>
+              Coba lagi
+            </button>
+          </p>
+        )}
       </section>
-      </Reveal>
     </div>
   );
 }

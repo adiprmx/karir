@@ -16,6 +16,18 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.8.0",
+    date: "7 November 2026",
+    points: [
+      "Rancang ulang dari nol: tampilan, navigasi, dan gerak baru. HP kini punya tab bawah, tema terang dan gelap, dan huruf Plus Jakarta Sans.",
+      "Beranda: 406 kanal tampil sebagai 406 kotak yang menyala sesuai domisili dan posisi yang diketik, dengan hasil teratas langsung di bawahnya.",
+      "Cari: hasil diurutkan langsung di browser tanpa menunggu server, kartu meluncur ke urutan baru, filter di panel bawah, dan kartu bisa ditandai tanpa membuka halaman detail.",
+      "Detail: status dijelaskan satu kalimat, pelacak lamaran satu ketukan, bagikan lewat menu bagikan HP.",
+      "Peta: pilih kota dari chip atau titik di peta untuk melihat perusahaannya. Lamaran: saring per status dan ganti status dari kartu.",
+      "Perbaikan pencarian: kata pendek seperti ob dan og dari sinonim office boy tidak lagi cocok di dalam kata lain (logistik, robot).",
+    ],
+  },
+  {
     version: "2.7.0",
     date: "6 November 2026",
     points: [

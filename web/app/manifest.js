@@ -6,8 +6,8 @@ export default function manifest() {
       "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser.",
     start_url: "/",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#0a0a0a",
+    background_color: "#f4f1ea",
+    theme_color: "#15140f",
     icons: [
       {
         src: "/icon.svg",

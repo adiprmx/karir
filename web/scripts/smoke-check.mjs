@@ -4,7 +4,7 @@
  * BASE_URL bawaan: http://localhost:3000.
  *
  * Empat cek: Beranda 200 + judul utama, /api/stats 200 + total 406,
- * /api/companies?q=Novell 200 + Novell di hasil, /changelog 200 + 2.7.0.
+ * /api/companies?q=Novell 200 + Novell di hasil, /changelog 200 + 2.8.0.
  * Dua cek data bersikap jujur soal lingkungan: bila server menjawab 503,
  * artinya Firestore tak terjangkau di lingkungan itu (mis. CI memakai
  * kunci dummy), dan cek itu DILEWATI, bukan gagal, karena 503 adalah
@@ -151,11 +151,11 @@ async function checkChangelog() {
     fail(name, `status ${res.status}`);
     return;
   }
-  if (!res.text.includes("2.7.0")) {
-    fail(name, "2.7.0 tidak ditemukan");
+  if (!res.text.includes("2.8.0")) {
+    fail(name, "2.8.0 tidak ditemukan");
     return;
   }
-  pass(name, "200, 2.7.0 ada");
+  pass(name, "200, 2.8.0 ada");
 }
 
 await checkHome();

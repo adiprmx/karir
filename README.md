@@ -103,6 +103,6 @@ Buka halaman perusahaan di aplikasi, lalu pakai tombol Laporkan tautan mati. Ata
 
 <h2 align="center">Lisensi</h2>
 
-Versi 2.7.0, 6 November 2026.
+Versi 2.8.0, 7 November 2026.
 
 Kode dan skrip di repo ini berlisensi MIT, dan data di folder data berlisensi CC BY 4.0.

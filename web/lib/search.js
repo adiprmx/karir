@@ -70,11 +70,25 @@ export function tokenizeRaw(value) {
     .filter((t) => t.length > 0);
 }
 
+/* Kata kunci pendek (1-2 huruf, mis. "ob" dan "og" dari sinonim office
+ * boy/girl) hanya cocok sebagai kata utuh. Tanpa ini "og" ikut cocok di
+ * "logistik" dan "ob" di "robot", dan hasil Office Boy membengkak. */
+function indexOfToken(text, token, from) {
+  let i = text.indexOf(token, from);
+  if (token.length > 2) return i;
+  const isWord = (ch) => ch !== undefined && /[a-z0-9]/.test(ch);
+  while (i !== -1) {
+    if (!isWord(text[i - 1]) && !isWord(text[i + token.length])) return i;
+    i = text.indexOf(token, i + 1);
+  }
+  return -1;
+}
+
 export function fieldMatches(field, tokenGroups) {
   const text = normalizeText(field);
   if (tokenGroups.length === 0) return false;
   return tokenGroups.every((group) =>
-    group.some((t) => text.indexOf(t) !== -1),
+    group.some((t) => indexOfToken(text, t, 0) !== -1),
   );
 }
 
@@ -83,7 +97,7 @@ const DENIAL_WINDOW = 60;
 
 function tokenHasAffirmativeOccurrence(text, token) {
   let idx = -1;
-  while ((idx = text.indexOf(token, idx + 1)) !== -1) {
+  while ((idx = indexOfToken(text, token, idx + 1)) !== -1) {
     const start = Math.max(0, idx - DENIAL_WINDOW);
     const end = Math.min(text.length, idx + token.length + DENIAL_WINDOW);
     const window = text.slice(start, end);

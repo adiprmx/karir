@@ -1,34 +1,51 @@
 import Link from "next/link";
 import { getCompanies, getTargets, getStats } from "@/lib/companies";
+import { runSearch } from "@/lib/search";
 import { getLocale, t } from "@/lib/i18n";
-import { CountUp, LiveSearch, PrintButton, Reveal, StatusDot } from "@/app/visual";
-import RecentChip from "@/app/recent-chip";
-import PhotoStrip from "@/app/photo-strip";
+import { CountUp, Icon, PrintButton, Reveal } from "@/app/visual";
+import HeroSearch from "@/app/hero-search";
 import ChangesFeed from "@/app/changes-feed";
 import TargetFilter from "@/app/target-filter";
+import { formatDate } from "@/app/components";
 
 /* Data di-render saat request, bukan saat build, supaya build tidak
  * gagal bila Firestore tidak bisa dijangkau dari mesin build. */
 export const dynamic = "force-dynamic";
 
+/* Posisi yang dicari pencari kerja lulusan SMK (dari brief produk). */
+const ROLE_NAMES = [
+  "Helper Gudang",
+  "Staff Gudang",
+  "Cleaning Service",
+  "Office Boy",
+  "Packing",
+  "Operator Produksi",
+  "Crew Store",
+];
+
 export default async function Beranda() {
-  const [stats, targets, locale] = await Promise.all([
+  const [companies, stats, targets, locale] = await Promise.all([
+    getCompanies(),
     getStats(),
     getTargets(),
     getLocale(),
   ]);
-  const byDate = stats.byDate;
-  const dateKeys = Object.keys(byDate).sort();
+
+  /* Angka di chip posisi: kanal yang terverifikasi punya lowongan target
+   * DAN posisinya cocok dengan nama posisi itu. Dihitung dari data. */
+  const roles = ROLE_NAMES.map((name) => {
+    const { results } = runSearch(companies, { posisi: name });
+    const count = results.filter(
+      (e) => e.positionMatched && e.company.status === "Ada lowongan target",
+    ).length;
+    return { name, count };
+  });
+
+  const dateKeys = Object.keys(stats.byDate).sort();
   const latestDate = dateKeys.length ? dateKeys[dateKeys.length - 1] : null;
   const latestMs = latestDate ? Date.parse(`${latestDate}T00:00:00Z`) : 0;
-  const latestLabel = latestDate
-    ? new Date(`${latestDate}T00:00:00Z`).toLocaleDateString(
-        locale === "en" ? "en-GB" : "id-ID",
-        { day: "numeric", month: "long", year: "numeric" },
-      )
-    : null;
-  const fresh =
-    latestMs > 0 && (Date.now() - latestMs) / 86400000 <= 7;
+  const fresh = latestMs > 0 && (Date.now() - latestMs) / 86400000 <= 7;
+
   const shareText =
     (locale === "en"
       ? `Target openings on Karir (${targets.length} companies):\n`
@@ -41,282 +58,157 @@ export default async function Beranda() {
       .join("\n");
   const waHref = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
+  const heroLabels = {
+    domisili: t(locale, "home.domisili"),
+    domisiliPh: t(locale, "home.domisiliPh"),
+    posisi: t(locale, "home.posisiPerusahaan"),
+    posisiPh: t(locale, "home.posisiPh"),
+    searchBtn: t(locale, "home.searchBtn"),
+    rolesLabel: t(locale, "hero.rolesLabel"),
+    vizQuestion: t(locale, "hero.vizQuestion"),
+    vizIdle: t(locale, "hero.vizIdle"),
+    vizMatch: t(locale, "hero.vizMatch"),
+    vizVerified: t(locale, "hero.vizVerified"),
+    vizLoading: t(locale, "hero.vizLoading"),
+    vizError: t(locale, "hero.vizError"),
+    legendTarget: t(locale, "hero.legendTarget"),
+    legendMatch: t(locale, "hero.legendMatch"),
+    legendOther: t(locale, "hero.legendOther"),
+    top: t(locale, "hero.top"),
+    seeAll: t(locale, "hero.seeAll"),
+    recent: t(locale, "hero.recent"),
+    noMatch: t(locale, "search.noPositionMatch"),
+    mark: t(locale, "search.mark"),
+    unmark: t(locale, "search.unmark"),
+    open: t(locale, "search.open"),
+  };
+
   return (
     <div className="wrap">
-      <section className="hero anim-fade-up">
-        <h1>{t(locale, "home.title")}</h1>
-        <p className="lede">
-          {t(locale, "home.intro", { n: stats.total })}
-        </p>
-        <LiveSearch
-          labels={{
-            domisili: t(locale, "home.domisili"),
-            domisiliPh: t(locale, "home.domisiliPh"),
-            posisi: t(locale, "home.posisiPerusahaan"),
-            posisiPh: t(locale, "home.posisiPh"),
-            searchBtn: t(locale, "home.searchBtn"),
-          }}
+      <section className="hero" aria-labelledby="hero-h">
+        <div className="hero-copy">
+          <h1 id="hero-h">{t(locale, "home.title")}</h1>
+          <p className="lede">{t(locale, "home.intro", { n: stats.total })}</p>
+          {latestDate && (
+            <p className="fresh">
+              <span className={`fresh-tag ${fresh ? "ok" : "warn"}`}>
+                <Icon name={fresh ? "check" : "alert"} size={13} />
+                {fresh
+                  ? t(locale, "landing.freshOk")
+                  : t(locale, "landing.freshStale")}
+              </span>
+              {t(locale, "landing.freshLabel", {
+                date: formatDate(latestDate, locale),
+              })}
+            </p>
+          )}
+        </div>
+        <HeroSearch
+          labels={heroLabels}
+          nos={companies.map((c) => c.no)}
+          targetMask={companies
+            .map((c) => (c.status === "Ada lowongan target" ? "1" : "0"))
+            .join("")}
+          roles={roles}
         />
-        <div className="examples">
-          <span>{t(locale, "home.try")}</span>
-          <a className="example-chip" href="/cari?domisili=Depok&posisi=Administrasi">
-            Depok + Administrasi
-          </a>
-          <a className="example-chip" href="/cari?domisili=Bogor&posisi=Helper+Gudang">
-            Bogor + Helper Gudang
-          </a>
-          <a className="example-chip" href="/cari?posisi=PGN">
-            PGN
-          </a>
-          <RecentChip label={t(locale, "landing.recentLabel")} />
-        </div>
       </section>
 
-      <Reveal>
-      <section
-        className="trust-strip"
-        aria-label={t(locale, "landing.trustLabel")}
-      >
-        <div className="trust-item">
-          <span className="trust-num num">
-            <CountUp value={stats.total} />
-          </span>
-          <span className="trust-label">
-            {t(locale, "landing.trustChecked")}
-          </span>
-        </div>
-        <div className="trust-item">
-          <span className="trust-num ok num">
-            <CountUp value={stats.byStatus["Ada lowongan target"]} />
-          </span>
-          <span className="trust-label">
-            {t(locale, "landing.trustTarget")}
-          </span>
-        </div>
-        <div className="trust-item">
-          <span className="trust-num warn num">
-            <CountUp
-              value={stats.byStatus["Ada lowongan target (tidak cocok)"]}
-            />
-          </span>
-          <span className="trust-label">
-            {t(locale, "landing.trustMismatch")}
-          </span>
-        </div>
-        <div className="trust-item">
-          <span className="trust-num num">
-            <CountUp value={stats.byStatus["Portal tidak bisa dibuka"]} />
-          </span>
-          <span className="trust-label">
-            {t(locale, "landing.trustDead")}
-          </span>
-        </div>
-      </section>
-      </Reveal>
-
-      {latestDate ? (
+      <section className="sec" aria-labelledby="target-h">
         <Reveal>
-        <p className="fresh-stamp">
-          {t(locale, "landing.freshLabel", { date: latestLabel })}
-          {" · "}
-          <span className={fresh ? "ok" : "warn"}>
-            {fresh
-              ? t(locale, "landing.freshOk")
-              : t(locale, "landing.freshStale")}
-          </span>
-        </p>
+          <div className="sec-head">
+            <div>
+              <p className="kicker ok">
+                <Icon name="check" size={14} />
+                {t(locale, "home.targetsLead")}
+              </p>
+              <h2 id="target-h">
+                {t(locale, "home.targetsHeading", { n: targets.length })}
+              </h2>
+            </div>
+          </div>
         </Reveal>
-      ) : null}
-
-      <Reveal>
-      <section
-        className="landing-section problem-outcome"
-        aria-labelledby="problem-title"
-      >
-        <h2 id="problem-title">{t(locale, "landing.problemTitle")}</h2>
-        <div className="problem-cols">
-          <div>
-            <p className="section-label">
-              {t(locale, "landing.problemLabel")}
-            </p>
-            <p>{t(locale, "landing.problem1")}</p>
-            <p>{t(locale, "landing.problem2")}</p>
-          </div>
-          <div>
-            <p className="section-label">
-              {t(locale, "landing.outcomeLabel")}
-            </p>
-            <p>
-              {t(locale, "landing.outcome1", { n: stats.total })}
-            </p>
-            <p>
-              {t(locale, "landing.outcome2", { n: targets.length })}
-            </p>
-            <p>{t(locale, "landing.outcome3")}</p>
-          </div>
-        </div>
-      </section>
-      </Reveal>
-
-      <Reveal>
-      <PhotoStrip
-        title={t(locale, "landing.photosTitle")}
-        captions={{
-          warehouse: t(locale, "landing.photoWarehouse"),
-          production: t(locale, "landing.photoProduction"),
-          cleaning: t(locale, "landing.photoCleaning"),
-        }}
-      />
-      </Reveal>
-
-      <Reveal delay={100}>
-      <section
-        className="landing-section"
-        aria-labelledby="how-title"
-      >
-        <h2 id="how-title">{t(locale, "home.howTitle")}</h2>
-        <ol className="steps">
-          <li>{t(locale, "landing.step1")}</li>
-          <li>{t(locale, "landing.step2")}</li>
-          <li>{t(locale, "landing.step3")}</li>
-        </ol>
-      </section>
-      </Reveal>
-
-      <Reveal>
-      <section
-        className="landing-section"
-        aria-labelledby="features-title"
-      >
-        <h2 id="features-title">{t(locale, "landing.featuresTitle")}</h2>
-        <ul className="feature-rows">
-          <li>
-            <Link href="/cari">
-              <span className="feature-title">
-                {t(locale, "landing.featureSearchTitle")}
-              </span>
-              <span className="feature-desc">
-                {t(locale, "landing.featureSearchDesc")}
-              </span>
-              <span className="feature-arrow" aria-hidden="true">
-                →
-              </span>
-            </Link>
-          </li>
-          <li>
-            <Link href="/lamaran">
-              <span className="feature-title">
-                {t(locale, "landing.featureTrackTitle")}
-              </span>
-              <span className="feature-desc">
-                {t(locale, "landing.featureTrackDesc")}
-              </span>
-              <span className="feature-arrow" aria-hidden="true">
-                →
-              </span>
-            </Link>
-          </li>
-          <li>
-            <Link href="/peta">
-              <span className="feature-title">
-                {t(locale, "landing.featureMapTitle")}
-              </span>
-              <span className="feature-desc">
-                {t(locale, "landing.featureMapDesc", { n: targets.length })}
-              </span>
-              <span className="feature-arrow" aria-hidden="true">
-                →
-              </span>
-            </Link>
-          </li>
-        </ul>
-      </section>
-      </Reveal>
-
-      <Reveal>
-      <section
-        className="landing-section"
-        aria-labelledby="target-title"
-      >
-        <p className="section-label" id="target-title">
-          <StatusDot status="Ada lowongan target" />{" "}
-          {t(locale, "home.targets")}
-        </p>
-        <h2>{t(locale, "home.targetsHeading", { n: targets.length })}</h2>
         <TargetFilter
           targets={targets}
-          notListed={t(locale, "common.notListed")}
+          labels={{
+            filter: t(locale, "home.targets"),
+            mark: t(locale, "search.mark"),
+            unmark: t(locale, "search.unmark"),
+            open: t(locale, "search.open"),
+          }}
         />
-        <div className="target-actions">
+        <div className="actions-row no-print">
           <a
-            className="btn ghost"
+            className="btn ghost small"
             href={waHref}
             target="_blank"
             rel="noopener noreferrer"
           >
-            {locale === "en"
-              ? "Share the target list"
-              : "Bagikan daftar target"}
+            <Icon name="share" size={16} />
+            {t(locale, "home.shareTargets")}
           </a>
-          <PrintButton
-            label={
-              locale === "en"
-                ? "Print the target list"
-                : "Cetak daftar target"
-            }
+          <PrintButton label={t(locale, "home.printTargets")} />
+        </div>
+      </section>
+
+      <section className="sec proof" aria-labelledby="proof-h">
+        <Reveal className="proof-lead">
+          <h2 id="proof-h">{t(locale, "home.proofTitle")}</h2>
+          <p>{t(locale, "landing.problem1")}</p>
+          <p>{t(locale, "landing.problem2")}</p>
+        </Reveal>
+        <Reveal className="proof-list" delay={80}>
+          <div className="proof-row">
+            <span className="proof-num">
+              <CountUp value={stats.total} />
+            </span>
+            <span>{t(locale, "home.proof1")}</span>
+          </div>
+          <div className="proof-row">
+            <span className="proof-num ok">
+              <CountUp value={targets.length} />
+            </span>
+            <span>{t(locale, "home.proof2")}</span>
+          </div>
+          <div className="proof-row">
+            <span className="proof-num">
+              <CountUp value={stats.byStatus["Portal tidak bisa dibuka"] || 0} />
+            </span>
+            <span>{t(locale, "landing.trustDead")}</span>
+          </div>
+          <p className="proof-foot">{t(locale, "home.proof3")}</p>
+        </Reveal>
+      </section>
+
+      <section className="sec" id="berubah" aria-labelledby="changes-h">
+        <Reveal>
+          <h2 id="changes-h">{t(locale, "landing.changesTitle")}</h2>
+          <ChangesFeed
+            labels={{
+              empty: t(locale, "home.changesEmpty"),
+              error: t(locale, "home.changesError"),
+              loading: t(locale, "home.changesLoading"),
+            }}
           />
-        </div>
+        </Reveal>
       </section>
-      </Reveal>
 
-      <Reveal>
-      <section
-        className="landing-section"
-        id="berubah"
-        aria-labelledby="changes-title"
-      >
-        <h2 id="changes-title">{t(locale, "landing.changesTitle")}</h2>
-        <ChangesFeed />
+      <section className="sec faq-teaser no-print" aria-labelledby="faq-h">
+        <Reveal>
+          <h2 id="faq-h">{t(locale, "landing.faqTitle")}</h2>
+          {[1, 2, 3].map((n) => (
+            <details className="faq-item" key={n}>
+              <summary>{t(locale, `landing.faq${n}q`)}</summary>
+              <p>{t(locale, `landing.faq${n}a`)}</p>
+            </details>
+          ))}
+          <p className="more">
+            <Link href="/faq">
+              {t(locale, "landing.faqMore")}
+              <Icon name="arrow" size={16} />
+            </Link>
+          </p>
+        </Reveal>
       </section>
-      </Reveal>
-
-      <Reveal>
-      <section
-        className="landing-section faq-teaser no-print"
-        aria-labelledby="faq-title"
-      >
-        <h2 id="faq-title">{t(locale, "landing.faqTitle")}</h2>
-        <details className="faq-item">
-          <summary>{t(locale, "landing.faq1q")}</summary>
-          <p>{t(locale, "landing.faq1a")}</p>
-        </details>
-        <details className="faq-item">
-          <summary>{t(locale, "landing.faq2q")}</summary>
-          <p>{t(locale, "landing.faq2a")}</p>
-        </details>
-        <details className="faq-item">
-          <summary>{t(locale, "landing.faq3q")}</summary>
-          <p>{t(locale, "landing.faq3a")}</p>
-        </details>
-        <p className="faq-more">
-          <Link href="/faq">{t(locale, "landing.faqMore")} →</Link>
-        </p>
-      </section>
-      </Reveal>
-
-      <Reveal>
-      <section className="cta-close no-print">
-        <p className="cta-text">{t(locale, "landing.ctaText")}</p>
-        <div className="cta-actions">
-          <Link className="btn" href="/mulai">
-            {t(locale, "landing.ctaStart")}
-          </Link>
-          <Link className="btn ghost" href="/dasbor">
-            {t(locale, "home.viewDashboard")}
-          </Link>
-        </div>
-      </section>
-      </Reveal>
     </div>
   );
 }

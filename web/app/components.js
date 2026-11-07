@@ -1,101 +1,42 @@
-import Link from "next/link";
-import { CategoryIcon, StatusDot } from "./visual";
-
-export function StatusBadge({ status }) {
-  const cls =
-    status === "Ada lowongan target"
-      ? "badge ok"
-      : status === "Ada lowongan target (tidak cocok)"
-        ? "badge warn"
-        : "badge";
-  return <span className={cls}>{status}</span>;
-}
+/* Pembantu kecil yang aman dipakai di server maupun klien. */
 
 export function safeLink(url) {
   return typeof url === "string" && /^https?:\/\//.test(url);
 }
 
-/* Baris hasil di tabel Cari. Nama perusahaan membuka halaman detail;
- * tautan portal ada di halaman detail dan di tombol terpisah. */
-export function CompanyRow({ entry }) {
-  const c = entry.company;
-  return (
-    <tr>
-      <td data-label="Perusahaan">
-        <span className="cell-name cell-name-row">
-          <CategoryIcon kategori={c.kategori} />
-          <Link href={`/perusahaan/${c.no}`}>{c.perusahaan}</Link>
-        </span>
-        <span className="cell-sub">{c.kategori}</span>
-        <span className="chip-row">
-          {(entry.reasons || []).map((r) => (
-            <span
-              key={r}
-              className={
-                r === "Posisi cocok" || r === "Lokasi cocok" ? "chip match" : "chip"
-              }
-            >
-              {r}
-            </span>
-          ))}
-        </span>
-        {entry.queryHasPosisi && !entry.positionMatched && !entry.nameMatched && (
-          <p className="notice">
-            Peran ini belum terverifikasi di data kami, cek langsung di portalnya.
-          </p>
-        )}
-      </td>
-      <td data-label="Lokasi" className="cell-muted">
-        <span className="cell-clamp">{c.lokasi || "Tidak tercantum"}</span>
-      </td>
-      <td data-label="Posisi tercatat" className="cell-muted">
-        <span className="cell-clamp">{c.posisi || "Tidak ada posisi terlihat"}</span>
-      </td>
-      <td data-label="Status">
-        <span className="cell-status">
-          <StatusDot status={c.status} />
-          <StatusBadge status={c.status} />
-        </span>
-      </td>
-    </tr>
-  );
+/* Penjelasan satu kalimat per status, diambil dari makna yang sudah
+ * ditulis di FAQ dan halaman Tentang, bukan klaim baru. */
+export const STATUS_EXPLAIN = {
+  "Ada lowongan target":
+    "Saat dicek, portal ini punya lowongan untuk posisi target.",
+  "Ada lowongan target (tidak cocok)":
+    "Saat dicek, ada lowongan, tetapi syaratnya tidak cocok.",
+  "Tidak ada lowongan target":
+    "Saat dicek, tidak ada lowongan untuk posisi target.",
+  "Tidak ada lowongan terlihat":
+    "Saat dicek, tidak ada lowongan yang terlihat di portal.",
+  "Tidak dapat diverifikasi":
+    "Lowongannya tidak bisa diverifikasi (halaman kosong atau perlu login). Itu bukan berarti tidak ada lowongan.",
+  "Portal tidak bisa dibuka":
+    "Portal gagal dibuka saat dicek. Itu bukan bukti tidak ada lowongan.",
+};
+
+/* "2026-11-05" menjadi "5 Nov 2026". */
+export function formatDate(value, locale = "id") {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.toLocaleDateString(locale === "en" ? "en-GB" : "id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
-export function ResultsTable({ entries, queryHasPosisi }) {
-  if (entries.length === 0) {
-    return (
-      <div className="state">
-        <strong>Tidak ada perusahaan yang cocok.</strong>
-        <p>
-          Coba kata kunci lain, atau kosongkan kolom dan tekan Cari untuk melihat
-          semua perusahaan.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <table className="results-table">
-      <thead>
-        <tr>
-          <th>Perusahaan</th>
-          <th>Lokasi</th>
-          <th>Posisi tercatat</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {entries.map((e) => (
-          <CompanyRow
-            key={e.company.no}
-            entry={{ ...e, queryHasPosisi }}
-          />
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/* Angka yang naik dari 0 ke nilai asli (mati di prefers-reduced-motion). */
-export function CountUp({ value }) {
-  return <span className="num">{value}</span>;
+/* Selisih hari dari tanggal cek sampai sekarang, atau null. */
+export function daysSince(value) {
+  const t = Date.parse(`${value}T00:00:00Z`);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((Date.now() - t) / 86400000));
 }

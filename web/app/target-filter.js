@@ -1,11 +1,11 @@
-/* Daftar 22 target dengan chip filter kelompok peran. Pemetaan dari teks
- * posisi dan kategori (huruf kecil, substring). Baris hasil dua baris:
- * nomor + logo + nama + panah, lalu posisi dan lokasi di bawah nama. */
+/* Daftar lowongan target dengan chip kelompok peran. Pemetaan dari teks
+ * posisi dan kategori (huruf kecil, substring). Kartu bisa langsung
+ * ditandai tanpa membuka halaman detail. */
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { CompanyLogo } from "@/lib/logos";
+import { CompanyCard } from "@/app/company-card";
+import { useTracker } from "@/app/tracker";
 
 const GROUPS = ["Semua", "Gudang", "Cleaning", "Produksi", "Toko", "Lainnya"];
 
@@ -35,69 +35,42 @@ function groupOf(c) {
   return best || "Lainnya";
 }
 
-export default function TargetFilter({ targets, notListed }) {
+export default function TargetFilter({ targets, labels }) {
   const [active, setActive] = useState("Semua");
+  const { entries, toggle } = useTracker();
   const counts = {};
   for (const g of GROUPS) counts[g] = 0;
   for (const c of targets) counts[groupOf(c)] += 1;
   counts["Semua"] = targets.length;
   const shown =
-    active === "Semua"
-      ? targets
-      : targets.filter((c) => groupOf(c) === active);
+    active === "Semua" ? targets : targets.filter((c) => groupOf(c) === active);
   return (
     <div>
-      <div
-        className="target-filters"
-        role="group"
-        aria-label="Saring lowongan target"
-      >
-        {GROUPS.map((g) => (
+      <div className="chips-scroll" role="group" aria-label={labels.filter}>
+        {GROUPS.filter((g) => g === "Semua" || counts[g] > 0).map((g) => (
           <button
             key={g}
             type="button"
-            className="filter-chip"
+            className="chip-btn"
             aria-pressed={active === g}
             onClick={() => setActive(g)}
           >
-            {g}{" "}
-            <span className="filter-count num">{counts[g]}</span>
+            {g} <span className="chip-count num">{counts[g]}</span>
           </button>
         ))}
       </div>
-      {shown.length === 0 ? (
-        <p className="state">Tidak ada target di kelompok ini.</p>
-      ) : (
-        <ol className="index-list target-rows">
-          {shown.map((c, i) => (
-            <li key={c.no}>
-              <Link href={`/perusahaan/${c.no}`}>
-                <span className="target-row-main">
-                  <span className="index-no">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="target-logo-slot">
-                    <CompanyLogo
-                      linkKarir={c.link_karir}
-                      name={c.perusahaan}
-                      size={32}
-                    />
-                  </span>
-                  <span className="index-name">{c.perusahaan}</span>
-                  <span className="index-arrow" aria-hidden="true">
-                    →
-                  </span>
-                </span>
-                <span className="target-row-sub">
-                  {(c.posisi || "").split(",")[0]}
-                  {" · "}
-                  {c.lokasi || notListed || "Lokasi tidak dicantumkan"}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ol>
-      )}
+      <div className="co-grid" key={active}>
+        {shown.map((c, i) => (
+          <CompanyCard
+            key={c.no}
+            company={c}
+            tracked={entries[String(c.no)]}
+            onToggle={toggle}
+            index={Math.min(i, 12)}
+            labels={labels}
+          />
+        ))}
+      </div>
     </div>
   );
 }

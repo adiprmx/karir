@@ -1,14 +1,13 @@
 /* Umpan perubahan status Karir: daftar perubahan terbaru yang dicatat
- * cron cek ulang harian. Tanpa props, baca /api/changes saat mount.
- * Memakai pola daftar .index-list yang sama dengan daftar target di
- * Beranda. Bila belum ada perubahan, tampilkan kalimat jujur, bukan
- * daftar contoh. */
+ * cron cek ulang harian. Baca /api/changes saat mount. Bila belum ada
+ * perubahan, tampilkan kalimat jujur, bukan daftar contoh. */
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { StatusStamp } from "@/app/visual";
 
-export default function ChangesFeed() {
+export default function ChangesFeed({ labels }) {
   const [changes, setChanges] = useState(null);
   const [failed, setFailed] = useState(false);
 
@@ -31,30 +30,25 @@ export default function ChangesFeed() {
     };
   }, []);
 
-  if (failed) {
-    return <p>Umpan perubahan belum bisa dimuat.</p>;
-  }
+  if (failed) return <p className="empty-line">{labels.error}</p>;
   if (changes === null) {
-    return <p>Memuat perubahan...</p>;
+    return (
+      <div className="skeleton" style={{ height: 72 }} aria-label={labels.loading} />
+    );
   }
-  if (changes.length === 0) {
-    return <p>Belum ada perubahan tercatat.</p>;
-  }
+  if (changes.length === 0) return <p className="empty-line">{labels.empty}</p>;
   return (
-    <ol className="index-list">
+    <ol className="changes">
       {changes.map((c, i) => (
         <li key={c.id || `${c.companyNo}-${c.createdAt || i}`}>
           <Link href={`/perusahaan/${c.companyNo}`}>
-            <span className="index-no">{String(i + 1).padStart(2, "0")}</span>
-            <span className="index-name">{c.perusahaan}</span>
-            <span className="index-meta">
-              {c.from} → {c.to}
-              {" · "}
-              {c.checkedAt}
+            <span className="changes-name">{c.perusahaan}</span>
+            <span className="changes-flow">
+              <StatusStamp status={c.from} />
+              <span aria-hidden="true">→</span>
+              <StatusStamp status={c.to} />
             </span>
-            <span className="index-arrow" aria-hidden="true">
-              →
-            </span>
+            <span className="changes-date">{c.checkedAt}</span>
           </Link>
         </li>
       ))}

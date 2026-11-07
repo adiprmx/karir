@@ -1,9 +1,21 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import localFont from "next/font/local";
 import "./globals.css";
 import { getStats } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
-import LocaleToggle from "./locale-toggle";
+import SiteNav from "./site-nav";
+import { Icon, ToastHost } from "./visual";
+
+/* Plus Jakarta Sans: huruf rancangan studio Indonesia (Tokotype), dibuat
+ * untuk teks layar kecil dan terbaca jelas di HP murah. Berkasnya ikut di
+ * repo (lisensi OFL), jadi tidak ada permintaan ke server font luar. */
+const jakarta = localFont({
+  src: "./fonts/PlusJakartaSans.woff2",
+  variable: "--font-jakarta",
+  weight: "200 800",
+  display: "swap",
+});
 
 export const metadata = {
   metadataBase: new URL("https://karir-adiprmx.vercel.app"),
@@ -32,97 +44,81 @@ export const metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f1ea" },
+    { media: "(prefers-color-scheme: dark)", color: "#12120f" },
+  ],
 };
+
+/* Dijalankan sebelum cat pertama supaya tema tidak berkedip. Memakai
+ * pilihan tersimpan; tanpa pilihan, mengikuti pengaturan perangkat. */
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('karir-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()`;
 
 export default async function RootLayout({ children }) {
   const locale = await getLocale();
   // Hitungan header tidak boleh menggagalkan build: kalau Firestore tidak
-  // bisa dijangkau saat build, header tampil tanpa angka (halaman yang
-  // butuh data di-render saat request, bukan saat build).
+  // bisa dijangkau saat build, header tampil tanpa angka.
   let total = null;
   try {
     total = (await getStats()).total;
   } catch {
     total = null;
   }
+  const labels = {
+    home: t(locale, "nav.home"),
+    search: t(locale, "nav.search"),
+    map: t(locale, "nav.map"),
+    lamaran: t(locale, "nav.lamaran"),
+    dashboard: t(locale, "nav.dashboard"),
+    about: t(locale, "nav.about"),
+    method: t(locale, "nav.method"),
+    faq: t(locale, "nav.faq"),
+    changelog: t(locale, "nav.changelog"),
+    settings: t(locale, "nav.settings"),
+    mulai: t(locale, "nav.mulai"),
+    menu: t(locale, "nav.menu"),
+    theme: t(locale, "nav.theme"),
+    count: total ? t(locale, "header.count", { n: total }) : "",
+  };
   return (
-    <html lang={locale}>
+    <html lang={locale} className={jakarta.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <noscript>
+          <style>{`.reveal{opacity:1!important;transform:none!important}`}</style>
+        </noscript>
+      </head>
       <body>
-        <header className="site-header">
-          <div className="wrap header-inner">
-            <div className="header-row">
-              <Link href="/" className="wordmark">
-                KARIR
-              </Link>
-              <Link
-                href="/mulai"
-                className="btn"
-                style={{
-                  background: "#fff",
-                  color: "#0a0a0a",
-                  borderColor: "#fff",
-                  padding: "8px 14px",
-                  minHeight: 36,
-                  fontSize: 14,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {t(locale, "nav.mulai")}
-              </Link>
-              <Suspense
-                fallback={
-                  <span className="locale-toggle" aria-hidden="true">
-                    ID / EN
-                  </span>
-                }
-              >
-                <LocaleToggle locale={locale} />
-              </Suspense>
-              <span className="header-count">
-                {total ? t(locale, "header.count", { n: total }) : null}
-              </span>
-            </div>
-            <nav className="site-nav" aria-label="Navigasi utama">
-              <Link href="/">{t(locale, "nav.home")}</Link>
-              <Link href="/cari">{t(locale, "nav.search")}</Link>
-              <Link href="/dasbor">{t(locale, "nav.dashboard")}</Link>
-              <Link href="/lamaran">{t(locale, "nav.lamaran")}</Link>
-              <Link href="/tentang">{t(locale, "nav.about")}</Link>
-              <Link href="/faq">{t(locale, "nav.faq")}</Link>
-            </nav>
-          </div>
-        </header>
-        <main>{children}</main>
-        <footer className="site-footer">
-          <div className="wrap footer-inner">
-            <p>{t(locale, "footer.note")}</p>
-            <p>
+        <a className="skip" href="#main">
+          {locale === "en" ? "Skip to content" : "Lewati ke isi"}
+        </a>
+        <Suspense fallback={null}>
+          <SiteNav labels={labels} locale={locale} />
+        </Suspense>
+        <main id="main">{children}</main>
+        <footer className="foot">
+          <div className="wrap foot-inner">
+            <p className="foot-note">{t(locale, "footer.note")}</p>
+            <nav className="foot-links" aria-label="Footer">
               <Link href="/tentang">{t(locale, "footer.about")}</Link>
-              {" · "}
               <Link href="/metode">{t(locale, "footer.method")}</Link>
-              {" · "}
               <Link href="/faq">{t(locale, "footer.faq")}</Link>
-              {" · "}
               <Link href="/changelog">{t(locale, "footer.changelog")}</Link>
-              {" · "}
-              <Link href="/lamaran">{t(locale, "footer.lamaran")}</Link>
-              {" · "}
               <Link href="/peta">{t(locale, "footer.map")}</Link>
-              {" · "}
-              <Link href="/mulai">{t(locale, "footer.mulai")}</Link>
-              {" · "}
               <Link href="/pengaturan">{t(locale, "footer.settings")}</Link>
-              {" · "}
               <a
                 href="https://github.com/adiprmx/karir"
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 {t(locale, "footer.repo")}
+                <Icon name="ext" size={13} />
               </a>
-            </p>
+            </nav>
           </div>
         </footer>
+        <ToastHost />
       </body>
     </html>
   );

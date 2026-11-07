@@ -5,7 +5,7 @@ export default async function NotFound() {
   const locale = await getLocale();
 
   return (
-    <div className="wrap">
+    <div className="wrap narrow">
       <div className="page-head">
         <h1>Halaman tidak ditemukan</h1>
         <p className="lede">
@@ -13,9 +13,9 @@ export default async function NotFound() {
           ketik, atau halamannya sudah tidak ada.
         </p>
       </div>
-      <div className="filter-actions">
+      <div className="actions-row">
         <Link href="/" className="btn">
-          {t(locale, "common.back")}
+          {t(locale, "nav.home")}
         </Link>
         <Link href="/cari" className="btn ghost">
           {t(locale, "nav.search")}

@@ -1,22 +1,103 @@
 "use client";
 
-/* Komponen visual Karir: angka yang naik, donat, bar animasi, ikon
- * kategori, titik status, dan pencarian langsung. Semua animasi mati
- * bila pengguna memakai prefers-reduced-motion. */
+/* Komponen UI bersama Karir: ikon, animasi masuk, angka naik, stempel
+ * status, sheet, toast, dan penyorot kata kunci. Semua gerak mati bila
+ * pengguna memakai prefers-reduced-motion. */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { saveRecentSearch } from "@/app/recent";
 
-function reducedMotion() {
+export function reducedMotion() {
   return (
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
 }
 
-/* Muncul saat masuk viewport: sekali saja, lalu observer dilepas.
- * Pengguna prefers-reduced-motion langsung melihat isinya. */
-export function Reveal({ children, delay = 0, className }) {
+/* ---------- Ikon ----------
+ * Set gambar sendiri: garis lurus, sudut tegas, tebal 2. Sengaja bukan
+ * Lucide: bentuknya mengikuti karakter tempat kerja (rak, palet, papan
+ * nama), bukan ikon aplikasi generik. */
+const ICONS = {
+  home: <path d="M3.5 11.5 12 4l8.5 7.5M6 10v10h12V10M10 20v-6h4v6" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 5 5" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z" />
+      <circle cx="12" cy="10" r="2.2" />
+    </>
+  ),
+  map: <path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20ZM9 4v13.5M15 6.5V20" />,
+  bookmark: <path d="M6 3.5h12V21l-6-4.5L6 21Z" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
+    </>
+  ),
+  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" />,
+  check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  alert: <path d="M12 4 21 20H3ZM12 10v4.5M12 17.4v.2" />,
+  dash: <path d="M6 12h12" />,
+  x: <path d="M6 6l12 12M18 6 6 18" />,
+  ext: <path d="M14 4h6v6M20 4l-9.5 9.5M18 14v6H4V6h6" />,
+  arrow: <path d="M4 12h16M14 6l6 6-6 6" />,
+  back: <path d="M20 12H4M10 6l-6 6 6 6" />,
+  sliders: (
+    <>
+      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9" cy="17" r="2" />
+    </>
+  ),
+  share: <path d="M12 15V4M7 9l5-5 5 5M5 14v6h14v-6" />,
+  trash: <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />,
+  bars: <path d="M5 20v-8M12 20V5M19 20V9" />,
+  chevron: <path d="m6 9 6 6 6-6" />,
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6M12 7.4v.2" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
+};
+
+export function Icon({ name, size = 20, filled = false, className }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="square"
+      strokeLinejoin="miter"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {ICONS[name] || null}
+    </svg>
+  );
+}
+
+/* ---------- Animasi masuk ---------- */
+
+/* Muncul saat masuk viewport: sekali saja, lalu observer dilepas. */
+export function Reveal({ children, delay = 0, className, as: Tag = "div" }) {
   const ref = useRef(null);
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -36,67 +117,57 @@ export function Reveal({ children, delay = 0, className }) {
           io.disconnect();
         }
       },
-      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" },
+      { threshold: 0.08, rootMargin: "0px 0px -32px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
-  const cls = `reveal${shown ? " revealed" : ""}${
-    className ? ` ${className}` : ""
-  }`;
-  const style = delay ? { transitionDelay: `${delay}ms` } : undefined;
+  const cls = `reveal${shown ? " revealed" : ""}${className ? ` ${className}` : ""}`;
   return (
-    <div ref={ref} className={cls} style={style}>
+    <Tag
+      ref={ref}
+      className={cls}
+      style={delay ? { transitionDelay: `${delay}ms` } : undefined}
+    >
       {children}
-    </div>
+    </Tag>
   );
 }
 
-/* Angka yang naik dari 0 ke nilai asli, baru jalan saat terlihat. */
-export function CountUp({ value }) {
+/* Angka yang naik dari 0 ke nilai asli saat terlihat. Tanpa JavaScript
+ * atau dengan reduced-motion, angka asli langsung tampil. */
+export function CountUp({ value, duration = 800 }) {
   const ref = useRef(null);
-  const [n, setN] = useState(0);
-  const [started, setStarted] = useState(false);
+  const [n, setN] = useState(value);
   useEffect(() => {
     if (reducedMotion()) {
       setN(value);
-      setStarted(true);
       return;
     }
     const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") {
-      setStarted(true);
-      return;
-    }
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    setN(0);
+    let raf = 0;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setStarted(true);
-          io.disconnect();
-        }
+        if (!entries.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        const start = performance.now();
+        const tick = (now) => {
+          const p = Math.min(1, (now - start) / duration);
+          setN(Math.round(value * (1 - Math.pow(1 - p, 3))));
+          if (p < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
       },
-      { threshold: 0.1 },
+      { threshold: 0.2 },
     );
     io.observe(el);
-    return () => io.disconnect();
-  }, [value]);
-  useEffect(() => {
-    if (!started) return;
-    if (reducedMotion()) {
-      setN(value);
-      return;
-    }
-    let raf = 0;
-    const start = performance.now();
-    const dur = 700;
-    const tick = (now) => {
-      const p = Math.min(1, (now - start) / dur);
-      setN(Math.round(value * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) raf = requestAnimationFrame(tick);
+    return () => {
+      io.disconnect();
+      cancelAnimationFrame(raf);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value, started]);
+  }, [value, duration]);
   return (
     <span ref={ref} className="num">
       {n}
@@ -104,341 +175,142 @@ export function CountUp({ value }) {
   );
 }
 
-/* Titik status: hijau berdenyut untuk lowongan target, kuning untuk
- * tidak cocok, abu untuk sisanya. */
+/* ---------- Status ---------- */
+
+const STATUS_META = {
+  "Ada lowongan target": { cls: "ok", icon: "check" },
+  "Ada lowongan target (tidak cocok)": { cls: "warn", icon: "alert" },
+  "Portal tidak bisa dibuka": { cls: "off", icon: "x" },
+};
+
+/* Stempel status: satu-satunya tempat warna hijau dan kuning dipakai
+ * untuk arti. Stempel hijau "jatuh" sekali saat muncul, tidak berulang. */
+export function StatusStamp({ status, index = 0 }) {
+  const meta = STATUS_META[status] || { cls: "", icon: "dash" };
+  return (
+    <span className={`stamp ${meta.cls}`} style={{ "--i": index }}>
+      <Icon name={meta.icon} size={13} />
+      {status}
+    </span>
+  );
+}
+
+/* Penanda status kecil untuk daftar padat. Hanya menandai keadaan nyata. */
 export function StatusDot({ status }) {
   const cls =
     status === "Ada lowongan target"
-      ? "dot ok pulse"
+      ? "dot ok"
       : status === "Ada lowongan target (tidak cocok)"
         ? "dot warn"
         : "dot";
   return <span className={cls} aria-hidden="true" />;
 }
 
-/* Ikon garis sederhana per kategori (dekorasi, bukan logo merek). */
-const ICONS = {
-  Manufaktur: (
-    <path d="M3 21V9l6 4V9l6 4V5h4v16H3z" />
-  ),
-  Mining: (
-    <path d="M3 20L10 5l4 8 3-5 4 12H3z" />
-  ),
-  Tech: (
-    <rect x="6" y="6" width="12" height="12" rx="2" />
-  ),
-  Fintech: (
-    <rect x="3" y="6" width="18" height="13" rx="2" />
-  ),
-  BUMN: (
-    <path d="M4 21V5a2 2 0 012-2h9a2 2 0 012 2v16M4 21h16M9 9h2m3 0h2M9 13h2m3 0h2" />
-  ),
-  BANK: (
-    <path d="M3 10l9-6 9 6M4 10v9m4-9v9m4-9v9m4-9v9m4-9v9" />
-  ),
-  FMCG: (
-    <path d="M3 9l9-5 9 5v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-  ),
-  Retail: (
-    <path d="M4 9l1-5h14l1 5M4 9v11h16V9M4 9h16M9 20v-6h6v6" />
-  ),
-};
+/* ---------- Teks ---------- */
 
-export function CategoryIcon({ kategori }) {
-  const path = ICONS[kategori] || (
-    <path d="M4 8h16v11H4zM9 8V6a3 3 0 016 0v2" />
-  );
-  return (
-    <svg
-      className="cat-icon"
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {path}
-    </svg>
-  );
+/* Sorot kata kunci yang cocok. Tanpa kata kunci, teks apa adanya. */
+export function Highlight({ text, terms }) {
+  if (!text) return text || null;
+  const esc = (terms || [])
+    .filter((t) => t && t.length > 1)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (esc.length === 0) return text;
+  const re = new RegExp(`(${esc.join("|")})`, "gi");
+  const parts = String(text).split(re);
+  return parts.map((p, i) => (i % 2 === 1 ? <mark key={i}>{p}</mark> : p));
 }
 
-/* Donat SVG: segmen tumbuh dari 0 saat komponen muncul. */
-export function DonutChart({ segments, total, centerLabel }) {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const t = requestAnimationFrame(() => setReady(true));
-    return () => cancelAnimationFrame(t);
-  }, []);
-  let offset = 25; // mulai dari atas
-  return (
-    <div className="donut-wrap">
-      <svg
-        className="donut"
-        viewBox="0 0 120 120"
-        width="160"
-        height="160"
-        role="img"
-        aria-label={centerLabel}
-      >
-        <circle cx="60" cy="60" r="48" fill="none" stroke="#f4f4f5" strokeWidth="16" />
-        {segments.map((s) => {
-          const frac = total > 0 ? s.value / total : 0;
-          const len = frac * 100;
-          const dash = ready ? `${len} ${100 - len}` : "0 100";
-          const el = (
-            <circle
-              key={s.label}
-              cx="60"
-              cy="60"
-              r="48"
-              fill="none"
-              stroke={s.color}
-              strokeWidth="16"
-              pathLength="100"
-              strokeDasharray={dash}
-              strokeDashoffset={offset}
-              style={{ transition: "stroke-dasharray 700ms ease-out" }}
-            />
-          );
-          offset -= len;
-          return el;
-        })}
-        <text x="60" y="58" textAnchor="middle" className="donut-num">
-          {total}
-        </text>
-        <text x="60" y="74" textAnchor="middle" className="donut-label">
-          {centerLabel}
-        </text>
-      </svg>
-      <ul className="donut-legend">
-        {segments.map((s) => (
-          <li key={s.label}>
-            <span
-              className="legend-swatch"
-              style={{ background: s.color }}
-              aria-hidden="true"
-            />
-            <span className="legend-label">{s.label}</span>
-            <span className="legend-num num">{s.value}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/* Bar horizontal yang tumbuh dari 0 saat muncul. */
-export function AnimatedBar({ value, max, color }) {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const t = requestAnimationFrame(() =>
-      setW(max > 0 ? Math.round((value / max) * 100) : 0),
-    );
-    return () => cancelAnimationFrame(t);
-  }, [value, max]);
-  return (
-    <span className="bar-track">
-      <span
-        className="bar-fill"
-        style={{ width: `${w}%`, background: color || "#0a0a0a" }}
-      />
-    </span>
-  );
-}
-
-/* Tombol cetak: memanggil dialog cetak browser. */
 export function PrintButton({ label }) {
   return (
-    <button
-      type="button"
-      className="btn ghost"
-      onClick={() => window.print()}
-    >
+    <button type="button" className="btn ghost" onClick={() => window.print()}>
       {label}
     </button>
   );
 }
 
-/* Pencarian langsung di Beranda: ketik, hasil 6 teratas muncul di bawah
- * tanpa pindah halaman. Enter atau tombol tetap mengirim form GET ke /cari.
- * Panah bawah/atas memilih hasil, Enter membuka hasil yang dipilih,
- * Escape menutup daftar. */
-export function LiveSearch({ labels }) {
-  const [domisili, setDomisili] = useState("");
-  const [posisi, setPosisi] = useState("");
-  const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(-1);
-  const timer = useRef(null);
-  const abort = useRef(null);
+/* ---------- Sheet (panel dari bawah di HP) ---------- */
 
-  /* Tutup dropdown saat halaman di-scroll, supaya tidak menutupi header. */
+export function Sheet({ open, onClose, title, children }) {
+  const panel = useRef(null);
   useEffect(() => {
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, { passive: true });
-    return () => window.removeEventListener("scroll", close);
-  }, []);
-
-  function run(d, p) {
-    if (!d.trim() && !p.trim()) {
-      setResults(null);
-      setOpen(false);
-      return;
-    }
-    setLoading(true);
-    setOpen(true);
-    if (abort.current) abort.current.abort();
-    const ctrl = new AbortController();
-    abort.current = ctrl;
-    const q = new URLSearchParams({
-      domisili: d,
-      posisi: p,
-      limit: "6",
-    });
-    fetch(`/api/companies?${q.toString()}`, { signal: ctrl.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        if (!j) return;
-        setResults(j.results || []);
-        setActive(-1);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }
-
-  function onKeyDown(e) {
-    if (e.key === "ArrowDown") {
-      if (!results || results.length === 0) return;
-      e.preventDefault();
-      setOpen(true);
-      setActive((a) => Math.min(a + 1, results.length - 1));
-    } else if (e.key === "ArrowUp") {
-      if (!results || results.length === 0) return;
-      e.preventDefault();
-      setActive((a) => Math.max(a - 1, -1));
-    } else if (e.key === "Enter") {
-      if (open && active >= 0 && results && results[active]) {
-        e.preventDefault();
-        saveRecentSearch(domisili, posisi);
-        window.location.assign(
-          `/perusahaan/${results[active].company.no}`,
-        );
-      }
-    } else if (e.key === "Escape") {
-      setOpen(false);
-      setActive(-1);
-    }
-  }
-
-  function onChange(setter, other) {
-    return (e) => {
-      const v = e.target.value;
-      setter(v);
-      setActive(-1);
-      clearTimeout(timer.current);
-      timer.current = setTimeout(
-        () => run(setter === setDomisili ? v : domisili, setter === setPosisi ? v : posisi),
-        300,
-      );
-      void other;
+    if (!open) return;
+    const prev = document.activeElement;
+    panel.current?.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
     };
-  }
-
-  const activeId =
-    active >= 0 && results && results[active]
-      ? `live-result-${results[active].company.no}`
-      : undefined;
-
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+      if (prev && prev.focus) prev.focus();
+    };
+  }, [open, onClose]);
   return (
-    <div className="live-search">
-      <form
-        className="searchbar"
-        method="get"
-        action="/cari"
-        onSubmit={() => saveRecentSearch(domisili, posisi)}
+    <>
+      <div
+        className={`sheet-back${open ? " open" : ""}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        ref={panel}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={`sheet${open ? " open" : ""}`}
+        inert={!open}
       >
-        <label htmlFor="hero-domisili">{labels.domisili}</label>
-        <input
-          id="hero-domisili"
-          name="domisili"
-          type="text"
-          placeholder={labels.domisiliPh}
-          autoComplete="off"
-          value={domisili}
-          onChange={onChange(setDomisili)}
-          onKeyDown={onKeyDown}
-          onFocus={() => results && setOpen(true)}
-          role="combobox"
-          aria-expanded={open}
-          aria-controls="live-results"
-          aria-activedescendant={activeId}
-        />
-        <label htmlFor="hero-posisi">{labels.posisi}</label>
-        <input
-          id="hero-posisi"
-          name="posisi"
-          type="text"
-          placeholder={labels.posisiPh}
-          autoComplete="off"
-          value={posisi}
-          onChange={onChange(setPosisi)}
-          onKeyDown={onKeyDown}
-          onFocus={() => results && setOpen(true)}
-          role="combobox"
-          aria-expanded={open}
-          aria-controls="live-results"
-          aria-activedescendant={activeId}
-        />
-        <button type="submit">{labels.searchBtn}</button>
-      </form>
-      {open && (
-        <div
-          id="live-results"
-          className="live-results"
-          onMouseDown={(e) => e.preventDefault()}
-          role="listbox"
-          aria-label="Hasil pencarian"
-        >
-          {loading && (
-            <div className="live-loading">
-              <span className="shimmer" />
-              <span className="shimmer" />
-            </div>
-          )}
-          {!loading && results && results.length === 0 && (
-            <p className="live-empty">
-              Tidak ada yang cocok. Tekan {labels.searchBtn} untuk melihat
-              semua kanal.
-            </p>
-          )}
-          {!loading &&
-            results &&
-            results.map((e, i) => (
-              <Link
-                key={e.company.no}
-                id={`live-result-${e.company.no}`}
-                href={`/perusahaan/${e.company.no}`}
-                className={
-                  i === active ? "live-item live-item-active" : "live-item"
-                }
-                role="option"
-                aria-selected={i === active}
-              >
-                <StatusDot status={e.company.status} />
-                <span className="live-name">{e.company.perusahaan}</span>
-                <span className="live-meta">
-                  {e.company.lokasi ? `${e.company.lokasi} · ` : ""}
-                  {e.score}
-                </span>
-              </Link>
-            ))}
+        <div className="sheet-head">
+          <h2>{title}</h2>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onClose}
+            aria-label="Tutup"
+          >
+            <Icon name="x" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </>
+  );
+}
+
+/* ---------- Toast ---------- */
+
+export function showToast(message, href, label) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("karir-toast", { detail: { message, href, label } }),
+  );
+}
+
+export function ToastHost() {
+  const [toast, setToast] = useState(null);
+  useEffect(() => {
+    let id;
+    const on = (e) => {
+      setToast({ ...e.detail, k: Date.now() });
+      clearTimeout(id);
+      id = setTimeout(() => setToast(null), 3600);
+    };
+    window.addEventListener("karir-toast", on);
+    return () => {
+      window.removeEventListener("karir-toast", on);
+      clearTimeout(id);
+    };
+  }, []);
+  return (
+    <div className="toast-wrap" role="status" aria-live="polite">
+      {toast && (
+        <div className="toast" key={toast.k}>
+          <span>{toast.message}</span>
+          {toast.href && <Link href={toast.href}>{toast.label}</Link>}
         </div>
       )}
     </div>

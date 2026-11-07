@@ -1,47 +1,57 @@
-# DESIGN.md — Karir web app (written from the built world, 6 Nov 2026)
+# DESIGN.md — Karir web app (rancang ulang v2.8.0, 7 Nov 2026)
 
-## World
+## Pembacaan desain
 
-White ground, near-black (`#0a0a0a`) header and footer, hairline dividers. One
-functional palette: green `#16a34a` verified target, amber `#d97706` mismatch,
-gray for everything else. System font stack, no external fonts. Tabular
-numerals on every figure. No gradients, no glass, no glow, no eyebrow labels,
-no side stripes, no decoration that is not data.
+Produk: alat cari lowongan untuk pencari kerja lulusan SMK, hampir semuanya
+membuka dari HP. Isinya konten dan keputusan ("kanal mana yang layak
+dibuka?"), jadi temanya terang, dengan tema gelap sebagai pilihan.
+Motif identitas: **stempel cek**. Janji produk ini adalah "dicek, bukan
+dicopas", jadi status terverifikasi tampil sebagai stempel yang jatuh sekali,
+dan 406 kanal tampil sebagai 406 kotak yang menyala sesuai pencarianmu.
 
-## Tokens
+## Token
 
-- Radius: cards 12px, chips pill, inputs and buttons 8px.
-- Elevation: a 1px `#e5e5e5` border only, never border plus shadow.
-- Buttons: primary black fill white text, secondary white fill with gray
-  border, press scale 0.98, min height 44px.
-- Focus: 3px solid `#111111` outline, offset 2px, on every interactive element.
-- Selection: black background, white text.
+- Warna inti: kertas `#f4f1ea`, permukaan `#fffdf9`, tinta `#15140f`.
+- Aksen tunggal: hijau `#0b7a43` yang artinya hanya "terverifikasi".
+  Kuning `#8f5200` hanya untuk "syarat tidak cocok". Selain itu netral.
+- Mode gelap: kertas `#12120f`, tinta `#f2efe6`, hijau `#4cd484`. Dipilih
+  dengan saklar, awalnya mengikuti pengaturan perangkat.
+- Huruf: Plus Jakarta Sans (variabel, 200–800), rancangan Tokotype (Indonesia),
+  berkas lokal di `app/fonts`, lisensi OFL. Angka tabular.
+- Radius: 10 (isian, tombol), 16 (kartu), 24 (panel pencarian, sheet), pil
+  hanya untuk chip dan stempel.
+- Elevasi: datar. Bayangan hanya di sheet dan toast. Tanpa kaca, glow,
+  gradien, strip samping, atau badge di atas judul.
+- Ikon: set gambar sendiri di `app/visual.js` (garis lurus, sudut tegas).
+- Fokus: outline 3px tinta, offset 2px. Sasaran sentuh minimal 40px, tombol
+  utama 48–56px.
 
-## Layout families (one use each)
+## Struktur
 
-- Hero: left-aligned headline (max two lines desktop), one short subtext,
-  the working search form as the dominant element, tappable example chips.
-- Stats: a plain figure strip with hairline dividers, no cards.
-- Vacancies: an index list of the 22 targets with filter chips per role group
-  (Gudang, Cleaning, Produksi, Toko, Lainnya), two-line rows (name on top,
-  position and location below), company logo on the left, status dot.
-- Dashboard: data bars (label, track, count) plus hairline-divided lists.
-- Search results: a table (`ResultsTable`) with filter rail on the side,
-  `minmax(0, 1fr)` tracks and `overflow-wrap: anywhere` so long URLs
-  and lokasi strings never push the page wider.
+- HP: bilah atas tipis + tab bawah 5 tujuan (Beranda, Cari, Peta, Lamaran,
+  Menu). Layar lebar: navigasi di bilah atas, tab bawah hilang.
+- Beranda: pencarian (hero) → 22 lowongan terverifikasi → bukti (angka besar,
+  dua kolom tak simetris) → perubahan → FAQ. Tanpa blok CTA penutup.
+- Cari: bilah isian menempel di atas (HP) / panel filter di kiri (desktop).
+- Detail: judul, arti status, tombol portal, lalu dua panel (hasil cek,
+  pelacak lamaran).
 
-## Motion
+## Gerak (semua mati di prefers-reduced-motion)
 
-Sections reveal as they scroll into view (IntersectionObserver, 14px rise
-over 600ms, once). Stat figures count up only when visible. Photos zoom
-slightly on hover, buttons press to scale 0.98, the live-search dropdown and
-FAQ answers open with a short fade, the header stays pinned while scrolling.
-All motion collapses to instant under `prefers-reduced-motion`. Nothing else
-moves.
+1. Halaman masuk: opacity + geser 6px, 0,38 dtk.
+2. Seksi masuk saat di-scroll: sekali, lalu observer dilepas.
+3. Kotak 406 kanal menyapu masuk diagonal sekali; saat mengetik, yang cocok
+   menyala dan sisanya meredup.
+4. Stempel hijau jatuh sekali saat muncul.
+5. Hasil Cari: kartu yang sudah ada meluncur ke posisi baru (FLIP, 340 ms).
+6. Kontrol status lamaran: thumb bergeser; tombol tanda memantul.
+7. Sheet filter/menu naik dari bawah; toast muncul 3,6 dtk.
+Tidak ada animasi yang berulang terus selain rangka muat yang berhenti
+setelah 6 putaran.
 
-## States
+## Keadaan
 
-Loading: "Memuat data…" in the result count. Empty: an honest empty state
-with recovery text. Error: a plain failure message. Every card shows the
-status badge, match chips, and the honest "belum terverifikasi" notice when
-the searched role has no match in the data.
+- Memuat: rangka (skeleton) atau "Memuat N kanal…". Kosong: sebut sebabnya dan
+  beri satu tindakan. Gagal: sebut apa yang gagal dan tombol Coba lagi.
+- Kartu selalu menampilkan stempel status dan catatan jujur "peran ini belum
+  terverifikasi" bila posisi yang dicari tidak cocok di data.

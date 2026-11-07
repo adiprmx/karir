@@ -1,20 +1,19 @@
 "use client";
 
-/* Dasbor pribadi Karir: sapaan, langkah berikutnya, dan ringkasan
- * lamaran. Semua data lokal (localStorage), tanpa akun, tanpa server:
- * pilihan dibaca dari "karir-onboarding" ({domisili, posisi, selesai})
- * dan lamaran dari "karir-lamaran" lewat useTracker(). */
+/* Ruang kerja pribadi di Dasbor: apa yang dicari, langkah berikutnya,
+ * dan ringkasan lamaran. Semua data lokal (localStorage), tanpa akun,
+ * tanpa server: pilihan dibaca dari "karir-onboarding" dan lamaran dari
+ * "karir-lamaran" lewat useTracker(). */
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTracker, TRACKER_STATUSES } from "@/app/tracker";
+import { loadOnboarding } from "@/app/onboarding";
 import { loadRecentSearch } from "@/app/recent";
-import { CountUp, Reveal } from "@/app/visual";
+import { CountUp, Icon, Reveal } from "@/app/visual";
 
-const ONBOARDING_KEY = "karir-onboarding";
 const VISITED_METODE_KEY = "karir-visited-metode";
 
 function readVisitedMetode() {
-  if (typeof window === "undefined") return false;
   try {
     return window.localStorage.getItem(VISITED_METODE_KEY) !== null;
   } catch {
@@ -22,84 +21,40 @@ function readVisitedMetode() {
   }
 }
 
-function readOnboarding() {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(ONBOARDING_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return null;
-    }
-    const domisili =
-      typeof parsed.domisili === "string" ? parsed.domisili.trim() : "";
-    const posisi =
-      typeof parsed.posisi === "string" ? parsed.posisi.trim() : "";
-    if (!parsed.selesai || !domisili || !posisi) return null;
-    return { domisili, posisi };
-  } catch {
-    return null;
-  }
-}
-
-function formatCheckDate(value) {
-  const parts = String(value || "").split("-");
-  if (parts.length !== 3) return null;
-  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
 export default function DashboardPersonal() {
   const { entries, loaded } = useTracker();
   const [onboarding, setOnboarding] = useState(null);
-  const [ready, setReady] = useState(false);
   const [recent, setRecent] = useState(null);
   const [visitedMetode, setVisitedMetode] = useState(false);
-  const [latestCheck, setLatestCheck] = useState(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setOnboarding(readOnboarding());
-    setRecent(loadRecentSearch());
-    setVisitedMetode(readVisitedMetode());
-    setReady(true);
-    const onChange = () => {
-      setOnboarding(readOnboarding());
+    const read = () => {
+      const o = loadOnboarding();
+      setOnboarding(o && o.domisili && o.posisi ? o : null);
       setRecent(loadRecentSearch());
       setVisitedMetode(readVisitedMetode());
     };
-    window.addEventListener("storage", onChange);
-    window.addEventListener("karir-recent-change", onChange);
+    read();
+    setReady(true);
+    window.addEventListener("storage", read);
+    window.addEventListener("karir-recent-change", read);
+    window.addEventListener("karir-onboarding-change", read);
     return () => {
-      window.removeEventListener("storage", onChange);
-      window.removeEventListener("karir-recent-change", onChange);
+      window.removeEventListener("storage", read);
+      window.removeEventListener("karir-recent-change", read);
+      window.removeEventListener("karir-onboarding-change", read);
     };
   }, []);
 
-  /* Tanggal cek terbaru dari data, untuk baris kesegaran. Gagal ambil
-   * data berarti barisnya tidak tampil sama sekali. */
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    fetch("/api/stats", { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const dates = Object.keys(data?.byDate || {});
-        if (dates.length === 0) return;
-        const latest = dates.sort().at(-1);
-        setLatestCheck(formatCheckDate(latest));
-      })
-      .catch(() => {})
-      .finally(() => clearTimeout(timer));
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, []);
+  if (!loaded || !ready) {
+    return (
+      <section className="panel" aria-label="Dasbor saya">
+        <div className="skeleton" style={{ height: 28, width: "60%" }} />
+        <div className="skeleton" style={{ height: 80, marginTop: 16 }} />
+      </section>
+    );
+  }
 
   const counts = {};
   for (const s of TRACKER_STATUSES) counts[s] = 0;
@@ -110,168 +65,110 @@ export default function DashboardPersonal() {
   }
 
   const steps = [
-    {
-      text: "Tentukan domisili dan posisi",
-      done: onboarding !== null,
-      href: "/mulai",
-    },
-    {
-      text: "Tandai lamaran pertama",
-      done: total > 0,
-      href: "/cari",
-    },
-    {
-      text: "Periksa portal resmi sebelum melamar",
-      done: visitedMetode,
-      href: "/metode",
-    },
+    { text: "Tentukan domisili dan posisi", done: onboarding !== null, href: "/mulai" },
+    { text: "Tandai lamaran pertama", done: total > 0, href: "/cari" },
+    { text: "Baca cara data dicek sebelum melamar", done: visitedMetode, href: "/metode" },
   ];
-
-  const allDone = steps.every((s) => s.done);
-
-  if (!loaded || !ready) {
-    return (
-      <section className="dash-section anim-fade-up" aria-label="Dasbor saya">
-        <p className="section-label">Dasbor saya</p>
-        <div className="live-loading">
-          <span className="shimmer" />
-          <span className="shimmer" />
-        </div>
-      </section>
-    );
-  }
-
-  const searchHref =
-    onboarding !== null
-      ? `/cari?domisili=${encodeURIComponent(onboarding.domisili)}&posisi=${encodeURIComponent(onboarding.posisi)}`
-      : "/cari";
+  const doneN = steps.filter((s) => s.done).length;
+  const searchHref = onboarding
+    ? `/cari?domisili=${encodeURIComponent(onboarding.domisili)}&posisi=${encodeURIComponent(onboarding.posisi)}`
+    : "/cari";
+  const recentParts = recent
+    ? [recent.domisili, recent.posisi].filter(Boolean)
+    : [];
+  const recentHref = recent
+    ? `/cari?${new URLSearchParams(
+        Object.fromEntries(
+          Object.entries({ domisili: recent.domisili, posisi: recent.posisi }).filter(
+            ([, v]) => v,
+          ),
+        ),
+      ).toString()}`
+    : "/cari";
 
   return (
-    <section className="dash-section" aria-label="Dasbor saya">
-      <p className="section-label">Dasbor saya</p>
-      <Reveal>
-      {onboarding ? (
-        <>
-          <h2>
-            Lowongan untuk {onboarding.posisi} di {onboarding.domisili}.
-          </h2>
-          <p
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 12,
-              alignItems: "center",
-              marginTop: 16,
-            }}
-          >
-            <Link href={searchHref} className="btn">
-              Lihat yang cocok
-            </Link>
-            <Link href="/mulai">Ubah pilihan</Link>
-          </p>
-        </>
-      ) : (
-        <>
-          <h2>Belum ada pilihan tersimpan.</h2>
-          <p style={{ marginTop: 16 }}>
-            <Link href="/mulai" className="btn">
+    <Reveal className="panel mine" as="section">
+      <div className="mine-top">
+        <div>
+          <p className="kicker">Dasbor saya</p>
+          {onboarding ? (
+            <h2>
+              Lowongan {onboarding.posisi} di {onboarding.domisili}
+            </h2>
+          ) : (
+            <h2>Belum ada pilihan tersimpan.</h2>
+          )}
+        </div>
+        <div className="actions-row">
+          {onboarding ? (
+            <>
+              <Link href={searchHref} className="btn small">
+                Lihat yang cocok
+                <Icon name="arrow" size={16} />
+              </Link>
+              <Link href="/mulai" className="btn ghost small">
+                Ubah pilihan
+              </Link>
+            </>
+          ) : (
+            <Link href="/mulai" className="btn small">
               Mulai
+              <Icon name="arrow" size={16} />
             </Link>
-          </p>
-        </>
+          )}
+        </div>
+      </div>
+
+      {recentParts.length > 0 && (
+        <p className="hint">
+          Terakhir kamu cari: <Link href={recentHref}>{recentParts.join(" + ")}</Link>
+        </p>
       )}
-      </Reveal>
 
-      {recent &&
-        [recent.domisili, recent.posisi].filter((v) => v).length > 0 && (
-          <Reveal delay={80}>
-          <p style={{ marginTop: 16 }}>
-            Terakhir kamu cari:{" "}
-            <Link
-              href={`/cari?${new URLSearchParams(
-                Object.fromEntries(
-                  Object.entries({
-                    domisili: recent.domisili,
-                    posisi: recent.posisi,
-                  }).filter(([, v]) => v),
-                ),
-              ).toString()}`}
-            >
-              {[recent.domisili, recent.posisi]
-                .filter((v) => v)
-                .join(" + ")}
-            </Link>
+      <div className="mine-cols">
+        <div>
+          <p className="label">
+            Langkah berikutnya <span className="num">{doneN}/3</span>
           </p>
-          </Reveal>
-        )}
-
-      <Reveal delay={120}>
-      <div style={{ marginTop: 32 }}>
-        <p className="section-label">Langkah berikutnya</p>
-        {allDone ? (
-          <p>Semua langkah selesai. Tinggal pantau lamaranmu.</p>
-        ) : (
-          <ol className="recheck-list" aria-label="Langkah berikutnya">
+          <div className="progress" aria-hidden="true">
+            <span style={{ width: `${(doneN / 3) * 100}%` }} />
+          </div>
+          <ol className="todo">
             {steps.map((s) => (
-              <li key={s.text}>
-                <span
-                  style={{ display: "flex", alignItems: "center", gap: 10 }}
-                >
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      color: s.done ? "var(--ok)" : "#a1a1aa",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {s.done ? "✓" : "○"}
-                  </span>
-                  {s.done ? (
-                    <span>{s.text}</span>
-                  ) : (
-                    <Link href={s.href}>{s.text}</Link>
-                  )}
+              <li key={s.text} className={s.done ? "done" : ""}>
+                <span className="todo-box" aria-hidden="true">
+                  {s.done && <Icon name="check" size={14} />}
                 </span>
+                {s.done ? (
+                  <span>
+                    <span className="sr-only">Selesai: </span>
+                    {s.text}
+                  </span>
+                ) : (
+                  <Link href={s.href}>{s.text}</Link>
+                )}
               </li>
             ))}
           </ol>
-        )}
+        </div>
+        <div>
+          <p className="label">Lamaran saya</p>
+          {total === 0 ? (
+            <p className="hint">Belum ada lamaran yang dilacak.</p>
+          ) : (
+            <div className="counts">
+              {TRACKER_STATUSES.map((s) => (
+                <Link href="/lamaran" key={s}>
+                  <span className="count-n num">
+                    <CountUp value={counts[s]} duration={600} />
+                  </span>
+                  <span className="count-l">{s}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      </Reveal>
-
-      <Reveal delay={160}>
-      <div style={{ marginTop: 32 }}>
-        <p className="section-label">Lamaran saya</p>
-        {total === 0 ? (
-          <p>Belum ada lamaran yang dilacak.</p>
-        ) : (
-          <div className="stat-stack">
-            {TRACKER_STATUSES.map((s) => (
-              <div className="stat-row" key={s}>
-                <span className="stat-num num">
-                  <CountUp value={counts[s]} />
-                </span>
-                <span className="stat-label">{s}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        <p style={{ marginTop: 16 }}>
-          <Link href="/lamaran">Buka Lamaran Saya</Link>
-          {" · "}
-          <Link href="/pengaturan">Pengaturan</Link>
-        </p>
-      </div>
-      </Reveal>
-
-      {latestCheck && (
-        <Reveal delay={200}>
-        <p style={{ marginTop: 16 }}>
-          Terakhir dicek ulang {latestCheck} ·{" "}
-          <Link href="/#berubah">Lihat yang berubah</Link>
-        </p>
-        </Reveal>
-      )}
-    </section>
+    </Reveal>
   );
 }

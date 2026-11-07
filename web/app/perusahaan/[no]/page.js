@@ -2,8 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCompanyById, getRelated } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
-import { StatusBadge, safeLink } from "@/app/components";
-import { StatusDot, CategoryIcon, Reveal } from "@/app/visual";
+import {
+  STATUS_EXPLAIN,
+  daysSince,
+  formatDate,
+  safeLink,
+} from "@/app/components";
+import { Icon, Reveal, StatusStamp } from "@/app/visual";
 import { TrackerControl } from "@/app/tracker";
 import { DetailActions } from "./actions";
 import { CompanyLogo } from "@/lib/logos";
@@ -44,10 +49,17 @@ export default async function CompanyDetail({ params }) {
     getLocale(),
   ]);
   if (!company) notFound();
-  const related = await getRelated(company);
+  const related = await getRelated(company, 4);
   const hasLink = safeLink(company.link_karir);
   const url = `${SITE_URL}/perusahaan/${company.no}`;
   const description = shortDescription(company);
+  const days = daysSince(company.tanggal_cek);
+  const ago =
+    days === null
+      ? null
+      : days === 0
+        ? t(locale, "detail.today")
+        : t(locale, "detail.daysAgo", { n: days });
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -68,57 +80,48 @@ export default async function CompanyDetail({ params }) {
   };
 
   return (
-    <div className="wrap">
-      <Reveal>
-      <div className="page-head">
-        <p className="section-note">
-          <Link href="/">{t(locale, "nav.home")}</Link>
-          {" / "}
-          <Link href="/cari">{t(locale, "nav.search")}</Link>
-          {" / "}
-          {company.perusahaan}
-        </p>
-        <h1 className="detail-title">
-          <CompanyLogo
-            linkKarir={company.link_karir}
-            name={company.perusahaan}
-            size={40}
-          />
-          {company.perusahaan}
-        </h1>
-        <p className="chip-row">
-          <span className="chip">{company.kategori}</span>
-          <span style={{ alignSelf: "center", display: "flex" }}>
-            <StatusDot status={company.status} />
-          </span>
-          <StatusBadge status={company.status} />
-        </p>
-      </div>
-      </Reveal>
+    <div className="wrap detail">
+      <nav className="crumbs" aria-label="Breadcrumb">
+        <Link href="/cari">
+          <Icon name="back" size={16} />
+          {t(locale, "nav.search")}
+        </Link>
+      </nav>
 
-      {hasLink ? (
-        <Reveal delay={80}>
-        <p>
+      <header className="d-head">
+        <CompanyLogo
+          linkKarir={company.link_karir}
+          name={company.perusahaan}
+          size={64}
+        />
+        <div className="d-head-text">
+          {company.kategori && <p className="co-cat">{company.kategori}</p>}
+          <h1>{company.perusahaan}</h1>
+          <StatusStamp status={company.status} />
+        </div>
+      </header>
+
+      <p className="d-explain">
+        {STATUS_EXPLAIN[company.status] || ""}
+      </p>
+
+      <div className="d-cta">
+        {hasLink ? (
           <a
-            className="btn"
+            className="btn d-portal"
             href={company.link_karir}
             target="_blank"
             rel="noopener noreferrer"
           >
             {t(locale, "detail.portalBtn")}
+            <Icon name="ext" size={18} />
           </a>
-        </p>
-        </Reveal>
-      ) : (
-        <Reveal delay={80}>
-        <p className="notice">
-          Perusahaan ini tidak punya tautan karir yang ditemukan
-        </p>
-        </Reveal>
-      )}
-
-      <Reveal delay={120}>
-      <div>
+        ) : (
+          <p className="note-line">
+            <Icon name="info" size={16} />
+            {t(locale, "detail.noLink")}
+          </p>
+        )}
         <DetailActions
           company={company}
           url={url}
@@ -126,66 +129,73 @@ export default async function CompanyDetail({ params }) {
             share: t(locale, "detail.share"),
             copied: t(locale, "detail.copied"),
             report: t(locale, "detail.report"),
+            reportHint: t(locale, "detail.reportHint"),
             reportSent: t(locale, "detail.reportSent"),
             loading: t(locale, "common.loading"),
           }}
         />
       </div>
-      </Reveal>
 
-      <Reveal delay={160}>
-      <div>
-        <TrackerControl company={company} />
+      <div className="d-grid">
+        <Reveal className="d-col">
+          <section className="panel" aria-labelledby="hasil-h">
+            <h2 id="hasil-h" className="panel-title">
+              {t(locale, "detail.notes")}
+            </h2>
+            <dl className="facts">
+              <div>
+                <dt>{t(locale, "detail.checked")}</dt>
+                <dd>
+                  {formatDate(company.tanggal_cek, locale) ||
+                    "Belum ada tanggal cek."}
+                  {ago && <span className="ago"> · {ago}</span>}
+                </dd>
+              </div>
+              <div>
+                <dt>{t(locale, "detail.location")}</dt>
+                <dd>{company.lokasi || t(locale, "common.notListed")}</dd>
+              </div>
+              <div>
+                <dt>{t(locale, "detail.positions")}</dt>
+                <dd>{company.posisi || t(locale, "detail.noPositions")}</dd>
+              </div>
+              <div>
+                <dt>{t(locale, "detail.notes")}</dt>
+                <dd>{company.catatan || t(locale, "detail.noNotes")}</dd>
+              </div>
+            </dl>
+          </section>
+        </Reveal>
+
+        <Reveal className="d-col" delay={80}>
+          <TrackerControl company={company} />
+        </Reveal>
       </div>
-      </Reveal>
 
-      <Reveal delay={200}>
-      <section className="dash-section" aria-label="Detail perusahaan">
-        <p className="section-label">{t(locale, "detail.location")}</p>
-        <p>{company.lokasi || "Tidak tercantum"}</p>
-        <p className="section-label">{t(locale, "detail.positions")}</p>
-        <p>{company.posisi || "Tidak ada posisi terlihat"}</p>
-        <p className="section-label">{t(locale, "detail.notes")}</p>
-        <p>{company.catatan || "Tidak ada catatan."}</p>
-        <p className="section-label">{t(locale, "detail.checked")}</p>
-        <p>{company.tanggal_cek || "Belum ada tanggal cek."}</p>
-      </section>
-      </Reveal>
-
-      <Reveal delay={240}>
-      <section className="dash-section">
-        <h2>{t(locale, "detail.related")}</h2>
-        {related.length > 0 ? (
-          <ul className="recheck-list">
-            {related.map((c) => (
-              <li key={c.no}>
-                <span
-                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
-                >
-                  <CategoryIcon kategori={c.kategori} />
-                  <Link
-                    href={`/perusahaan/${c.no}`}
-                    style={{ minWidth: 0, overflowWrap: "anywhere" }}
-                  >
-                    {c.perusahaan}
+      <section className="sec" aria-labelledby="related-h">
+        <Reveal>
+          <h2 id="related-h">{t(locale, "detail.related")}</h2>
+          {related.length > 0 ? (
+            <ul className="mini-list">
+              {related.map((c) => (
+                <li key={c.no}>
+                  <Link href={`/perusahaan/${c.no}`}>
+                    <CompanyLogo
+                      linkKarir={c.link_karir}
+                      name={c.perusahaan}
+                      size={36}
+                    />
+                    <span className="mini-name">{c.perusahaan}</span>
+                    <StatusStamp status={c.status} />
                   </Link>
-                  <StatusDot status={c.status} />
-                </span>
-                <span className="cell-sub">{c.kategori}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="section-note">
-            Belum ada perusahaan sejenis dalam kategori ini.
-          </p>
-        )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty-line">{t(locale, "detail.noRelated")}</p>
+          )}
+        </Reveal>
       </section>
-      </Reveal>
-
-      <p>
-        <Link href="/cari">← {t(locale, "common.back")}</Link>
-      </p>
 
       <script
         type="application/ld+json"

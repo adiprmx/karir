@@ -2,9 +2,16 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
-## Belum dirilis
+## 2.8.0 — 2026-11-07
 
-Repo dilengkapi: README dan banner baru, SECURITY.md, docs/ARCHITECTURE.md, docs/API.md, ROADMAP.md, indeks docs/, web/.env.example, 27 tes unit mesin pencarian (npm test), workflow CI aplikasi (tes + build tiap push), dependabot, deskripsi package.json diperbaiki (Firestore, bukan Supabase).
+Rancang ulang tampilan dan pengalaman dari nol.
+
+- Kerangka baru: tab bawah di HP, tema terang/gelap, huruf Plus Jakarta Sans lokal, stempel status sebagai motif.
+- Beranda: 406 kotak kanal yang menyala sesuai pencarian; hasil teratas langsung muncul.
+- Cari: urutan dihitung di browser dari `/api/index`; animasi FLIP; filter di panel bawah.
+- Detail, Lamaran, Peta, Mulai, Dasbor, Pengaturan dirancang ulang. Firebase di halaman detail dimuat malas (First Load JS 290 kB ke 111 kB).
+- `lib/search.js`: kata kunci 1-2 huruf hanya cocok sebagai kata utuh.
+- Dihapus: `photo-strip.js`, `recent-chip.js`, `cari/recent-saver.js`, `locale-toggle.js` (diganti `site-nav.js`).
 
 ## 2.7.0 — 2026-11-06
 
