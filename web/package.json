@@ -19,7 +19,7 @@
   "type": "module",
   "version": "2.8.2",
   "devDependencies": {
-    "eslint": "^9.39.5",
+    "eslint": "^10.14.0",
     "eslint-config-next": "^16.4.5"
   }
 }
