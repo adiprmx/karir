@@ -15,6 +15,14 @@ const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databas
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache = null;
 let cacheAt = 0;
+/* Janji fetch yang sedang berjalan, dipakai bersama oleh semua pemanggil
+ * bersamaan supaya satu rangkaian paginasi penuh hanya dibaca sekali.
+ * Tanpa ini, tiga panggilan bersamaan (mis. /api/stats yang memanggil
+ * getCompanies(), getStats(), dan getStaleCount() sekaligus) masing-masing
+ * menjalankan paginasi penuh sendiri — 3x baca dokumen untuk data yang
+ * sama. Dibersihkan begitu fetch selesai (sukses maupun gagal) supaya
+ * panggilan berikutnya memakai cache atau mencoba lagi. */
+let inflight = null;
 
 /* Semua fetch ke Firestore WAJIB punya timeout: kalau rute egress mati,
  * request tidak boleh menggantung selamanya — gagal cepat (10 dtk) supaya
@@ -36,6 +44,11 @@ async function fetchJson(url, timeoutMs = 10_000) {
 export function revalidateCompanies() {
   cache = null;
   cacheAt = 0;
+  /* Fetch yang sedang berjalan ikut dibatalkan bagi pemanggil berikutnya:
+   * tanpa ini, panggilan setelah revalidate akan bergabung ke fetch lama
+   * dan mendapat data sebelum penulisan admin. Fetch lama yang sudah
+   * berjalan tetap selesai, tapi tidak lagi dipakai bersama. */
+  inflight = null;
 }
 
 function docToCompany(d) {
@@ -61,24 +74,36 @@ function docToCompany(d) {
 export async function getCompanies() {
   const now = Date.now();
   if (cache && now - cacheAt < CACHE_TTL_MS) return cache;
-  let docs = [];
-  let token = "";
-  do {
-    const url =
-      `${BASE}/companies?pageSize=300&key=${API_KEY}` +
-      (token ? `&pageToken=${token}` : "");
-    const res = await fetchJson(url);
-    if (!res.ok) {
-      throw new Error(`Firestore list gagal: HTTP ${res.status}`);
-    }
-    const body = await res.json();
-    docs = docs.concat(body.documents || []);
-    token = body.nextPageToken || "";
-  } while (token);
-  const list = docs.map(docToCompany).sort((a, b) => a.no - b.no);
-  cache = list;
-  cacheAt = now;
-  return list;
+  if (inflight) return inflight;
+  const promise = (async () => {
+    let docs = [];
+    let token = "";
+    do {
+      const url =
+        `${BASE}/companies?pageSize=300&key=${API_KEY}` +
+        (token ? `&pageToken=${token}` : "");
+      const res = await fetchJson(url);
+      if (!res.ok) {
+        throw new Error(`Firestore list gagal: HTTP ${res.status}`);
+      }
+      const body = await res.json();
+      docs = docs.concat(body.documents || []);
+      token = body.nextPageToken || "";
+    } while (token);
+    const list = docs.map(docToCompany).sort((a, b) => a.no - b.no);
+    cache = list;
+    cacheAt = now;
+    return list;
+  })();
+  inflight = promise;
+  try {
+    return await promise;
+  } finally {
+    /* Bersihkan janji begitu selesai: sukses → panggilan berikutnya
+     * memakai cache; gagal → panggilan berikutnya mencoba lagi, bukan
+     * mendapat penolakan lama yang tersimpan. */
+    if (inflight === promise) inflight = null;
+  }
 }
 
 export async function getCompanyById(no) {
