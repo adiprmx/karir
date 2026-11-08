@@ -25,8 +25,7 @@ export async function GET(request, { params }) {
     );
   }
   try {
-    const { no } = await params;
-    const company = await getCompanyById(no);
+    const company = await getCompanyById(params.no);
     if (!company) {
       return NextResponse.json(
         { error: "Perusahaan tidak ditemukan." },
