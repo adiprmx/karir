@@ -102,12 +102,14 @@ export function Reveal({ children, delay = 0, className, as: Tag = "div" }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     if (reducedMotion()) {
-      setShown(true);
+      /* Tampilkan langsung dijadwalkan sebagai microtask: setState di
+       * dalam callback, bukan sinkron di badan effect. */
+      queueMicrotask(() => setShown(true));
       return;
     }
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") {
-      setShown(true);
+      queueMicrotask(() => setShown(true));
       return;
     }
     const io = new IntersectionObserver(
@@ -141,12 +143,14 @@ export function CountUp({ value, duration = 800 }) {
   const [n, setN] = useState(value);
   useEffect(() => {
     if (reducedMotion()) {
-      setN(value);
+      /* Nilai akhir dijadwalkan sebagai microtask: setState di dalam
+       * callback, bukan sinkron di badan effect. */
+      queueMicrotask(() => setN(value));
       return;
     }
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    setN(0);
+    queueMicrotask(() => setN(0));
     let raf = 0;
     const io = new IntersectionObserver(
       (entries) => {

@@ -4,7 +4,7 @@
  * Bukan pendaftaran, tidak ada akun. Di langkah terakhir pengunjung
  * langsung melihat berapa kanal yang cocok, lalu diantar ke /cari dengan
  * filter terisi. Jawaban tersimpan di browser saja. */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOnboarding } from "@/app/onboarding";
@@ -43,13 +43,17 @@ export default function Mulai() {
   const [step, setStep] = useState(1);
   const [editing, setEditing] = useState(false);
 
-  useEffect(() => {
-    if (!loaded) return;
+  /* Isi formulir dari data tersimpan begitu data selesai dibaca.
+   * Penyesuaian state saat render (pola resmi React untuk state yang
+   * mengikuti perubahan nilai lain), bukan setState di dalam effect. */
+  const [prevLoaded, setPrevLoaded] = useState(loaded);
+  if (loaded !== prevLoaded) {
+    setPrevLoaded(loaded);
     if (data) {
       setDomisili(data.domisili || "");
       setPosisi(data.posisi || "");
     }
-  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const preview = useMemo(() => {
     if (!index || !(domisili.trim() || posisi.trim())) return null;

@@ -47,8 +47,12 @@ export default function Pengaturan() {
   const [confirmAll, setConfirmAll] = useState(false);
 
   useEffect(() => {
-    setRecent(loadRecentSearch());
-    setRecentReady(true);
+    /* Baca awal dijadwalkan sebagai microtask: setState di dalam
+     * callback, bukan sinkron di badan effect. */
+    queueMicrotask(() => {
+      setRecent(loadRecentSearch());
+      setRecentReady(true);
+    });
     const onChange = () => setRecent(loadRecentSearch());
     window.addEventListener("karir-recent-change", onChange);
     window.addEventListener("storage", onChange);

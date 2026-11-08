@@ -35,8 +35,12 @@ export default function DashboardPersonal() {
       setRecent(loadRecentSearch());
       setVisitedMetode(readVisitedMetode());
     };
-    read();
-    setReady(true);
+    /* Baca awal dijadwalkan sebagai microtask: setState di dalam
+     * callback, bukan sinkron di badan effect. */
+    queueMicrotask(() => {
+      read();
+      setReady(true);
+    });
     window.addEventListener("storage", read);
     window.addEventListener("karir-recent-change", read);
     window.addEventListener("karir-onboarding-change", read);

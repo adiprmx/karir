@@ -54,7 +54,9 @@ export function useCompanyIndex({ eager = false } = {}) {
   useEffect(() => {
     if (cached) return;
     if (eager) {
-      start();
+      /* Muat langsung dijadwalkan sebagai microtask: start() mengatur
+       * state, jadi tidak dipanggil sinkron di badan effect. */
+      queueMicrotask(start);
       return;
     }
     let id;

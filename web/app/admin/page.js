@@ -544,16 +544,36 @@ export default function Admin() {
 
   useEffect(() => {
     if (!user) return;
-    loadCompanies();
-    loadAudit();
-    loadReports();
-    loadVisitors();
-    loadProfiles();
+    /* Pemuat mengatur state awal (loading / reset error) secara sinkron,
+     * jadi pemanggilannya dijadwalkan sebagai microtask: setState di
+     * dalam callback, bukan sinkron di badan effect. */
+    queueMicrotask(() => {
+      loadCompanies();
+      loadAudit();
+      loadReports();
+      loadVisitors();
+      loadProfiles();
+    });
   }, [user]);
 
-  useEffect(() => {
+  /* Kembali ke halaman 1 begitu filter berubah. Penyesuaian state saat
+   * render (pola resmi React untuk state yang mengikuti perubahan nilai
+   * lain), bukan setState di dalam effect. */
+  const [prevFilters, setPrevFilters] = useState([
+    filter,
+    statusFilter,
+    sortBy,
+    qualityFilter,
+  ]);
+  if (
+    prevFilters[0] !== filter ||
+    prevFilters[1] !== statusFilter ||
+    prevFilters[2] !== sortBy ||
+    prevFilters[3] !== qualityFilter
+  ) {
+    setPrevFilters([filter, statusFilter, sortBy, qualityFilter]);
     setPage(1);
-  }, [filter, statusFilter, sortBy, qualityFilter]);
+  }
 
   async function handleLogin(e) {
     e.preventDefault();
