@@ -13,18 +13,12 @@ import {
   validateEvent,
   hashVisitor,
   todayJakarta,
-  rateLimiter,
   writeAnalyticsEvent,
 } from "@/lib/analytics-server";
-import { isBotUa } from "@/lib/api-guard";
+import { isBotUa, getClientIp } from "@/lib/api-guard";
+import { getSharedLimiter } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
-
-function clientIp(request) {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return request.headers.get("x-real-ip") || "unknown";
-}
 
 export async function POST(request) {
   let body;
@@ -38,8 +32,10 @@ export async function POST(request) {
     return NextResponse.json({ error: checked.error }, { status: 400 });
   }
   const day = todayJakarta();
-  const visitorHash = hashVisitor(clientIp(request), day);
-  if (!rateLimiter.check(visitorHash)) {
+  const visitorHash = hashVisitor(getClientIp(request), day);
+  /* Batas 30/menit per hash pengunjung, lewat limiter bersama supaya
+   * dihitung di semua instance, bukan per instance. */
+  if (!(await getSharedLimiter().check(visitorHash, 30, 60_000))) {
     return NextResponse.json(
       { error: "terlalu banyak request" },
       { status: 429 },

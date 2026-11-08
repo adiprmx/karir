@@ -19,11 +19,54 @@ service cloud.firestore {
           'Tidak dapat diverifikasi',
           'Portal tidak bisa dibuka'
         ]
+        // Batas lamar opsional ("YYYY-MM-DD"); bila ada, harus string.
+        && (!request.resource.data.keys().hasAny(['batas_lamar'])
+          || request.resource.data.batas_lamar is string)
         && request.resource.data.keys().hasAll([
           'no', 'perusahaan', 'kategori', 'link_karir', 'status',
           'tanggal_cek', 'catatan', 'lokasi', 'posisi'
         ]);
       allow delete: if request.auth != null;
+    }
+    // Alert notifikasi (ditulis cron cek ulang harian dan dibaca watcher
+    // agent-side): siapa pun boleh membaca seperti changes, tulis hanya
+    // lewat service account (melewati rules) atau admin yang login.
+    // Entri yang sudah tercatat tidak bisa diubah atau dihapus dari
+    // klien, supaya status terkirim tidak bisa dipalsukan.
+    match /alerts/{doc} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll([
+          'type', 'companyNo', 'perusahaan', 'sent', 'createdAt'
+        ])
+        && request.resource.data.type in ['new-target', 'deadline']
+        && request.resource.data.companyNo is int
+        && request.resource.data.perusahaan is string
+        && request.resource.data.sent is bool
+        && request.resource.data.createdAt is string;
+      allow update, delete: if false;
+    }
+    // Snapshot internal cron (meta/targets: daftar nomor target run
+    // sebelumnya). Hanya service account yang menulis dan membaca
+    // (melewati rules); klien tidak mendapat akses sama sekali.
+    match /meta/{doc} {
+      allow read, write: if false;
+    }
+    // Batas laju bersama (lib/rate-limit.js, store Firestore): dokumen
+    // per hash pengunjung harian, berisi larik waktu hit dan cap
+    // waktu tulis balik. Tidak ada IP mentah di sini, hanya angka
+    // waktu. Tulis lewat API key publik, jadi bentuknya dibatasi
+    // ketat: larik maks 60 angka dan cap waktu wajib ada. Baca
+    // terbuka karena isinya hanya waktu hit, bukan data pengunjung.
+    match /rate_limits/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll([
+          'hits', 'updatedAt'
+        ])
+        && request.resource.data.hits is list
+        && request.resource.data.hits.size() <= 60
+        && request.resource.data.updatedAt is timestamp;
+      allow delete: if false;
     }
     // Jejak audit: admin bisa membaca dan menulis, tidak bisa mengubah
     // atau menghapus entri yang sudah tercatat.
@@ -79,8 +122,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     // Pelacak lamaran per akun: hanya pemilik akun yang boleh baca
-    // dan tulis, satu dokumen per perusahaan. Aturan ini aktif hanya
-    // setelah diterbitkan dari Firebase Console.
+    // dan tulis, satu dokumen per perusahaan.
     match /user_trackers/{uid}/items/{companyNo} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow delete: if request.auth != null && request.auth.uid == uid;
@@ -99,8 +141,7 @@ service cloud.firestore {
     }
     // Profil akun: tulis hanya pemiliknya, baca hanya yang login.
     // Dipakai dasbor admin untuk menampilkan akun tanpa menyimpan
-    // email di dalam event pengunjung. Aturan ini aktif hanya setelah
-    // diterbitkan dari Firebase Console.
+    // email di dalam event pengunjung.
     match /user_profiles/{uid} {
       allow read: if request.auth != null;
       allow create, update: if request.auth != null

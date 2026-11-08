@@ -24,14 +24,34 @@
  *    sedang berstatus "Portal tidak bisa dibuka" dicek juga supaya ada
  *    jalan pulih; sisanya menunggu hari berikut bila waktu habis.
  *
- * Balasan: {checked, changed, updated, skipped, truncated}.
- * checked = portal yang sempat dicek; changed = status yang berbalik
- * (sekaligus tercatat di koleksi changes); updated = tanggal cek saja
- * yang diperbarui; skipped = tidak sempat dicek atau tidak punya tautan. */
+ * Balasan: {checked, changed, updated, skipped, truncated, alerts,
+ * telegram}. alerts = alert baru yang dibuat di run ini; telegram =
+ * "sent" | "failed" | "skipped-no-token" | "skipped-timeout" | "none".
+ *
+ * Notifikasi (lihat lib/notify.js):
+ * - Setelah cek selesai, daftar target sekarang dibandingkan dengan
+ *   snapshot meta/targets run sebelumnya. Nomor yang baru muncul =
+ *   lowongan target baru -> alert new-target-{no}-{tanggal}.
+ * - Perusahaan target yang batas_lamar-nya 0-3 hari lagi ->
+ *   alert deadline-{no}-{batas_lamar}.
+ * - Alert ditulis ke koleksi alerts dengan id deterministik (jadi
+ *   idempotent), lalu paling banyak satu pesan Telegram gabungan
+ *   dikirim bila ada alert baru. Kegagalan Telegram tidak pernah
+ *   menggagalkan cron. Bila env TELEGRAM_BOT_TOKEN belum dipasang,
+ *   pengiriman dilewati dan alert tetap tercatat untuk watcher
+ *   agent-side (notify_watch.py). */
 import { NextResponse } from "next/server";
 import { createSign } from "node:crypto";
 import { getCompanies, STATUS_ORDER } from "@/lib/companies";
 import { checkUrl } from "@/lib/check";
+import {
+  TARGET_STATUS,
+  DEFAULT_CHAT_ID,
+  collectNewTargetAlerts,
+  collectDeadlineAlerts,
+  formatTelegramMessage,
+  sendTelegramMessage,
+} from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +63,12 @@ const TARGET_STATUSES = [
 ];
 const DEAD_STATUS = "Portal tidak bisa dibuka";
 const UNVERIFIED_STATUS = "Tidak dapat diverifikasi";
+/* Snapshot daftar target run sebelumnya (dokumen meta/targets) dan
+ * koleksi alerts. Snapshot dipakai untuk mendeteksi "lowongan target
+ * baru": cron hanya menguji portal bisa dibuka atau tidak, jadi
+ * kemunculan target baru hanya terlihat dari perbandingan snapshot.
+ * Id alert deterministik (lihat lib/notify.js) supaya satu kejadian
+ * tidak tercatat dua kali dan tidak ada spam harian. */
 
 function todayWib() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
@@ -109,6 +135,69 @@ async function firestoreFetch(url, token, options = {}) {
       throw new Error(`Firestore tulis gagal: HTTP ${res.status}`);
     }
     return res.json().catch(() => ({}));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Baca satu dokumen Firestore. Kembalikan null bila dokumen belum ada
+ * (HTTP 404); lempar untuk kegagalan lain. */
+async function firestoreGet(url, token) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      throw new Error(`Firestore baca gagal: HTTP ${res.status}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Buat satu dokumen alert dengan id deterministik. Kembalikan "created"
+ * bila baru dibuat, "exists" bila id sudah ada (bukan error: id yang
+ * sama berarti kejadian yang sama di run sebelumnya), dan "failed" bila
+ * tulisnya gagal. */
+async function createAlert(fsBase, token, alert) {
+  const fields = {
+    type: { stringValue: alert.type },
+    companyNo: { integerValue: String(alert.companyNo) },
+    perusahaan: { stringValue: alert.perusahaan },
+    posisi: { stringValue: alert.posisi || "" },
+    link: { stringValue: alert.link || "" },
+    sent: { booleanValue: false },
+    createdAt: { stringValue: new Date().toISOString() },
+  };
+  if (alert.type === "deadline") {
+    fields.batasLamar = { stringValue: alert.batasLamar };
+    fields.daysLeft = { integerValue: String(alert.daysLeft) };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(
+      `${fsBase}/alerts?documentId=${encodeURIComponent(alert.id)}`,
+      {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fields }),
+      },
+    );
+    if (res.status === 409) return "exists";
+    if (!res.ok) return "failed";
+    return "created";
+  } catch {
+    return "failed";
   } finally {
     clearTimeout(timer);
   }
@@ -191,13 +280,40 @@ export async function GET(request) {
   }
   const fsBase = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents`;
 
+  /* Snapshot target run sebelumnya. Bila dokumen belum ada (run
+   * pertama dengan fitur ini), snapshot ditulis tanpa alert supaya
+   * 22 target lama tidak langsung terkirim sebagai "baru". */
+  let previousTargetNos = null;
+  let snapshotKnown = true;
+  try {
+    const snap = await firestoreGet(`${fsBase}/meta/targets`, token);
+    if (snap && snap.fields && snap.fields.targetNos) {
+      const values = snap.fields.targetNos.arrayValue?.values || [];
+      previousTargetNos = values
+        .map((v) => Number(v.integerValue))
+        .filter((n) => Number.isInteger(n));
+    }
+  } catch {
+    /* Baca snapshot gagal: tandai tidak diketahui supaya fase alert
+     * tidak menimpa snapshot dengan data yang bisa menghilangkan
+     * deteksi target baru di run berikut. */
+    snapshotKnown = false;
+  }
+
   const summary = {
     checked: 0,
     changed: 0,
     updated: 0,
     skipped: 0,
     truncated: false,
+    alerts: 0,
+    telegram: "none",
   };
+
+  /* Status tiap perusahaan setelah run ini (dipakai untuk snapshot
+   * dan alert; diisi dari data awal lalu diperbarui tiap ada
+   * perubahan status). */
+  const statusAfter = new Map(companies.map((c) => [c.no, c.status]));
 
   for (let i = 0; i < queue.length; i += BATCH) {
     if (Date.now() > deadline) {
@@ -230,6 +346,7 @@ export async function GET(request) {
       }
       /* Status baru harus salah satu dari 6 nilai yang diakui. */
       if (newStatus && !STATUS_ORDER.includes(newStatus)) newStatus = null;
+      if (newStatus) statusAfter.set(company.no, newStatus);
 
       const patchUrl =
         `${fsBase}/companies/${company.no}` +
@@ -282,6 +399,77 @@ export async function GET(request) {
       }
     }
     await Promise.all(writes);
+  }
+
+  /* 5. Deteksi alert dan pengiriman Telegram. Hanya bila waktu masih
+   * ada: bila antrean cek sudah memakan anggaran, fase ini dilewati
+   * utuh (snapshot lama tetap tersimpan, jadi kejadian yang sama
+   * terdeteksi di run berikut, tidak hilang). */
+  if (Date.now() < deadline) {
+    const currentTargets = companies
+      .filter((c) => statusAfter.get(c.no) === TARGET_STATUS)
+      .map((c) => ({ ...c, status: statusAfter.get(c.no) }));
+    const freshAlerts = [];
+    try {
+      const newTargetAlerts =
+        !snapshotKnown || previousTargetNos === null
+          ? []
+          : collectNewTargetAlerts(previousTargetNos, currentTargets, today);
+      const deadlineAlerts = collectDeadlineAlerts(currentTargets, today);
+      for (const alert of [...newTargetAlerts, ...deadlineAlerts]) {
+        const result = await createAlert(fsBase, token, alert);
+        if (result === "created") freshAlerts.push(alert);
+      }
+      summary.alerts = freshAlerts.length;
+
+      /* Tulis snapshot baru (selalu, walau tidak ada alert baru) —
+       * kecuali bila baca snapshot sebelumnya gagal, supaya deteksi
+       * tidak hilang diam-diam. */
+      if (snapshotKnown) {
+        await firestoreFetch(`${fsBase}/meta/targets`, token, {
+          method: "PATCH",
+          body: JSON.stringify({
+            fields: {
+              targetNos: {
+                arrayValue: {
+                  values: currentTargets.map((c) => ({
+                    integerValue: String(c.no),
+                  })),
+                },
+              },
+              updatedAt: { stringValue: new Date().toISOString() },
+            },
+          }),
+        }).catch(() => {});
+      }
+
+      /* Satu pesan gabungan, hanya bila ada alert baru di run ini. */
+      if (freshAlerts.length > 0) {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
+        if (!botToken) {
+          summary.telegram = "skipped-no-token";
+          console.warn(
+            "Notifikasi Telegram dilewati: env TELEGRAM_BOT_TOKEN belum dipasang.",
+          );
+        } else {
+          const text = formatTelegramMessage(freshAlerts, today);
+          const sent = await sendTelegramMessage({
+            token: botToken,
+            chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
+            text,
+          });
+          summary.telegram = sent.ok ? "sent" : "failed";
+          if (!sent.ok) {
+            console.warn(`Notifikasi Telegram gagal: ${sent.error}`);
+          }
+        }
+      }
+    } catch {
+      /* Alert dan Telegram tidak boleh menggagalkan cron. */
+      summary.telegram = "failed";
+    }
+  } else {
+    summary.telegram = "skipped-timeout";
   }
 
   return NextResponse.json(summary);

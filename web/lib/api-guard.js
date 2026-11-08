@@ -1,7 +1,12 @@
 /* Penjaga API Karir: token berumur pendek, deteksi UA otomatis, dan
- * batas laju di memori. Logika murni, tanpa Next.js, supaya bisa diuji
- * unit dengan node:test. Tidak ada fungsi di sini yang mencatat secret,
- * token, atau IP mentah ke mana pun. */
+ * batas laju. Logika murni, tanpa Next.js, supaya bisa diuji unit
+ * dengan node:test. Tidak ada fungsi di sini yang mencatat secret,
+ * token, atau IP mentah ke mana pun.
+ *
+ * Batas laju bersama tinggal di lib/rate-limit.js (store Redis,
+ * Firestore, atau memori). checkRateLimit di bawah ini tetap ada
+ * sebagai pembantu memori sinkron untuk test dan kompatibilitas;
+ * route produksi memakai limiter bersama lewat getSharedLimiter. */
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /* Umur token default 60 detik. */
@@ -59,7 +64,12 @@ export function isBotUa(ua) {
  * bila request masih dalam batas dan dicatat, false bila sudah lewat
  * batas. Pola yang sama dengan /api/admin/check-link: jendela geser,
  * entri lama dibuang. Map diteruskan dari route supaya tiap route punya
- * hitungannya sendiri. */
+ * hitungannya sendiri.
+ *
+ * Catatan: pembantu ini hanya hidup di memori satu instance dan
+ * hilang tiap cold start. Route produksi memakai limiter bersama
+ * dari lib/rate-limit.js; fungsi ini dipertahankan supaya test lama
+ * dan pemakaian sinkron tetap jalan. */
 export function checkRateLimit(
   hits,
   key,
@@ -79,9 +89,34 @@ export function checkRateLimit(
 }
 
 /* Ambil IP klien dari header proxy. Dipakai hanya untuk hash dan batas
- * laju, lalu dibuang; jangan pernah mencatat atau menyimpan hasilnya. */
+ * laju, lalu dibuang; jangan pernah mencatat atau menyimpan hasilnya.
+ *
+ * Pilihan sumber, dan alasannya:
+ *   1. x-real-ip dulu. Di Vercel, edge yang menulis header ini, dan
+ *      nilainya adalah IP yang langsung tersambung ke edge. Header
+ *      ini tidak bisa dipalsukan pengirim karena edge menimpanya.
+ *   2. Bila x-real-ip kosong, pakai elemen TERAKHIR x-forwarded-for.
+ *      Elemen pertama JANGAN dipakai: siapa pun bisa menulis
+ *      x-forwarded-for sendiri sebelum request sampai ke server,
+ *      jadi elemen pertama adalah klaim pengirim, bukan fakta.
+ *      Tiap proxy yang dilewati menambahkan IP yang dilihatnya di
+ *      ujung rantai; elemen terakhir adalah IP yang dilihat proxy
+ *      tepercaya paling ujung (edge Vercel), jadi itu yang paling
+ *      bisa dipercaya dari rantai ini.
+ * Keterbatasan yang jujur: di balik NAT atau proxy bersama, banyak
+ * pengunjung sah bisa berbagi satu IP yang sama dan ikut kena batas
+ * yang sama. Itu harga dari batas per IP, dan batas 30-60/menit
+ * dipilih longgar supaya pemakaian normal tidak kena. */
 export function getClientIp(request) {
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp && realIp.trim() !== "") return realIp.trim();
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return request.headers.get("x-real-ip") || "unknown";
+  if (forwarded) {
+    const parts = forwarded
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p !== "");
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
+  return "unknown";
 }

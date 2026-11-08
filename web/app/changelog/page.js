@@ -16,6 +16,15 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.8.2",
+    date: "8 November 2026",
+    points: [
+      "Notifikasi lowongan target: cron harian membandingkan daftar target dengan hasil cek sebelumnya. Target baru dan batas lamar yang tinggal 0-3 hari tercatat sebagai alert dan dikirim sekali sebagai satu pesan Telegram.",
+      "Chip Baru menandai perusahaan yang berubah dalam 48 jam terakhir di Beranda, Dasbor, dan daftar target.",
+      "Batas laju API kini dibagikan antar instance: Redis Upstash dulu, lalu Firestore, lalu memori. IP klien dibaca dari x-real-ip, lalu elemen terakhir x-forwarded-for.",
+    ],
+  },
+  {
     version: "2.8.1",
     date: "7 November 2026",
     points: [

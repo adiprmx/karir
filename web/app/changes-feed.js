@@ -6,6 +6,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusStamp } from "@/app/visual";
+import { isNewChange } from "@/lib/notify";
+
+/* Entri baru: dibuat dalam 48 jam terakhir, atau perubahannya menuju
+ * "Ada lowongan target". Sumber kebenaran adalah createdAt di koleksi
+ * changes. Chip memakai pola chip yang sudah ada (.chip.match). */
+function isNew(c) {
+  return isNewChange(c.createdAt) || c.to === "Ada lowongan target";
+}
 
 export default function ChangesFeed({ labels }) {
   const [changes, setChanges] = useState(null);
@@ -42,7 +50,14 @@ export default function ChangesFeed({ labels }) {
       {changes.map((c, i) => (
         <li key={c.id || `${c.companyNo}-${c.createdAt || i}`}>
           <Link href={`/perusahaan/${c.companyNo}`}>
-            <span className="changes-name">{c.perusahaan}</span>
+            <span className="changes-name">
+              {c.perusahaan}
+              {isNew(c) && (
+                <span className="chip match" style={{ marginLeft: 8 }}>
+                  Baru
+                </span>
+              )}
+            </span>
             <span className="changes-flow">
               <StatusStamp status={c.from} />
               <span aria-hidden="true">→</span>

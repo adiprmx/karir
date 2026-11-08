@@ -81,9 +81,11 @@ Data mentah tersedia dalam dua format: [daftar-link-karir.csv](data/daftar-link-
 | Firebase Auth | Dipakai | Login admin saja |
 | Leaflet | Dipakai | Peta lowongan |
 | Supabase | Tidak dipakai | Mentok 2 proyek |
-| Vercel KV | Tidak dipakai | Bukan dokumen |
+| Vercel KV | Belum terpasang | Store batas laju (rencana); Firestore aktif sementara |
+| Notifikasi Telegram | Dipakai | Target baru + batas lamar 0-3 hari, via cron 01:00 WIB |
+| Batas laju bersama | Dipakai | Redis → Firestore → memori, satu limiter untuk semua endpoint API |
 | Payment gateway | Tidak dipakai | Tanpa bayar |
-| Akun pengguna | Tidak dipakai | Di browser saja |
+| Akun pengguna | Opsional | Login Firebase (Email/Password + Google) untuk sinkron pelacak; tamu tetap bisa pakai semua fitur |
 
 Dokumen: [PRODUCT.md](docs/PRODUCT.md), [DESIGN.md](docs/DESIGN.md), [METODE.md](docs/METODE.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), [API.md](docs/API.md), [SECURITY.md](SECURITY.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md). Usulan perusahaan baru dan koreksi tautan mengikuti aturan di CONTRIBUTING.md.
 
@@ -91,11 +93,11 @@ Dokumen: [PRODUCT.md](docs/PRODUCT.md), [DESIGN.md](docs/DESIGN.md), [METODE.md]
 
 Datanya dari kapan?
 
-Dicek langsung di browser tanggal 4 dan 5 November 2026. 81 kanal dicek tanggal 4, 325 tanggal 5. 22 perusahaan target dicek ulang pada 7 November 2026.
+Dicek langsung di browser tanggal 4 dan 5 November 2026. 81 kanal dicek tanggal 4, 303 tanggal 5, 22 dokumen dicek ulang tanggal 7 November 2026.
 
 Kapan dicek ulang?
 
-Cek ulang otomatis tiap jam 01:00 WIB belum jalan. Cron masih jawab 503 karena tiga langkah di Firebase Console belum selesai: terbitkan aturan Firestore, pasang service account dan CRON_SECRET, buat akun admin. Sampai ketiganya selesai, umpan perubahan di aplikasi kosong.
+Cek ulang otomatis jalan tiap jam 01:00 WIB. Cron mengecek ulang portal target dan portal yang sempat mati, lalu mencatat perubahan status di umpan Yang berubah. Bila ada lowongan target baru atau batas lamar yang tinggal 0-3 hari, pemilik mendapat satu pesan Telegram gabungan.
 
 Bagaimana cara melaporkan tautan mati?
 
@@ -103,6 +105,6 @@ Buka halaman perusahaan di aplikasi, lalu pakai tombol Laporkan tautan mati. Ata
 
 <h2 align="center">Lisensi</h2>
 
-Versi 2.8.1, 7 November 2026.
+Versi 2.8.2, 8 November 2026.
 
 Kode dan skrip di repo ini berlisensi MIT, dan data di folder data berlisensi CC BY 4.0.

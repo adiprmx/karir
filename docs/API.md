@@ -35,8 +35,8 @@ Contoh: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang`
         "kategori": "Makanan",
         "link_karir": "https://rotio.id/Career",
         "status": "Ada lowongan target",
-        "tanggal_cek": "2026-11-05",
-        "catatan": "Dibuka lewat menu KARIR di rotio.id (bukan URL lama job-vacancy.html yang 404 di riset). Judul target yang tercatat adalah judul SETARA, bukan persis: Pelaksana Gudang (Kalideres, Jakarta Barat, setara Staff Gudang/Helper Gudang), Produksi Buns & Pastry (Kalideres, setara staf produksi), Office Girl (Kalideres, setara Office Boy/Girl). Daftar lengkap juga: Kasir & Baker (Jakarta, Bogor, Depok, Tangerang, Bekasi, Cikarang - bukan judul target), Teknisi Listrik/pendingin, Driver B1/BII Jakarta, Teknisi Listrik/building, Admin Gudang, Staff Finance & Accounting, Staff QC Pabrik, Security, Staff Payroll, Staff Pajak.",
+        "tanggal_cek": "2026-11-07",
+        "catatan": "Dibuka lewat menu KARIR di rotio.id (bukan URL lama job-vacancy.html yang 404 di riset). Judul target yang tercatat adalah judul SETARA, bukan persis: Pelaksana Gudang (Kalideres, Jakarta Barat, setara Staff Gudang/Helper Gudang), Produksi Buns & Pastry (Kalideres, setara staf produksi), Office Girl (Kalideres, setara Office Boy/Girl). Daftar lengkap juga: Kasir & Baker (Jakarta, Bogor, Depok, Tangerang, Bekasi, Cikarang - bukan judul target), Teknisi Listrik/pendingin, Driver B1/BII Jakarta, Teknisi Listrik/building, Admin Gudang, Staff Finance & Accounting, Staff QC Pabrik, Security, Staff Payroll, Staff Pajak. Cek ulang 7 Nov 2026: Pelaksana Gudang, Kasir & Baker, dan Office Girl masih tercantum di tabel karier, status tetap.",
         "lokasi": "Kalideres (Jakarta Barat); Kasir & Baker: Jakarta, Bogor, Depok, Tangerang, Bekasi, Cikarang",
         "posisi": "Pelaksana Gudang, Produksi Buns & Pastry, Office Girl, Kasir & Baker, Admin Gudang, Teknisi Listrik/pendingin, Driver B1/BII Jakarta, Staff Finance & Accounting, Staff QC Pabrik, Security, Staff Payroll, Staff Pajak"
       },
@@ -68,9 +68,9 @@ Satu perusahaan berdasarkan nomor baris. Contoh: `GET /api/companies/212`
     "perusahaan": "PT Novell Pharmaceutical Laboratories",
     "kategori": "Manufaktur",
     "link_karir": "https://novellpharm.com/index.php?mod=professional",
-    "status": "Ada lowongan target",
-    "tanggal_cek": "2026-11-05",
-    "catatan": "Judul persis HELPER, penempatan Gunung Putri Bogor",
+    "status": "Tidak ada lowongan terlihat",
+    "tanggal_cek": "2026-11-07",
+    "catatan": "Judul persis HELPER dengan penempatan Gunung Putri Bogor, di https://novellpharm.com/career (dialihkan ke URL di atas). Halaman yang sama juga mencantumkan WAREHOUSE STAFF sebagai pilihan posisi, plus OPERATOR PACKAGING OT (SUKABUMI), OPERATOR PRODUKSI OT, PACKING PRODUKSI OT, QUALITY CONTROL STAFF, QUALITY ASSURANCE, ANALIS QC, STAFF PPIC, FINANCE & ACCOUNTING STAFF, dan lain-lain; lokasi untuk posisi selain HELPER tidak dirinci di laporan ini selain daftar lokasi lain di halaman (Sukabumi, Jakarta, Bandung, Semarang, Bali, Makassar, Medan, Palembang, Surabaya, Yogyakarta, Cirebon, Pekanbaru, Pontianak, Banjarmasin). Cek ulang 7 Nov 2026: HELPER dan WAREHOUSE STAFF tidak lagi terlihat di portal maupun kanal resmi terbaru (postingan terbaru: Supervisor Produksi 28 Okt 2026, Staff Teknik HVAC 2 Nov 2026). Daftar lowongan portal tidak terbaca penuh dalam teks halaman (kemungkinan dimuat lewat JavaScript), jadi status ini berarti tidak terlihat, bukan vonis pasti lowongan sudah ditutup.",
     "lokasi": "Gunung Putri Bogor",
     "posisi": "HELPER, WAREHOUSE STAFF"
   }
@@ -87,34 +87,34 @@ Angka ringkas data. Contoh: `GET /api/stats`
 {
   "total": 406,
   "byStatus": {
-    "Ada lowongan target": 22,
-    "Ada lowongan target (tidak cocok)": 5,
-    "Tidak ada lowongan target": 152,
-    "Tidak ada lowongan terlihat": 77,
-    "Tidak dapat diverifikasi": 84,
-    "Portal tidak bisa dibuka": 66
+    "Ada lowongan target": 9,
+    "Ada lowongan target (tidak cocok)": 7,
+    "Tidak ada lowongan target": 153,
+    "Tidak ada lowongan terlihat": 80,
+    "Tidak dapat diverifikasi": 89,
+    "Portal tidak bisa dibuka": 68
   },
   "byCategory": [
     { "label": "Manufaktur", "count": 67 },
-    { "label": "Tech", "count": 30 },
     { "label": "Mining", "count": 30 },
+    { "label": "Tech", "count": 30 },
     { "label": "Fintech", "count": 23 },
     { "label": "BUMN", "count": 21 },
-    { "label": "FMCG", "count": 18 },
     { "label": "BANK", "count": 18 },
+    { "label": "FMCG", "count": 18 },
     { "label": "Retail", "count": 16 }
   ],
-  "byDate": { "2026-11-04": 81, "2026-11-05": 325 },
-  "targets": 22,
+  "byDate": { "2026-11-04": 81, "2026-11-05": 303, "2026-11-07": 22 },
+  "targets": 9,
   "stale": 0
 }
 ```
 
-`byCategory` berisi 8 kategori terbanyak. `stale` adalah jumlah baris yang tanggal ceknya sudah lebih dari 30 hari; nilainya 0 saat dokumen ini ditulis karena semua baris dicek 4 dan 5 November 2026. Firestore tidak bisa dijangkau: `{ "error": "Data perusahaan tidak bisa dimuat." }`, status 503.
+`byCategory` berisi 8 kategori terbanyak. `stale` adalah jumlah baris yang tanggal ceknya sudah lebih dari 30 hari; nilainya 0 saat dokumen ini ditulis karena semua baris dicek 4, 5, dan 7 November 2026. Firestore tidak bisa dijangkau: `{ "error": "Data perusahaan tidak bisa dimuat." }`, status 503.
 
 ## GET /api/changes
 
-Umpan perubahan status, 10 terbaru, terbaru dulu. Contoh: `GET /api/changes`
+Umpan perubahan status, 10 terbaru, terbaru dulu. Aturan Firestore untuk koleksi `changes` diterbitkan 7 November 2026, jadi perubahan dari cron harian dan cek massal admin tercatat di sini. Perubahan dalam 48 jam terakhir ditandai chip "Baru" di umpan Yang berubah, daftar target, dan kartu perusahaan. Contoh: `GET /api/changes`
 
 ```json
 { "changes": [] }
@@ -132,6 +132,22 @@ Umpan masih kosong saat dokumen ini ditulis, karena aturan Firestore untuk kolek
 | `createdAt` | Waktu tercatat, ISO 8601 |
 
 Bila Firestore tidak bisa dijangkau, rute ini mengembalikan `{ "changes": [] }` dengan status 200, bukan error, supaya halaman tetap tampil.
+
+## GET /api/index
+
+Indeks pencarian untuk halaman Cari. Wajib token valid di header `Authorization: Bearer <token>` (lihat `/api/token` di bawah). Menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 30 permintaan per menit per hash IP. Respons memakai `Cache-Control: private, no-store`.
+
+## GET /api/token
+
+Memberi token berumur 60 detik untuk `/api/index`. Token hanya diberikan bila `Referer` atau `Origin` request sama dengan origin situs; selain itu jawabannya 403. Tanpa batas laju.
+
+## POST /api/analytics
+
+Satu event analitik pengunjung anonim (pageview, search, detail, portal_click, tracker_mark, filter). IP mentah hanya dipakai untuk hash dan batas laju, lalu dibuang; yang disimpan hanya hash IP 64 heksa. Batas 30 permintaan per menit per hash IP; jawaban 202 walau tulis ke Firestore gagal. Endpoint ini tidak menolak user agent otomatis karena ia alat ukur; request dengan user agent kosong atau berpola bot ditandai field `uaFlag` pada dokumen.
+
+## Batas laju
+
+Satu limiter dipakai `/api/index`, `/api/companies`, `/api/stats`, dan `/api/analytics` (`web/lib/rate-limit.js`). Urutan store: Redis lewat REST Upstash bila env KV terpasang, lalu Firestore (koleksi `rate_limits`, tulis balik tiap 10 hit per kunci), lalu memori bila keduanya tidak ada. Store hanya menyimpan hash IP harian dan waktu hit, bukan IP mentah. Bila store tidak bisa dijangkau, pintu dibuka (fail-open) supaya situs tetap tampil. IP klien dibaca dari header `x-real-ip` dulu, lalu elemen terakhir `x-forwarded-for`; elemen pertama tidak dipakai karena bisa ditulis pengirim.
 
 ## POST /api/admin/check-link
 
@@ -176,10 +192,26 @@ Bila service account ada tapi tidak bisa dibaca atau tidak lengkap, `detail` ber
 Bila cron berjalan, jawabannya 200 dengan bentuk:
 
 ```json
-{ "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "truncated": false }
+{ "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "truncated": false, "alerts": 0, "telegram": "none" }
 ```
 
-`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai. Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
+`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, dan `telegram` bernilai `sent`, `failed`, `skipped-no-token`, `skipped-timeout`, atau `none` (tidak ada alert baru). Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
+
+### Notifikasi
+
+Setelah cek selesai, cron membandingkan daftar target sekarang dengan snapshot run sebelumnya di dokumen `meta/targets`: nomor yang baru muncul jadi alert `new-target`, dan perusahaan target yang batas lamarnya tinggal 0-3 hari jadi alert `deadline`. Alert tercatat di koleksi `alerts` dengan id deterministik (`new-target-{no}-{tanggal}` atau `deadline-{no}-{batas_lamar}`), supaya satu kejadian tidak tercatat dua kali. Bila ada alert baru, cron mengirim satu pesan Telegram gabungan ke pemilik. Kegagalan kirim tidak menggagalkan cron. Bila token Telegram belum dipasang di env (`TELEGRAM_BOT_TOKEN`), pengiriman dilewati dan alert tetap tercatat untuk dibaca watcher agent-side.
+
+## Koleksi Firestore yang dipakai API
+
+| Koleksi | Isi | Aturan tulis |
+| --- | --- | --- |
+| `companies` | 406 dokumen perusahaan; kolom `batas_lamar` ("YYYY-MM-DD", opsional) menyimpan tanggal batas lamar yang diparse dari catatan yang sudah ada | Admin login, 9 kolom wajib, `batas_lamar` harus string bila ada |
+| `changes` | Umpan perubahan status | Admin login; entri tidak bisa diubah atau dihapus |
+| `alerts` | Alert notifikasi (`new-target` atau `deadline`) dengan field `type`, `companyNo`, `perusahaan`, `sent`, `createdAt` | Admin login; entri tidak bisa diubah atau dihapus |
+| `meta` | Snapshot internal cron (`meta/targets`: daftar nomor target run sebelumnya) | Tidak ada akses klien; hanya service account |
+| `rate_limits` | Satu dokumen per hash pengunjung harian: larik waktu hit (maks 60 angka) dan `updatedAt` | Bentuk dibatasi ketat oleh aturan; tidak bisa dihapus |
+| `audit_logs` | Jejak perubahan data oleh admin | Admin login; entri tidak bisa diubah atau dihapus |
+| `reports` | Laporan tautan mati dari pengunjung | Siapa pun boleh membuat satu laporan berbentuk benar; tidak bisa dibaca publik |
 
 ## GET /api/locale
 

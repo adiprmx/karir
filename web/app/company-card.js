@@ -16,6 +16,7 @@ export function CompanyCard({
   onToggle,
   notice = false,
   noticeText,
+  isNew = false,
   index = 0,
   compact = false,
   labels = {},
@@ -51,8 +52,9 @@ export function CompanyCard({
             <Highlight text={c.posisi} terms={terms && terms.pos} />
           </p>
         )}
-        {matchChips.length > 0 && (
+        {(matchChips.length > 0 || isNew) && (
           <p className="co-chips">
+            {isNew && <span className="chip match">Baru</span>}
             {matchChips.map((r) => (
               <span key={r} className="chip match">
                 {r}

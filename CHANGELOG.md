@@ -2,6 +2,18 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.8.2 — 2026-11-08
+
+Notifikasi lowongan target dan batas laju API yang dibagikan.
+
+- Cron cek ulang harian kini membandingkan daftar target dengan snapshot run sebelumnya (dokumen `meta/targets`): nomor target yang baru muncul dicatat sebagai alert `new-target`, dan perusahaan target yang batas lamarnya 0-3 hari lagi dicatat sebagai alert `deadline` di koleksi `alerts`.
+- Satu pesan Telegram gabungan dikirim per run bila ada alert baru; kegagalan kirim tidak menggagalkan cron. Balasan cron bertambah field `alerts` dan `telegram`.
+- Kolom baru `batas_lamar` ("YYYY-MM-DD", opsional) di dokumen `companies`, diparse dari catatan yang sudah ada; aturan Firestore memvalidasinya sebagai string bila ada.
+- Chip "Baru" di umpan Yang berubah, daftar target, dan kartu perusahaan untuk perubahan dalam 48 jam terakhir.
+- Batas laju API pindah ke limiter bersama (`lib/rate-limit.js`): urutan store Redis REST Upstash, Firestore, lalu memori; dipakai `/api/index`, `/api/companies`, `/api/stats`, dan `/api/analytics`. `getClientIp` diperbaiki: `x-real-ip` dulu, lalu elemen terakhir `x-forwarded-for`.
+- Status jujur: Vercel KV belum terpasang karena pembuatan via API gagal saat jaringan egress mati; store yang aktif sementara adalah Firestore. Web push (FCM) ditunda; Telegram dan chip "Baru" sudah mencakup kebutuhan.
+- Tes: 121 lolos, 0 gagal (82 lama + 23 rate-limit + 16 notify). Build sukses; lint 0 error, 2 warning lama.
+
 ## 2.8.1 — 2026-11-07
 
 Cek ulang 22 perusahaan target di portal resmi masing-masing.

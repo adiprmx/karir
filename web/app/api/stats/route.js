@@ -4,10 +4,10 @@
 import { NextResponse } from "next/server";
 import { getCompanies, getStats, getStaleCount } from "@/lib/companies";
 import { countBy, topEntries } from "@/lib/search";
-import { isBotUa, checkRateLimit, getClientIp } from "@/lib/api-guard";
+import { isBotUa, getClientIp } from "@/lib/api-guard";
+import { getSharedLimiter } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
 
-const hits = new Map();
 const WINDOW_MS = 60_000;
 const LIMIT_PER_MINUTE = 60;
 
@@ -19,7 +19,7 @@ export async function GET(request) {
     );
   }
   const key = hashVisitor(getClientIp(request), todayJakarta());
-  if (!checkRateLimit(hits, key, LIMIT_PER_MINUTE, WINDOW_MS)) {
+  if (!(await getSharedLimiter().check(key, LIMIT_PER_MINUTE, WINDOW_MS))) {
     return NextResponse.json(
       { error: "Terlalu banyak permintaan. Coba lagi sebentar." },
       { status: 429 },

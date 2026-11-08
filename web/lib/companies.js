@@ -51,6 +51,10 @@ function docToCompany(d) {
     catatan: s("catatan"),
     lokasi: s("lokasi"),
     posisi: s("posisi"),
+    /* Opsional, "YYYY-MM-DD", dari catatan yang menyebut batas lamar.
+     * Kosong bila tidak ada batas yang tercatat. Dipakai cron untuk
+     * peringatan batas lamar (lihat lib/notify.js). */
+    batas_lamar: s("batas_lamar"),
   };
 }
 
