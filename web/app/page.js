@@ -23,6 +23,13 @@ const ROLE_NAMES = [
   "Crew Store",
 ];
 
+/* Batas segar data: tanggal data terbaru masih dalam 7 hari terakhir
+ * dari waktu request. Beranda di-render per request (force-dynamic),
+ * jadi waktu di sini adalah waktu request, bukan waktu build. */
+function isFreshData(latestMs) {
+  return latestMs > 0 && (Date.now() - latestMs) / 86400000 <= 7;
+}
+
 export default async function Beranda() {
   const [companies, stats, targets, locale] = await Promise.all([
     getCompaniesOrSeed(),
@@ -44,7 +51,7 @@ export default async function Beranda() {
   const dateKeys = Object.keys(stats.byDate).sort();
   const latestDate = dateKeys.length ? dateKeys[dateKeys.length - 1] : null;
   const latestMs = latestDate ? Date.parse(`${latestDate}T00:00:00Z`) : 0;
-  const fresh = latestMs > 0 && (Date.now() - latestMs) / 86400000 <= 7;
+  const fresh = isFreshData(latestMs);
 
   const shareText =
     (locale === "en"

@@ -18,7 +18,13 @@ function isActive(pathname, href) {
 function ThemeToggle({ label }) {
   const [theme, setTheme] = useState("light");
   useEffect(() => {
-    setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+    /* Baca tema awal dijadwalkan sebagai microtask: setState di dalam
+     * callback, bukan sinkron di badan effect. */
+    queueMicrotask(() => {
+      setTheme(
+        document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+      );
+    });
   }, []);
   function flip() {
     const next = theme === "dark" ? "light" : "dark";
@@ -79,7 +85,14 @@ export default function SiteNav({ labels, locale }) {
     : "Masuk";
   const close = useCallback(() => setMenu(false), []);
 
-  useEffect(() => setMenu(false), [pathname]);
+  /* Tutup menu begitu halaman berpindah. Penyesuaian state saat render
+   * (pola resmi React untuk state yang mengikuti perubahan nilai lain),
+   * bukan setState di dalam effect. */
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setMenu(false);
+  }
 
   const main = [
     { href: "/", label: labels.home, icon: "home" },

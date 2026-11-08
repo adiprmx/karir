@@ -64,8 +64,12 @@ export function useOnboarding() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setData(loadOnboarding());
-    setLoaded(true);
+    /* Baca awal dijadwalkan sebagai microtask: setState di dalam
+     * callback, bukan sinkron di badan effect. */
+    queueMicrotask(() => {
+      setData(loadOnboarding());
+      setLoaded(true);
+    });
     const onChange = () => setData(loadOnboarding());
     window.addEventListener("karir-onboarding-change", onChange);
     window.addEventListener("storage", onChange);

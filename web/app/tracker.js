@@ -77,8 +77,12 @@ export function useTracker() {
   const [synced, setSynced] = useState(false);
 
   useEffect(() => {
-    setEntries(readEntries());
-    setLoaded(true);
+    /* Baca awal dijadwalkan sebagai microtask: setState di dalam
+     * callback, bukan sinkron di badan effect. */
+    queueMicrotask(() => {
+      setEntries(readEntries());
+      setLoaded(true);
+    });
     const onChange = () => setEntries(readEntries());
     window.addEventListener("karir-tracker-change", onChange);
     window.addEventListener("storage", onChange);
@@ -214,8 +218,12 @@ export function TrackerControl({ company }) {
 
   useEffect(() => {
     if (!loaded) return;
-    setTanggal(entry && entry.tanggal ? entry.tanggal : todayLocal());
-    setCatatan(entry && entry.catatan ? entry.catatan : "");
+    /* Isi tanggal/catatan dijadwalkan sebagai microtask: setState di
+     * dalam callback, bukan sinkron di badan effect. */
+    queueMicrotask(() => {
+      setTanggal(entry && entry.tanggal ? entry.tanggal : todayLocal());
+      setCatatan(entry && entry.catatan ? entry.catatan : "");
+    });
   }, [loaded, company.no]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function commit(patch) {

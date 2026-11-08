@@ -20,9 +20,10 @@ export { trackEvent };
 export default function AnalyticsTrack() {
   const pathname = usePathname();
   const pathRef = useRef(pathname);
-  pathRef.current = pathname;
 
   useEffect(() => {
+    /* Ref hanya ditulis di dalam effect, bukan saat render. */
+    pathRef.current = pathname;
     if (!pathname) return;
     trackEvent({ type: "pageview", path: pathname });
   }, [pathname]);
