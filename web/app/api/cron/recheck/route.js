@@ -12,7 +12,12 @@
  *    baru. Bila env itu tidak ada, rute menjawab 503 dan tidak gagal total.
  * 3. Anggaran waktu 50 detik (batas fungsi Vercel Hobby sekitar 60 detik).
  *    Bila waktu habis di tengah jalan, sisanya dicatat sebagai terpotong.
- * 4. Tiap portal dicek paralel batch 5 lewat lib/check.js. Cek ini hanya
+ * 4. Fase alert jalan DULU, sebelum loop cek portal (lihat butir
+ *    Notifikasi di bawah). Alasannya: loop cek bisa menghabiskan
+ *    seluruh anggaran, dan bila fase alert menunggu giliran sesudah
+ *    loop, fase itu tidak pernah jalan (terbukti 9 Nov 2026: run
+ *    56,8 detik, alert + snapshot dilewati utuh).
+ * 5. Tiap portal dicek paralel batch 5 lewat lib/check.js. Cek ini hanya
  *    menguji portal bisa dibuka atau tidak, BUKAN isi lowongannya. Karena
  *    itu pemetaan statusnya hati-hati:
  *    - target + portal mati -> "Portal tidak bisa dibuka" + catat perubahan
@@ -26,11 +31,11 @@
  *
  * Balasan: {checked, changed, updated, skipped, truncated, alerts,
  * telegram}. alerts = alert baru yang dibuat di run ini; telegram =
- * "sent" | "failed" | "skipped-no-token" | "skipped-timeout" | "none".
+ * "sent" | "failed" | "skipped-no-token" | "none".
  *
  * Notifikasi (lihat lib/notify.js):
- * - Setelah cek selesai, daftar target sekarang dibandingkan dengan
- *   snapshot meta/targets run sebelumnya. Nomor yang baru muncul =
+ * - Sebelum loop cek, daftar target yang baru dimuat dibandingkan
+ *   dengan snapshot meta/targets run sebelumnya. Nomor yang baru muncul =
  *   lowongan target baru -> alert new-target-{no}-{tanggal}.
  * - Perusahaan target yang batas_lamar-nya 0-3 hari lagi ->
  *   alert deadline-{no}-{batas_lamar}.
@@ -310,11 +315,85 @@ export async function GET(request) {
     telegram: "none",
   };
 
-  /* Status tiap perusahaan setelah run ini (dipakai untuk snapshot
-   * dan alert; diisi dari data awal lalu diperbarui tiap ada
-   * perubahan status). */
+  /* Status tiap perusahaan, mulai dari data yang baru dimuat. Fase
+   * alert di bawah membaca peta ini sebelum loop cek jalan; loop cek
+   * memperbaruinya tiap ada perubahan status. */
   const statusAfter = new Map(companies.map((c) => [c.no, c.status]));
 
+  /* 5. Fase alert jalan DULU, sebelum loop cek portal. Alasannya:
+   * loop cek bisa menghabiskan seluruh anggaran 50 detik; bila fase
+   * ini menunggu sesudah loop, fase ini tidak pernah jalan dan
+   * snapshot meta/targets tidak pernah diperbarui (terbukti 9 Nov
+   * 2026). Daftar target di sini adalah data yang baru dimuat;
+   * loop cek di bawah tidak pernah menambah target baru (hanya
+   * target -> mati atau mati -> belum terverifikasi), jadi
+   * perbandingan snapshot tetap benar. */
+  const freshAlerts = [];
+  try {
+    const currentTargets = companies
+      .filter((c) => statusAfter.get(c.no) === TARGET_STATUS)
+      .map((c) => ({ ...c, status: statusAfter.get(c.no) }));
+    const newTargetAlerts =
+      !snapshotKnown || previousTargetNos === null
+        ? []
+        : collectNewTargetAlerts(previousTargetNos, currentTargets, today);
+    const deadlineAlerts = collectDeadlineAlerts(currentTargets, today);
+    for (const alert of [...newTargetAlerts, ...deadlineAlerts]) {
+      const result = await createAlert(fsBase, token, alert);
+      if (result === "created") freshAlerts.push(alert);
+    }
+    summary.alerts = freshAlerts.length;
+
+    /* Tulis snapshot baru (selalu, walau tidak ada alert baru) —
+     * kecuali bila baca snapshot sebelumnya gagal, supaya deteksi
+     * tidak hilang diam-diam. */
+    if (snapshotKnown) {
+      await firestoreFetch(`${fsBase}/meta/targets`, token, {
+        method: "PATCH",
+        body: JSON.stringify({
+          fields: {
+            targetNos: {
+              arrayValue: {
+                values: currentTargets.map((c) => ({
+                  integerValue: String(c.no),
+                })),
+              },
+            },
+            updatedAt: { stringValue: new Date().toISOString() },
+          },
+        }),
+      }).catch(() => {});
+    }
+
+    /* Satu pesan gabungan, hanya bila ada alert baru di run ini. */
+    if (freshAlerts.length > 0) {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
+      if (!botToken) {
+        summary.telegram = "skipped-no-token";
+        console.warn(
+          "Notifikasi Telegram dilewati: env TELEGRAM_BOT_TOKEN belum dipasang.",
+        );
+      } else {
+        const text = formatTelegramMessage(freshAlerts, today);
+        const sent = await sendTelegramMessage({
+          token: botToken,
+          chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
+          text,
+        });
+        summary.telegram = sent.ok ? "sent" : "failed";
+        if (!sent.ok) {
+          console.warn(`Notifikasi Telegram gagal: ${sent.error}`);
+        }
+      }
+    }
+  } catch {
+    /* Alert dan Telegram tidak boleh menggagalkan cron. */
+    summary.telegram = "failed";
+  }
+
+  /* 6. Loop cek portal, tetap dibatasi anggaran 50 detik. Bila waktu
+   * habis di tengah jalan, sisanya dicatat sebagai terpotong dan
+   * menunggu hari berikut. */
   for (let i = 0; i < queue.length; i += BATCH) {
     if (Date.now() > deadline) {
       summary.truncated = true;
@@ -399,77 +478,6 @@ export async function GET(request) {
       }
     }
     await Promise.all(writes);
-  }
-
-  /* 5. Deteksi alert dan pengiriman Telegram. Hanya bila waktu masih
-   * ada: bila antrean cek sudah memakan anggaran, fase ini dilewati
-   * utuh (snapshot lama tetap tersimpan, jadi kejadian yang sama
-   * terdeteksi di run berikut, tidak hilang). */
-  if (Date.now() < deadline) {
-    const currentTargets = companies
-      .filter((c) => statusAfter.get(c.no) === TARGET_STATUS)
-      .map((c) => ({ ...c, status: statusAfter.get(c.no) }));
-    const freshAlerts = [];
-    try {
-      const newTargetAlerts =
-        !snapshotKnown || previousTargetNos === null
-          ? []
-          : collectNewTargetAlerts(previousTargetNos, currentTargets, today);
-      const deadlineAlerts = collectDeadlineAlerts(currentTargets, today);
-      for (const alert of [...newTargetAlerts, ...deadlineAlerts]) {
-        const result = await createAlert(fsBase, token, alert);
-        if (result === "created") freshAlerts.push(alert);
-      }
-      summary.alerts = freshAlerts.length;
-
-      /* Tulis snapshot baru (selalu, walau tidak ada alert baru) —
-       * kecuali bila baca snapshot sebelumnya gagal, supaya deteksi
-       * tidak hilang diam-diam. */
-      if (snapshotKnown) {
-        await firestoreFetch(`${fsBase}/meta/targets`, token, {
-          method: "PATCH",
-          body: JSON.stringify({
-            fields: {
-              targetNos: {
-                arrayValue: {
-                  values: currentTargets.map((c) => ({
-                    integerValue: String(c.no),
-                  })),
-                },
-              },
-              updatedAt: { stringValue: new Date().toISOString() },
-            },
-          }),
-        }).catch(() => {});
-      }
-
-      /* Satu pesan gabungan, hanya bila ada alert baru di run ini. */
-      if (freshAlerts.length > 0) {
-        const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
-        if (!botToken) {
-          summary.telegram = "skipped-no-token";
-          console.warn(
-            "Notifikasi Telegram dilewati: env TELEGRAM_BOT_TOKEN belum dipasang.",
-          );
-        } else {
-          const text = formatTelegramMessage(freshAlerts, today);
-          const sent = await sendTelegramMessage({
-            token: botToken,
-            chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
-            text,
-          });
-          summary.telegram = sent.ok ? "sent" : "failed";
-          if (!sent.ok) {
-            console.warn(`Notifikasi Telegram gagal: ${sent.error}`);
-          }
-        }
-      }
-    } catch {
-      /* Alert dan Telegram tidak boleh menggagalkan cron. */
-      summary.telegram = "failed";
-    }
-  } else {
-    summary.telegram = "skipped-timeout";
   }
 
   return NextResponse.json(summary);
