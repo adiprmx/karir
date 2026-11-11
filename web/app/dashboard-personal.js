@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useTracker, TRACKER_STATUSES } from "@/app/tracker";
 import { loadOnboarding } from "@/app/onboarding";
 import { loadRecentSearch } from "@/app/recent";
-import { CountUp, Icon, Reveal } from "@/app/visual";
+import { Icon, Reveal } from "@/app/visual";
 
 const VISITED_METODE_KEY = "karir-visited-metode";
 
@@ -55,7 +55,7 @@ export default function DashboardPersonal() {
     return (
       <section className="panel" aria-label="Dasbor saya">
         <div className="skeleton" style={{ height: 28, width: "60%" }} />
-        <div className="skeleton" style={{ height: 80, marginTop: 16 }} />
+        <div className="skeleton" style={{ height: 80 }} />
       </section>
     );
   }
@@ -69,7 +69,7 @@ export default function DashboardPersonal() {
   }
 
   const steps = [
-    { text: "Tentukan domisili dan posisi", done: onboarding !== null, href: "/mulai" },
+    { text: "Tentukan kota dan posisi", done: onboarding !== null, href: "/mulai" },
     { text: "Tandai lamaran pertama", done: total > 0, href: "/cari" },
     { text: "Baca cara data dicek sebelum melamar", done: visitedMetode, href: "/metode" },
   ];
@@ -77,62 +77,51 @@ export default function DashboardPersonal() {
   const searchHref = onboarding
     ? `/cari?domisili=${encodeURIComponent(onboarding.domisili)}&posisi=${encodeURIComponent(onboarding.posisi)}`
     : "/cari";
-  const recentParts = recent
-    ? [recent.domisili, recent.posisi].filter(Boolean)
-    : [];
+  const recentParts = recent ? [recent.domisili, recent.posisi].filter(Boolean) : [];
   const recentHref = recent
     ? `/cari?${new URLSearchParams(
         Object.fromEntries(
-          Object.entries({ domisili: recent.domisili, posisi: recent.posisi }).filter(
-            ([, v]) => v,
-          ),
+          Object.entries({ domisili: recent.domisili, posisi: recent.posisi }).filter(([, v]) => v),
         ),
       ).toString()}`
     : "/cari";
 
   return (
-    <Reveal className="panel mine" as="section">
-      <div className="mine-top">
-        <div>
-          <p className="kicker">Dasbor saya</p>
-          {onboarding ? (
-            <h2>
-              Lowongan {onboarding.posisi} di {onboarding.domisili}
-            </h2>
-          ) : (
-            <h2>Belum ada pilihan tersimpan.</h2>
-          )}
-        </div>
-        <div className="actions-row">
-          {onboarding ? (
-            <>
-              <Link href={searchHref} className="btn small">
-                Lihat yang cocok
-                <Icon name="arrow" size={16} />
-              </Link>
-              <Link href="/mulai" className="btn ghost small">
-                Ubah pilihan
-              </Link>
-            </>
-          ) : (
-            <Link href="/mulai" className="btn small">
-              Mulai
-              <Icon name="arrow" size={16} />
-            </Link>
-          )}
-        </div>
+    <Reveal as="section" className="panel" aria-labelledby="mine-h">
+      <div>
+        <p className="lbl">Dasbor saya</p>
+        <h2 id="mine-h">
+          {onboarding
+            ? `${onboarding.posisi} di ${onboarding.domisili}`
+            : "Belum ada pilihan tersimpan"}
+        </h2>
       </div>
-
+      <div className="actions">
+        {onboarding ? (
+          <>
+            <Link href={searchHref} className="btn small">
+              Lihat yang cocok
+            </Link>
+            <Link href="/mulai" className="btn ghost small">
+              Ubah pilihan
+            </Link>
+          </>
+        ) : (
+          <Link href="/mulai" className="btn small">
+            Tentukan kota dan posisi
+          </Link>
+        )}
+      </div>
       {recentParts.length > 0 && (
         <p className="hint">
           Terakhir kamu cari: <Link href={recentHref}>{recentParts.join(" + ")}</Link>
         </p>
       )}
 
-      <div className="mine-cols">
-        <div>
-          <p className="label">
-            Langkah berikutnya <span className="num">{doneN}/3</span>
+      <div className="dash-grid">
+        <div style={{ display: "grid", gap: 10 }}>
+          <p className="lbl">
+            Langkah berikutnya, <span className="num">{doneN} dari 3 selesai</span>
           </p>
           <div className="progress" aria-hidden="true">
             <span style={{ width: `${(doneN / 3) * 100}%` }} />
@@ -144,7 +133,7 @@ export default function DashboardPersonal() {
                   {s.done && <Icon name="check" size={14} />}
                 </span>
                 {s.done ? (
-                  <span>
+                  <span className="todo-t">
                     <span className="sr-only">Selesai: </span>
                     {s.text}
                   </span>
@@ -155,18 +144,19 @@ export default function DashboardPersonal() {
             ))}
           </ol>
         </div>
-        <div>
-          <p className="label">Lamaran saya</p>
+        <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+          <p className="lbl">Lamaran saya</p>
           {total === 0 ? (
-            <p className="hint">Belum ada lamaran yang dilacak.</p>
+            <div className="state">
+              <strong>Belum ada lamaran yang dilacak.</strong>
+              <p>Ketuk ikon bendera di baris perusahaan untuk mulai menandai.</p>
+            </div>
           ) : (
             <div className="counts">
               {TRACKER_STATUSES.map((s) => (
                 <Link href="/lamaran" key={s}>
-                  <span className="count-n num">
-                    <CountUp value={counts[s]} duration={600} />
-                  </span>
-                  <span className="count-l">{s}</span>
+                  <b className="num">{counts[s]}</b>
+                  <span>{s}</span>
                 </Link>
               ))}
             </div>

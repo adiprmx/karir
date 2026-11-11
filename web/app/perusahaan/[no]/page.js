@@ -1,14 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCompanyByIdOrSeed, getRelatedOrSeed } from "@/lib/companies";
-import { getLocale, t } from "@/lib/i18n";
-import {
-  STATUS_EXPLAIN,
-  daysSince,
-  formatDate,
-  safeLink,
-} from "@/app/components";
-import { Icon, Reveal, StatusStamp } from "@/app/visual";
+import { STATUS_EXPLAIN, daysSince, deadlineInfo, formatDate, safeLink } from "@/app/components";
+import { Icon, StatusTag } from "@/app/visual";
 import { TrackerControl } from "@/app/tracker";
 import { DetailActions } from "./actions";
 import { CompanyLogo } from "@/lib/logos";
@@ -16,12 +10,8 @@ import { CompanyLogo } from "@/lib/logos";
 const SITE_URL = "https://karir-adiprmx.vercel.app";
 
 function shortDescription(company) {
-  const base = [company.perusahaan, company.kategori, company.status]
-    .filter(Boolean)
-    .join(", ");
-  const withLocation = company.lokasi
-    ? `${base}. Lokasi: ${company.lokasi}`
-    : base;
+  const base = [company.perusahaan, company.kategori, company.status].filter(Boolean).join(", ");
+  const withLocation = company.lokasi ? `${base}. Lokasi: ${company.lokasi}` : base;
   return withLocation.slice(0, 160);
 }
 
@@ -44,164 +34,138 @@ export async function generateMetadata({ params }) {
 
 export default async function CompanyDetail({ params }) {
   const { no } = await params;
-  const [company, locale] = await Promise.all([
-    getCompanyByIdOrSeed(no),
-    getLocale(),
-  ]);
+  const company = await getCompanyByIdOrSeed(no);
   if (!company) notFound();
   const related = await getRelatedOrSeed(company, 4);
   const hasLink = safeLink(company.link_karir);
   const url = `${SITE_URL}/perusahaan/${company.no}`;
   const description = shortDescription(company);
   const days = daysSince(company.tanggal_cek);
-  const ago =
-    days === null
-      ? null
-      : days === 0
-        ? t(locale, "detail.today")
-        : t(locale, "detail.daysAgo", { n: days });
+  const ago = days === null ? null : days === 0 ? "hari ini" : `${days} hari lalu`;
+  const isOpen = company.status === "Ada lowongan target";
+  const deadline = isOpen ? deadlineInfo(company.batas_lamar) : null;
 
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
-      {
-        "@type": "Organization",
-        name: company.perusahaan,
-        ...(hasLink ? { url: company.link_karir } : {}),
-      },
-      {
-        "@type": "WebPage",
-        name: `${company.perusahaan} — Karir`,
-        url,
-        description,
-        inLanguage: locale,
-      },
+      { "@type": "Organization", name: company.perusahaan, ...(hasLink ? { url: company.link_karir } : {}) },
+      { "@type": "WebPage", name: `${company.perusahaan} | Karir`, url, description, inLanguage: "id" },
     ],
   };
 
   return (
-    <div className="wrap detail">
-      <nav className="crumbs" aria-label="Breadcrumb">
-        <Link href="/cari">
-          <Icon name="back" size={16} />
-          {t(locale, "nav.search")}
-        </Link>
-      </nav>
+    <div className="wrap">
+      <Link className="crumb" href="/cari">
+        <Icon name="back" size={18} />
+        Kembali ke Cari
+      </Link>
 
       <header className="d-head">
-        <CompanyLogo
-          linkKarir={company.link_karir}
-          name={company.perusahaan}
-          size={64}
-        />
-        <div className="d-head-text">
-          {company.kategori && <p className="co-cat">{company.kategori}</p>}
-          <h1>{company.perusahaan}</h1>
-          <StatusStamp status={company.status} />
+        <div className="d-no">
+          <b className="num" aria-hidden="true">
+            {company.no}
+          </b>
+          <span>
+            Nomor urut di daftar
+            {company.kategori ? `, kategori ${company.kategori}` : ""}
+          </span>
         </div>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <CompanyLogo linkKarir={company.link_karir} name={company.perusahaan} size={56} />
+          <h1>
+            <span className="sr-only">Nomor {company.no}: </span>
+            {company.perusahaan}
+          </h1>
+        </div>
+        <div className="reg-line">
+          <StatusTag status={company.status} />
+          {deadline && (
+            <span className={`tag${deadline.urgent ? " deadline" : " none"}`}>{deadline.text}</span>
+          )}
+        </div>
+        <p className="lede">{STATUS_EXPLAIN[company.status] || ""}</p>
       </header>
-
-      <p className="d-explain">
-        {STATUS_EXPLAIN[company.status] || ""}
-      </p>
 
       <div className="d-cta">
         {hasLink ? (
-          <a
-            className="btn d-portal"
-            href={company.link_karir}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t(locale, "detail.portalBtn")}
+          <a className={`btn${isOpen ? " hi" : ""}`} href={company.link_karir} target="_blank" rel="noopener noreferrer">
+            Buka portal karir resmi
             <Icon name="ext" size={18} />
           </a>
         ) : (
-          <p className="note-line">
-            <Icon name="info" size={16} />
-            {t(locale, "detail.noLink")}
+          <p className="note">
+            <Icon name="info" size={18} />
+            Perusahaan ini belum punya tautan karir yang tercatat.
           </p>
         )}
-        <DetailActions
-          company={company}
-          url={url}
-          labels={{
-            share: t(locale, "detail.share"),
-            copied: t(locale, "detail.copied"),
-            report: t(locale, "detail.report"),
-            reportHint: t(locale, "detail.reportHint"),
-            reportSent: t(locale, "detail.reportSent"),
-            loading: t(locale, "common.loading"),
-          }}
-        />
+        <DetailActions company={company} url={url} />
       </div>
 
-      <div className="d-grid">
-        <Reveal className="d-col">
-          <section className="panel" aria-labelledby="hasil-h">
-            <h2 id="hasil-h" className="panel-title">
-              {t(locale, "detail.notes")}
-            </h2>
-            <dl className="facts">
+      <div className="d-grid" style={{ marginTop: 16 }}>
+        <section className="panel" aria-labelledby="hasil-h">
+          <h2 id="hasil-h" className="panel-title">
+            Hasil pengecekan
+          </h2>
+          <dl className="facts">
+            <div>
+              <dt>Terakhir dicek</dt>
+              <dd>
+                {formatDate(company.tanggal_cek) || "Belum ada tanggal cek."}
+                {ago && ` (${ago})`}
+              </dd>
+            </div>
+            {company.batas_lamar && (
               <div>
-                <dt>{t(locale, "detail.checked")}</dt>
-                <dd>
-                  {formatDate(company.tanggal_cek, locale) ||
-                    "Belum ada tanggal cek."}
-                  {ago && <span className="ago"> · {ago}</span>}
-                </dd>
+                <dt>Batas lamar tercatat</dt>
+                <dd>{formatDate(company.batas_lamar) || company.batas_lamar}</dd>
               </div>
-              <div>
-                <dt>{t(locale, "detail.location")}</dt>
-                <dd>{company.lokasi || t(locale, "common.notListed")}</dd>
-              </div>
-              <div>
-                <dt>{t(locale, "detail.positions")}</dt>
-                <dd>{company.posisi || t(locale, "detail.noPositions")}</dd>
-              </div>
-              <div>
-                <dt>{t(locale, "detail.notes")}</dt>
-                <dd>{company.catatan || t(locale, "detail.noNotes")}</dd>
-              </div>
-            </dl>
-          </section>
-        </Reveal>
-
-        <Reveal className="d-col" delay={80}>
-          <TrackerControl company={company} />
-        </Reveal>
+            )}
+            <div>
+              <dt>Lokasi</dt>
+              <dd>{company.lokasi || "Tidak tercantum"}</dd>
+            </div>
+            <div>
+              <dt>Posisi yang terlihat</dt>
+              <dd>{company.posisi || "Belum ada posisi yang tercatat."}</dd>
+            </div>
+            <div>
+              <dt>Catatan</dt>
+              <dd>{company.catatan || "Belum ada catatan."}</dd>
+            </div>
+          </dl>
+        </section>
+        <TrackerControl company={company} />
       </div>
 
       <section className="sec" aria-labelledby="related-h">
-        <Reveal>
-          <h2 id="related-h">{t(locale, "detail.related")}</h2>
-          {related.length > 0 ? (
-            <ul className="mini-list">
-              {related.map((c) => (
-                <li key={c.no}>
-                  <Link href={`/perusahaan/${c.no}`}>
-                    <CompanyLogo
-                      linkKarir={c.link_karir}
-                      name={c.perusahaan}
-                      size={36}
-                    />
-                    <span className="mini-name">{c.perusahaan}</span>
-                    <StatusStamp status={c.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="empty-line">{t(locale, "detail.noRelated")}</p>
-          )}
-        </Reveal>
+        <div className="sec-head">
+          <h2 id="related-h">Perusahaan sekategori</h2>
+        </div>
+        {related.length > 0 ? (
+          <ul className="mini-list">
+            {related.map((c) => (
+              <li key={c.no}>
+                <Link href={`/perusahaan/${c.no}`}>
+                  <span className="mini-name">
+                    {c.no}. {c.perusahaan}
+                  </span>
+                  <span>
+                    <StatusTag status={c.status} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="state">
+            <strong>Belum ada perusahaan lain di kategori ini.</strong>
+          </div>
+        )}
       </section>
 
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
     </div>
   );

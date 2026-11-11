@@ -1,5 +1,4 @@
 import { getTargetsOrSeed } from "@/lib/companies";
-import { getLocale, t } from "@/lib/i18n";
 import { matchCity } from "@/lib/cities";
 import MapClient from "@/app/map-client";
 
@@ -8,12 +7,11 @@ export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Peta lowongan",
-  description:
-    "Lokasi perusahaan dengan lowongan target, dipetakan berdasarkan kota.",
+  description: "Lokasi perusahaan dengan lowongan target, dipetakan berdasarkan kota.",
 };
 
 export default async function Peta() {
-  const [targets, locale] = await Promise.all([getTargetsOrSeed(), getLocale()]);
+  const targets = await getTargetsOrSeed();
   const byCity = new Map();
   const other = [];
   for (const c of targets) {
@@ -41,19 +39,15 @@ export default async function Peta() {
   return (
     <div className="wrap">
       <div className="page-head">
-        <h1>{locale === "en" ? "Openings map" : "Peta lowongan"}</h1>
+        <h1>Peta lowongan</h1>
         <p className="lede">
-          {t(locale, "landing.featureMapDesc", { n: targets.length })}
+          {targets.length} perusahaan dengan lowongan target, dikelompokkan per
+          kota. Lokasi yang tidak cocok dengan kota di peta ada di daftar bawah.
         </p>
       </div>
       <MapClient
         groups={groups}
-        other={other.map((c) => ({
-          no: c.no,
-          perusahaan: c.perusahaan,
-          link_karir: c.link_karir,
-          lokasi: c.lokasi,
-        }))}
+        other={other.map((c) => ({ no: c.no, perusahaan: c.perusahaan, link_karir: c.link_karir, lokasi: c.lokasi }))}
       />
     </div>
   );

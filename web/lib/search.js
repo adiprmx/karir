@@ -70,6 +70,16 @@ export function tokenizeRaw(value) {
     .filter((t) => t.length > 0);
 }
 
+/* Kata peran (gudang, cleaning, kasir, dst., semua yang ada di kelompok
+ * sinonim) tidak boleh memicu mode nama. Tanpa ini mengetik "gudang",
+ * peran yang paling sering dicari, hanya menampilkan perusahaan yang
+ * kebetulan bernama GudangAda dan menyembunyikan semua lowongan gudang.
+ * Nama yang berisi kata peran tetap bisa dicari lewat kata lain di
+ * namanya. */
+export function isRoleWord(token) {
+  return SYNONYM_LOOKUP.has(token);
+}
+
 /* Kata kunci pendek (1-2 huruf, mis. "ob" dan "og" dari sinonim office
  * boy/girl) hanya cocok sebagai kata utuh. Tanpa ini "og" ikut cocok di
  * "logistik" dan "ob" di "robot", dan hasil Office Boy membengkak. */
@@ -197,7 +207,7 @@ export function runSearch(companies, query) {
   const q = {
     domisiliTokens: tokenize(query.domisili || ""),
     posisiTokens: tokenize(query.posisi || ""),
-    rawPosisiTokens: tokenizeRaw(query.posisi || ""),
+    rawPosisiTokens: tokenizeRaw(query.posisi || "").filter((t) => !isRoleWord(t)),
   };
   let scored = companies.map((c) => {
     const s = scoreCompany(c, q);

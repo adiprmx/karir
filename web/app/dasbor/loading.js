@@ -1,15 +1,11 @@
-import { getLocale, t } from "@/lib/i18n";
-
-export default async function Loading() {
-  const locale = await getLocale();
+export default function Loading() {
   return (
-    <div className="wrap" aria-busy="true">
+    <div className="wrap" aria-busy="true" aria-label="Memuat dasbor">
       <div className="page-head">
-        <h1>{t(locale, "dash.metaTitle")}</h1>
-        <p className="lede">{t(locale, "common.loading")}</p>
+        <div className="skeleton" style={{ height: 40, maxWidth: 240 }} />
       </div>
-      <div className="skeleton" style={{ height: 160 }} />
-      <div className="skeleton" style={{ height: 220, marginTop: 16 }} />
+      <div className="skeleton" style={{ height: 180 }} />
+      <div className="skeleton" style={{ height: 240, marginTop: 16 }} />
     </div>
   );
 }

@@ -1,0 +1,132 @@
+/* Gaya panel admin, dibatasi di .adm. Admin selalu terang dan hanya
+ * dipakai pemilik, jadi padat dan fungsional: tabel, isian, tombol.
+ * Token warna datang dari .force-light di globals.css. */
+
+.adm {
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+.adm .wrap {
+  padding-top: 8px;
+}
+.adm .page-head {
+  display: grid;
+  gap: 8px;
+  padding: 24px 0 16px;
+}
+.adm .lede {
+  color: var(--ink-2);
+}
+.adm .filters {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+}
+.adm fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.adm legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.adm .section-label {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+.adm .section-note {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.adm .filter-actions,
+.adm .chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.adm .notice {
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-field);
+  background: var(--hi-soft);
+  font-size: 0.95rem;
+}
+.adm .result-count {
+  padding: 8px 0;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.adm .state {
+  display: grid;
+  gap: 8px;
+  padding: 20px 16px;
+  border: 2px dashed var(--line-2);
+  border-radius: var(--r-panel);
+}
+.adm .cari-grid {
+  display: grid;
+  gap: 16px;
+}
+.adm .recheck-list {
+  display: grid;
+  gap: 6px;
+  padding-left: 1.2em;
+  list-style: square;
+}
+.adm .stat-stack {
+  display: grid;
+}
+.adm .stat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.adm .stat-num {
+  font-size: 1.8rem;
+  font-weight: 900;
+  font-stretch: 62%;
+  min-width: 2.4ch;
+  text-align: right;
+}
+.adm .stat-label {
+  color: var(--ink-2);
+}
+.adm .results-table {
+  width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+  font-size: 0.9rem;
+}
+.adm .results-table th,
+.adm .results-table td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.adm .results-table th {
+  position: sticky;
+  top: 0;
+  background: var(--sunk);
+  font-weight: 800;
+  white-space: nowrap;
+}
+@media (min-width: 900px) {
+  .adm .cari-grid {
+    grid-template-columns: 1fr;
+  }
+}

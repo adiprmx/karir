@@ -1,57 +1,24 @@
-# DESIGN.md — Karir web app (rancang ulang v2.8.0, 7 Nov 2026)
+# Karir v3.0.0: catatan desain
+
+Dibangun ulang dari nol (10 Nov 2026). Arah visual diputuskan oleh pembangun karena brief menyerahkannya.
 
 ## Pembacaan desain
+Alat cari lowongan untuk lulusan SMK di Android layar kecil, bergaya buku daftar dengan papan peringatan oranye hi-vis.
+Dial: ENERGY 2, RHYTHM 3, MOTION 2 (MOTION 2 karena pemilik pernah minta tampilan yang hidup).
 
-Produk: alat cari lowongan untuk pencari kerja lulusan SMK, hampir semuanya
-membuka dari HP. Isinya konten dan keputusan ("kanal mana yang layak
-dibuka?"), jadi temanya terang, dengan tema gelap sebagai pilihan.
-Motif identitas: **stempel cek**. Janji produk ini adalah "dicek, bukan
-dicopas", jadi status terverifikasi tampil sebagai stempel yang jatuh sekali,
-dan 406 kanal tampil sebagai 406 kotak yang menyala sesuai pencarianmu.
+## Keputusan dan alasannya
+- **Nomor urut sebagai motif.** Tiap perusahaan punya nomor asli di data (`no`). Nomor itu jadi lajur kiri baris daftar dan angka besar di halaman detail. Bukan hiasan, karena itu juga alamat halamannya.
+- **Warna.** Inti: tinta hijau-hitam dan kertas kehijauan. Satu aksen: oranye hi-vis (warna rompi gudang dan pabrik). Oranye hanya berarti "ada lowongan terverifikasi" dan dipakai di tag status, slab angka Beranda, dan tombol portal pada perusahaan yang sedang buka. Kotak kecil di logo adalah penanda "buka" yang sama.
+- **Status dibedakan lewat bentuk dan teks, bukan warna.** Persegi penuh = ada lowongan; setengah = ada tetapi tidak cocok; kosong = tidak ada; putus-putus = tidak bisa diverifikasi; silang dan dicoret = portal mati.
+- **Huruf.** Archivo variabel (lebar 62-125%, tebal 100-900), satu berkas lokal 90 KB, lisensi OFL (`app/fonts/Archivo-OFL.txt`). Angka dan judul dipadatkan, teks bacaan lebar normal.
+- **Bentuk.** Tag persegi 2px, chip bulat (bisa dipilih), panel 10px, daftar tanpa kartu (garis tipis seperti buku register). Bayangan hanya untuk sheet dan toast.
+- **Navigasi.** HP: bilah atas tipis dan dock bawah 5 tujuan berlabel (Beranda, Cari, Peta, Lamaran, Menu). Layar lebar: tautan di bilah atas dan panel Menu dari kanan.
+- **Gerak.** Hanya yang menjelaskan perubahan: sheet, toast, thumb pemilih status, tanda lamaran, urutan hasil yang bergeser di Cari, reveal sekali untuk seksi di bawah layar pertama. Mati bila `prefers-reduced-motion`.
+- **Tema.** Terang dan gelap, mengikuti sistem, bisa diganti dari bilah atas. Panel admin selalu terang (`.force-light`).
+- **Tanpa aset luar.** Tidak ada foto stok, tidak ada logo perusahaan di daftar (hanya di halaman detail), tidak ada font dari server luar.
+- **Ikon.** Set gambar sendiri (garis 2,5, ujung rata, sudut tegas) di `app/visual.js`. Ikon aplikasi `public/icon.svg` berupa tanda sementara (kotak oranye dengan centang di atas tinta), bukan identitas final.
 
-## Token
-
-- Warna inti: kertas `#f4f1ea`, permukaan `#fffdf9`, tinta `#15140f`.
-- Aksen tunggal: hijau `#0b7a43` yang artinya hanya "terverifikasi".
-  Kuning `#8f5200` hanya untuk "syarat tidak cocok". Selain itu netral.
-- Mode gelap: kertas `#12120f`, tinta `#f2efe6`, hijau `#4cd484`. Dipilih
-  dengan saklar, awalnya mengikuti pengaturan perangkat.
-- Huruf: Plus Jakarta Sans (variabel, 200–800), rancangan Tokotype (Indonesia),
-  berkas lokal di `app/fonts`, lisensi OFL. Angka tabular.
-- Radius: 10 (isian, tombol), 16 (kartu), 24 (panel pencarian, sheet), pil
-  hanya untuk chip dan stempel.
-- Elevasi: datar. Bayangan hanya di sheet dan toast. Tanpa kaca, glow,
-  gradien, strip samping, atau badge di atas judul.
-- Ikon: set gambar sendiri di `app/visual.js` (garis lurus, sudut tegas).
-- Fokus: outline 3px tinta, offset 2px. Sasaran sentuh minimal 40px, tombol
-  utama 48–56px.
-
-## Struktur
-
-- HP: bilah atas tipis + tab bawah 5 tujuan (Beranda, Cari, Peta, Lamaran,
-  Menu). Layar lebar: navigasi di bilah atas, tab bawah hilang.
-- Beranda: pencarian (hero) → 22 lowongan terverifikasi → bukti (angka besar,
-  dua kolom tak simetris) → perubahan → FAQ. Tanpa blok CTA penutup.
-- Cari: bilah isian menempel di atas (HP) / panel filter di kiri (desktop).
-- Detail: judul, arti status, tombol portal, lalu dua panel (hasil cek,
-  pelacak lamaran).
-
-## Gerak (semua mati di prefers-reduced-motion)
-
-1. Halaman masuk: opacity + geser 6px, 0,38 dtk.
-2. Seksi masuk saat di-scroll: sekali, lalu observer dilepas.
-3. Kotak 406 kanal menyapu masuk diagonal sekali; saat mengetik, yang cocok
-   menyala dan sisanya meredup.
-4. Stempel hijau jatuh sekali saat muncul.
-5. Hasil Cari: kartu yang sudah ada meluncur ke posisi baru (FLIP, 340 ms).
-6. Kontrol status lamaran: thumb bergeser; tombol tanda memantul.
-7. Sheet filter/menu naik dari bawah; toast muncul 3,6 dtk.
-Tidak ada animasi yang berulang terus selain rangka muat yang berhenti
-setelah 6 putaran.
-
-## Keadaan
-
-- Memuat: rangka (skeleton) atau "Memuat N kanal…". Kosong: sebut sebabnya dan
-  beri satu tindakan. Gagal: sebut apa yang gagal dan tombol Coba lagi.
-- Kartu selalu menampilkan stempel status dan catatan jujur "peran ini belum
-  terverifikasi" bila posisi yang dicari tidak cocok di data.
+## Berkas
+- `app/globals.css`: token, dasar, kerangka, komponen. Alasan per keputusan ada di komentar atas berkas.
+- `app/visual.js`: ikon, tag status, reveal, sheet, toast.
+- `app/admin/admin.css`: gaya admin, dibatasi di `.adm`.

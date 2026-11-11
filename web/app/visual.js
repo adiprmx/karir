@@ -1,8 +1,8 @@
 "use client";
 
-/* Komponen UI bersama Karir: ikon, animasi masuk, angka naik, stempel
- * status, sheet, toast, dan penyorot kata kunci. Semua gerak mati bila
- * pengguna memakai prefers-reduced-motion. */
+/* Komponen UI bersama Karir v3: ikon, tag status, reveal, sheet, toast,
+ * penyorot kata kunci. Semua gerak mati bila pengguna memakai
+ * prefers-reduced-motion. */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
@@ -14,64 +14,63 @@ export function reducedMotion() {
 }
 
 /* ---------- Ikon ----------
- * Set gambar sendiri: garis lurus, sudut tegas, tebal 2. Sengaja bukan
- * Lucide: bentuknya mengikuti karakter tempat kerja (rak, palet, papan
- * nama), bukan ikon aplikasi generik. */
+ * Set gambar sendiri: garis tebal 2,5, ujung rata, sudut tegas, bentuk
+ * persegi seperti papan nama. Tiap ikon dipakai untuk benda yang sama
+ * dengan maknanya (rumah = beranda, bendera lamaran = tanda, dst). */
 const ICONS = {
-  home: <path d="M3.5 11.5 12 4l8.5 7.5M6 10v10h12V10M10 20v-6h4v6" />,
+  home: <path d="M3 11 12 3l9 8M5.5 9.5V21h13V9.5M10 21v-6h4v6" />,
   search: (
     <>
-      <circle cx="11" cy="11" r="6.5" />
-      <path d="m16 16 5 5" />
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 6 6" />
     </>
   ),
   pin: (
     <>
-      <path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z" />
-      <circle cx="12" cy="10" r="2.2" />
+      <path d="M12 22s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12Z" />
+      <rect x="10" y="8" width="4" height="4" />
     </>
   ),
-  map: <path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20ZM9 4v13.5M15 6.5V20" />,
-  bookmark: <path d="M6 3.5h12V21l-6-4.5L6 21Z" />,
-  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  map: <path d="M3 5.5 9 3l6 2.5L21 3v15.5L15 21l-6-2.5L3 21ZM9 3v15.5M15 5.5V21" />,
+  flag: <path d="M6 21V3M6 4h13l-3 4.5 3 4.5H6" />,
+  menu: <path d="M3 6.5h18M3 12h18M3 17.5h18" />,
   sun: (
     <>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
+      <rect x="8" y="8" width="8" height="8" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2 2M17.1 17.1l2 2M19.1 4.9l-2 2M6.9 17.1l-2 2" />
     </>
   ),
-  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" />,
-  check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
-  alert: <path d="M12 4 21 20H3ZM12 10v4.5M12 17.4v.2" />,
-  dash: <path d="M6 12h12" />,
-  x: <path d="M6 6l12 12M18 6 6 18" />,
-  ext: <path d="M14 4h6v6M20 4l-9.5 9.5M18 14v6H4V6h6" />,
-  arrow: <path d="M4 12h16M14 6l6 6-6 6" />,
-  back: <path d="M20 12H4M10 6l-6 6 6 6" />,
+  moon: <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />,
+  check: <path d="m4 12.5 5 5L20 6.5" />,
+  alert: <path d="M12 3 22 21H2ZM12 10v5M12 17.8v.4" />,
+  x: <path d="M5 5l14 14M19 5 5 19" />,
+  ext: <path d="M13 3h8v8M21 3l-10 10M18 14v7H3V6h7" />,
+  arrow: <path d="M3 12h17M14 6l6 6-6 6" />,
+  back: <path d="M21 12H4M10 6l-6 6 6 6" />,
   sliders: (
     <>
-      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
-      <circle cx="15" cy="7" r="2" />
-      <circle cx="9" cy="17" r="2" />
+      <path d="M3 7h9M17 7h4M3 17h4M12 17h9" />
+      <rect x="12" y="4.5" width="5" height="5" />
+      <rect x="7" y="14.5" width="5" height="5" />
     </>
   ),
-  share: <path d="M12 15V4M7 9l5-5 5 5M5 14v6h14v-6" />,
-  trash: <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />,
-  bars: <path d="M5 20v-8M12 20V5M19 20V9" />,
-  chevron: <path d="m6 9 6 6 6-6" />,
+  share: <path d="M12 15V3M7 8l5-5 5 5M4 13v8h16v-8" />,
+  trash: <path d="M4 7h16M9 7V3h6v4M6 7l1 14h10l1-14" />,
+  bars: <path d="M4 21V13M10 21V4M16 21V9M22 21H2" />,
+  chevron: <path d="m5 9 7 7 7-7" />,
   info: (
     <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 11v6M12 7.4v.2" />
+      <rect x="3" y="3" width="18" height="18" />
+      <path d="M12 11v6M12 7v.4" />
     </>
   ),
   user: (
     <>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+      <rect x="8" y="3" width="8" height="8" />
+      <path d="M3 21c0-4.5 4-7 9-7s9 2.5 9 7" />
     </>
   ),
-  plus: <path d="M12 5v14M5 12h14" />,
+  plus: <path d="M12 4v16M4 12h16" />,
 };
 
 export function Icon({ name, size = 20, filled = false, className }) {
@@ -83,8 +82,8 @@ export function Icon({ name, size = 20, filled = false, className }) {
       height={size}
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="square"
+      strokeWidth="2.5"
+      strokeLinecap="butt"
       strokeLinejoin="miter"
       aria-hidden="true"
       focusable="false"
@@ -96,19 +95,14 @@ export function Icon({ name, size = 20, filled = false, className }) {
 
 /* ---------- Animasi masuk ---------- */
 
-/* Muncul saat masuk viewport: sekali saja, lalu observer dilepas. */
-export function Reveal({ children, delay = 0, className, as: Tag = "div" }) {
+/* Muncul sekali saat masuk layar. Tanpa JavaScript (kelas .js tidak ada)
+ * isinya langsung tampil, lihat globals.css. */
+export function Reveal({ children, className, as: Tag = "div", ...rest }) {
   const ref = useRef(null);
   const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (reducedMotion()) {
-      /* Tampilkan langsung dijadwalkan sebagai microtask: setState di
-       * dalam callback, bukan sinkron di badan effect. */
-      queueMicrotask(() => setShown(true));
-      return;
-    }
     const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") {
+    if (reducedMotion() || !el || typeof IntersectionObserver === "undefined") {
       queueMicrotask(() => setShown(true));
       return;
     }
@@ -119,96 +113,98 @@ export function Reveal({ children, delay = 0, className, as: Tag = "div" }) {
           io.disconnect();
         }
       },
-      { threshold: 0.08, rootMargin: "0px 0px -32px 0px" },
+      { threshold: 0.05, rootMargin: "0px 0px -24px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
-  const cls = `reveal${shown ? " revealed" : ""}${className ? ` ${className}` : ""}`;
   return (
     <Tag
       ref={ref}
-      className={cls}
-      style={delay ? { transitionDelay: `${delay}ms` } : undefined}
+      className={`rv${shown ? " in" : ""}${className ? ` ${className}` : ""}`}
+      {...rest}
     >
       {children}
     </Tag>
   );
 }
 
-/* Angka yang naik dari 0 ke nilai asli saat terlihat. Tanpa JavaScript
- * atau dengan reduced-motion, angka asli langsung tampil. */
-export function CountUp({ value, duration = 800 }) {
-  const ref = useRef(null);
-  const [n, setN] = useState(value);
-  useEffect(() => {
-    if (reducedMotion()) {
-      /* Nilai akhir dijadwalkan sebagai microtask: setState di dalam
-       * callback, bukan sinkron di badan effect. */
-      queueMicrotask(() => setN(value));
-      return;
-    }
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    queueMicrotask(() => setN(0));
-    let raf = 0;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((e) => e.isIntersecting)) return;
-        io.disconnect();
-        const start = performance.now();
-        const tick = (now) => {
-          const p = Math.min(1, (now - start) / duration);
-          setN(Math.round(value * (1 - Math.pow(1 - p, 3))));
-          if (p < 1) raf = requestAnimationFrame(tick);
-        };
-        raf = requestAnimationFrame(tick);
-      },
-      { threshold: 0.2 },
+/* ---------- Status ----------
+ * Warna oranye hanya untuk "ada lowongan terverifikasi". Status lain
+ * dibedakan lewat bentuk penanda dan teks. */
+
+const STATUS_META = {
+  "Ada lowongan target": { cls: "open", glyph: "full" },
+  "Ada lowongan target (tidak cocok)": { cls: "partial", glyph: "half" },
+  "Tidak ada lowongan target": { cls: "none", glyph: "empty" },
+  "Tidak ada lowongan terlihat": { cls: "none", glyph: "empty" },
+  "Tidak dapat diverifikasi": { cls: "unknown", glyph: "dashed" },
+  "Portal tidak bisa dibuka": { cls: "dead", glyph: "cross" },
+};
+
+function Glyph({ kind }) {
+  const common = {
+    width: 12,
+    height: 12,
+    viewBox: "0 0 12 12",
+    "aria-hidden": "true",
+    focusable: "false",
+  };
+  if (kind === "full") {
+    return (
+      <svg {...common}>
+        <rect width="12" height="12" fill="currentColor" />
+      </svg>
     );
-    io.observe(el);
-    return () => {
-      io.disconnect();
-      cancelAnimationFrame(raf);
-    };
-  }, [value, duration]);
+  }
+  if (kind === "half") {
+    return (
+      <svg {...common}>
+        <rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" />
+        <rect x="1" y="1" width="5" height="10" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (kind === "dashed") {
+    return (
+      <svg {...common}>
+        <rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="3 2" />
+      </svg>
+    );
+  }
+  if (kind === "cross") {
+    return (
+      <svg {...common}>
+        <path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
   return (
-    <span ref={ref} className="num">
-      {n}
-    </span>
+    <svg {...common}>
+      <rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
   );
 }
 
-/* ---------- Status ---------- */
-
-const STATUS_META = {
-  "Ada lowongan target": { cls: "ok", icon: "check" },
-  "Ada lowongan target (tidak cocok)": { cls: "warn", icon: "alert" },
-  "Portal tidak bisa dibuka": { cls: "off", icon: "x" },
-};
-
-/* Stempel status: satu-satunya tempat warna hijau dan kuning dipakai
- * untuk arti. Stempel hijau "jatuh" sekali saat muncul, tidak berulang. */
-export function StatusStamp({ status, index = 0 }) {
-  const meta = STATUS_META[status] || { cls: "", icon: "dash" };
+export function StatusTag({ status }) {
+  const meta = STATUS_META[status] || { cls: "none", glyph: "empty" };
   return (
-    <span className={`stamp ${meta.cls}`} style={{ "--i": index }}>
-      <Icon name={meta.icon} size={13} />
+    <span className={`tag ${meta.cls}`}>
+      <Glyph kind={meta.glyph} />
       {status}
     </span>
   );
 }
 
-/* Penanda status kecil untuk daftar padat. Hanya menandai keadaan nyata. */
-export function StatusDot({ status }) {
-  const cls =
-    status === "Ada lowongan target"
-      ? "dot ok"
-      : status === "Ada lowongan target (tidak cocok)"
-        ? "dot warn"
-        : "dot";
-  return <span className={cls} aria-hidden="true" />;
-}
+/* Kotak warna kecil untuk legenda sebaran status di Dasbor. */
+export const STATUS_SWATCH = {
+  "Ada lowongan target": "s0",
+  "Ada lowongan target (tidak cocok)": "s1",
+  "Tidak ada lowongan target": "s2",
+  "Tidak ada lowongan terlihat": "s3",
+  "Tidak dapat diverifikasi": "s4",
+  "Portal tidak bisa dibuka": "s5",
+};
 
 /* ---------- Teks ---------- */
 
@@ -226,13 +222,13 @@ export function Highlight({ text, terms }) {
 
 export function PrintButton({ label }) {
   return (
-    <button type="button" className="btn ghost" onClick={() => window.print()}>
+    <button type="button" className="btn ghost small" onClick={() => window.print()}>
       {label}
     </button>
   );
 }
 
-/* ---------- Sheet (panel dari bawah di HP) ---------- */
+/* ---------- Sheet (panel dari bawah di HP, dari kanan di layar lebar) ---------- */
 
 export function Sheet({ open, onClose, title, children }) {
   const panel = useRef(null);
@@ -301,7 +297,7 @@ export function ToastHost() {
     const on = (e) => {
       setToast({ ...e.detail, k: Date.now() });
       clearTimeout(id);
-      id = setTimeout(() => setToast(null), 3600);
+      id = setTimeout(() => setToast(null), 4000);
     };
     window.addEventListener("karir-toast", on);
     return () => {

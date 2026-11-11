@@ -8,6 +8,8 @@
  * Cache di memori server 5 menit; admin menulis wajib memanggil
  * revalidateCompanies() supaya cache dibersihkan. */
 
+import { createCooldown } from "./cooldown.js";
+
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
@@ -41,9 +43,16 @@ async function fetchJson(url, timeoutMs = 10_000) {
   }
 }
 
+/* Jeda 30 detik setelah Firestore gagal, khusus jalur "atau data
+ * cadangan" (halaman). getCompanies() sendiri tetap melempar dan mencoba
+ * lagi tiap dipanggil, jadi API tetap jujur soal kegagalan. */
+const SEED_COOLDOWN_MS = 30_000;
+const seedCooldown = createCooldown(SEED_COOLDOWN_MS);
+
 export function revalidateCompanies() {
   cache = null;
   cacheAt = 0;
+  seedCooldown.reset();
   /* Fetch yang sedang berjalan ikut dibatalkan bagi pemanggil berikutnya:
    * tanpa ini, panggilan setelah revalidate akan bergabung ke fetch lama
    * dan mendapat data sebelum penulisan admin. Fetch lama yang sudah
@@ -130,20 +139,25 @@ async function loadSeed() {
 }
 
 export async function getCompaniesOrSeed() {
+  if (seedCooldown.active()) return loadSeed();
   try {
     return await getCompanies();
   } catch {
+    seedCooldown.trip();
     return loadSeed();
   }
 }
 
 export async function getCompanyByIdOrSeed(no) {
-  try {
-    return await getCompanyById(no);
-  } catch {
-    const seed = await loadSeed();
-    return seed.find((c) => c.no === Number(no)) || null;
+  if (!seedCooldown.active()) {
+    try {
+      return await getCompanyById(no);
+    } catch {
+      seedCooldown.trip();
+    }
   }
+  const seed = await loadSeed();
+  return seed.find((c) => c.no === Number(no)) || null;
 }
 
 /* Perusahaan sejenis: kategori sama, bukan dirinya sendiri, yang punya

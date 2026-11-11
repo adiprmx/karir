@@ -1,20 +1,13 @@
 export default function manifest() {
   return {
-    name: "Karir — Cari Kanal Lowongan Kerja",
+    name: "Karir: cari kanal lowongan kerja",
     short_name: "Karir",
-    description:
-      "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser.",
+    description: "Kanal karir resmi perusahaan Indonesia, dicek langsung di browser.",
+    lang: "id",
     start_url: "/",
     display: "standalone",
-    background_color: "#f4f1ea",
-    theme_color: "#15140f",
-    icons: [
-      {
-        src: "/icon.svg",
-        sizes: "any",
-        type: "image/svg+xml",
-        purpose: "any",
-      },
-    ],
+    background_color: "#f4f6f0",
+    theme_color: "#101c16",
+    icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
   };
 }

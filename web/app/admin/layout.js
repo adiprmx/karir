@@ -1,5 +1,9 @@
-/* Panel admin selalu tampil terang: gayanya memakai warna tetap, dan
- * hanya dipakai pemilik. Membungkus dengan token terang. */
+import "./admin.css";
+
+/* Panel admin selalu tampil terang dan memakai gaya sendiri yang dibatasi
+ * di .adm, supaya tidak bertabrakan dengan sistem desain publik. */
+export const metadata = { title: "Admin" };
+
 export default function AdminLayout({ children }) {
-  return <div className="force-light">{children}</div>;
+  return <div className="force-light adm">{children}</div>;
 }

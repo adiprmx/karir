@@ -77,6 +77,28 @@ describe("sinonim", () => {
   });
 });
 
+describe("kata peran tidak memicu mode nama", () => {
+  it("mengetik gudang menampilkan lowongan gudang, bukan hanya GudangAda", () => {
+    const companies = [
+      company({ perusahaan: "GudangAda", posisi: "Admin" }),
+      company({ perusahaan: "PT Contoh", posisi: "Staff Gudang" }),
+    ];
+    const { results, mode } = runSearch(companies, { posisi: "gudang" });
+    assert.equal(mode, "semua");
+    assert.equal(results[0].company.perusahaan, "PT Contoh");
+    assert.ok(results.some((e) => e.company.perusahaan === "GudangAda"));
+  });
+  it("nama yang berisi kata peran tetap ketemu lewat kata lain di namanya", () => {
+    const companies = [
+      company({ perusahaan: "GudangAda", posisi: "Admin" }),
+      company({ perusahaan: "PT Contoh", posisi: "Staff Gudang" }),
+    ];
+    const { mode, results } = runSearch(companies, { posisi: "gudangada" });
+    assert.equal(mode, "perusahaan");
+    assert.equal(results.length, 1);
+  });
+});
+
 describe("token mentah untuk nama perusahaan", () => {
   it("tokenizeRaw tidak memperluas sinonim", () => {
     assert.deepEqual(tokenizeRaw("warehouse"), ["warehouse"]);

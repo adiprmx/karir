@@ -14,6 +14,7 @@
 import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { clearAnalyticsUid, setAnalyticsUid } from "@/lib/analytics";
+import { Icon } from "./visual";
 
 /* Terjemahan kode error Firebase Auth ke bahasa sehari-hari. */
 export function authErrorMessage(code) {
@@ -113,11 +114,7 @@ export default function AuthPanel() {
         updateProfile,
       } = await import("firebase/auth");
       if (mode === "daftar") {
-        const cred = await createUserWithEmailAndPassword(
-          auth,
-          email.trim(),
-          password,
-        );
+        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
         const displayName = name.trim();
         if (displayName) {
           await updateProfile(cred.user, { displayName }).catch(() => {});
@@ -136,8 +133,7 @@ export default function AuthPanel() {
     setError("");
     setBusy(true);
     try {
-      const { GoogleAuthProvider, signInWithPopup } =
-        await import("firebase/auth");
+      const { GoogleAuthProvider, signInWithPopup } = await import("firebase/auth");
       await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (err) {
       if (err && err.code !== "auth/cancelled-popup-request") {
@@ -160,128 +156,76 @@ export default function AuthPanel() {
 
   if (user) {
     return (
-      <div className="filters" style={{ marginTop: 16 }}>
-        <p className="section-label">Akun</p>
+      <section className="panel" style={{ marginTop: 20 }} aria-label="Akun">
+        <h3>Akun</h3>
         <p>
           Masuk sebagai <strong>{user.email}</strong>
           {user.displayName ? ` (${user.displayName})` : ""}
         </p>
-        <p className="section-note">
-          Lamaran di perangkat ini ikut tersimpan ke akun. Semua fitur
-          tetap bisa dipakai tanpa masuk.
+        <p className="hint">
+          Lamaran di perangkat ini ikut tersimpan ke akun. Semua fitur tetap
+          bisa dipakai tanpa masuk.
         </p>
-        <div className="filter-actions">
-          <button
-            className="btn ghost small"
-            type="button"
-            onClick={signOutUser}
-            disabled={signingOut}
-          >
-            {signingOut ? "Keluar…" : "Keluar"}
+        <div className="actions">
+          <button className="btn ghost small" type="button" onClick={signOutUser} disabled={signingOut}>
+            {signingOut ? "Keluar..." : "Keluar dari akun"}
           </button>
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="filters" style={{ marginTop: 16 }}>
-      <p className="section-label">Akun</p>
-      <p className="section-note">
-        Masuk itu pilihan. Tanpa masuk pun semua fitur tetap bisa dipakai,
-        hanya lamaran yang tidak tersimpan ke akun.
-      </p>
-      <div className="chip-row" role="group" aria-label="Pilih masuk atau daftar">
-        <button
-          type="button"
-          className="btn ghost small"
-          aria-pressed={mode === "masuk"}
-          onClick={() => {
-            setMode("masuk");
-            setError("");
-          }}
-          style={
-            mode === "masuk"
-              ? { background: "#0a0a0a", color: "#fff" }
-              : undefined
-          }
-        >
-          Masuk
-        </button>
-        <button
-          type="button"
-          className="btn ghost small"
-          aria-pressed={mode === "daftar"}
-          onClick={() => {
-            setMode("daftar");
-            setError("");
-          }}
-          style={
-            mode === "daftar"
-              ? { background: "#0a0a0a", color: "#fff" }
-              : undefined
-          }
-        >
-          Daftar
-        </button>
-      </div>
-      <form onSubmit={submit}>
-        {mode === "daftar" && (
-          <fieldset>
-            <legend>Nama tampilan (boleh kosong)</legend>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="nickname"
-              maxLength={100}
-              placeholder="Nama yang tampil di akun"
-            />
-          </fieldset>
-        )}
-        <fieldset>
-          <legend>Email</legend>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="username"
-            placeholder="nama@email.com"
-          />
-        </fieldset>
-        <fieldset>
-          <legend>Kata sandi</legend>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete={mode === "daftar" ? "new-password" : "current-password"}
-            minLength={6}
-            placeholder="Minimal 6 huruf"
-          />
-        </fieldset>
-        {error && <p className="notice">{error}</p>}
-        <div className="filter-actions">
-          <button className="btn" type="submit" disabled={busy}>
-            {busy ? "Tunggu…" : mode === "daftar" ? "Buat akun" : "Masuk"}
-          </button>
-        </div>
-      </form>
-      <div className="filter-actions">
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={signInGoogle}
-          disabled={busy}
-        >
-          Masuk dengan Google
-        </button>
-      </div>
+    <section className="panel" style={{ marginTop: 20 }} aria-label="Masuk atau daftar">
+      <h3>Masuk akun (pilihan)</h3>
       <p className="hint">
-        Masuk dengan Google butuh diaktifkan dulu di Firebase Console.
+        Tanpa masuk pun semua fitur tetap bisa dipakai. Akun hanya menyimpan
+        tanda lamaranmu supaya tidak hilang saat ganti HP.
       </p>
-    </div>
+      <div className="chips" role="group" aria-label="Pilih masuk atau daftar">
+        {["masuk", "daftar"].map((m) => (
+          <button
+            key={m}
+            type="button"
+            className="chip"
+            aria-pressed={mode === m}
+            onClick={() => {
+              setMode(m);
+              setError("");
+            }}
+          >
+            {m === "masuk" ? "Masuk" : "Daftar"}
+          </button>
+        ))}
+      </div>
+      <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+        {mode === "daftar" && (
+          <div className="field">
+            <label htmlFor="auth-name">Nama tampilan (boleh kosong)</label>
+            <input id="auth-name" type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" maxLength={100} />
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor="auth-email">Email</label>
+          <input id="auth-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" placeholder="email@example.com" />
+        </div>
+        <div className="field">
+          <label htmlFor="auth-pass">Kata sandi</label>
+          <input id="auth-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete={mode === "daftar" ? "new-password" : "current-password"} placeholder="Minimal 6 huruf" />
+        </div>
+        {error && (
+          <p className="note" role="alert">
+            <Icon name="alert" size={18} />
+            {error}
+          </p>
+        )}
+        <button className="btn" type="submit" disabled={busy}>
+          {busy ? "Tunggu..." : mode === "daftar" ? "Buat akun" : "Masuk dengan email"}
+        </button>
+      </form>
+      <button className="btn ghost" type="button" onClick={signInGoogle} disabled={busy}>
+        Masuk dengan Google
+      </button>
+    </section>
   );
 }

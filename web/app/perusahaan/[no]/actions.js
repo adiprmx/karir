@@ -1,13 +1,11 @@
 "use client";
 
-/* Aksi di halaman detail perusahaan: bagikan tautan (menu bagikan bawaan
- * HP bila ada, kalau tidak salin) dan laporkan tautan mati. Label sudah
- * diterjemahkan di server (page.js) dan dikirim lewat props, supaya file
- * ini tidak mengimpor lib/i18n yang memakai next/headers. */
+/* Aksi di halaman detail: bagikan tautan (menu bagikan HP bila ada, kalau
+ * tidak salin) dan laporkan tautan mati ke koleksi reports. */
 import { useState } from "react";
 import { Icon, showToast } from "@/app/visual";
 
-export function DetailActions({ company, url, labels }) {
+export function DetailActions({ company, url }) {
   const [alasan, setAlasan] = useState("");
   const [sent, setSent] = useState(false);
   const [reportError, setReportError] = useState(false);
@@ -25,15 +23,13 @@ export function DetailActions({ company, url, labels }) {
     }
     try {
       await navigator.clipboard.writeText(url);
-      showToast(labels.copied);
+      showToast("Tautan disalin.");
     } catch {
       showToast("Tautan tidak bisa disalin otomatis. Salin alamat di bilah browser.");
     }
   }
 
-  const waHref = `https://wa.me/?text=${encodeURIComponent(
-    `${company.perusahaan} di Karir: ${url}`,
-  )}`;
+  const waHref = `https://wa.me/?text=${encodeURIComponent(`${company.perusahaan} di Karir: ${url}`)}`;
 
   async function submitReport(e) {
     e.preventDefault();
@@ -42,7 +38,6 @@ export function DetailActions({ company, url, labels }) {
     setSending(true);
     setReportError(false);
     try {
-      /* Firebase dimuat hanya saat laporan dikirim, supaya halaman detail ringan. */
       const [{ addDoc, collection }, { db }] = await Promise.all([
         import("firebase/firestore"),
         import("@/lib/firebase"),
@@ -62,49 +57,40 @@ export function DetailActions({ company, url, labels }) {
   }
 
   return (
-    <div className="d-actions">
-      <div className="actions-row">
+    <>
+      <div className="actions">
         <button className="btn ghost small" type="button" onClick={share}>
-          <Icon name="share" size={16} />
-          {labels.share}
+          <Icon name="share" size={18} />
+          Bagikan
         </button>
-        <a
-          className="btn ghost small"
-          href={waHref}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          WhatsApp
+        <a className="btn ghost small" href={waHref} target="_blank" rel="noopener noreferrer">
+          Kirim ke WhatsApp
         </a>
       </div>
-
-      <details className="report">
-        <summary>{labels.reportHint}</summary>
+      <details className="report" style={{ flexBasis: "100%" }}>
+        <summary>Laporkan tautan mati atau data yang salah</summary>
         <form onSubmit={submitReport}>
           <div className="field">
-            <label htmlFor="report-alasan">{labels.report}</label>
-            <input
-              id="report-alasan"
-              type="text"
-              value={alasan}
-              onChange={(e) => setAlasan(e.target.value.slice(0, 500))}
-              maxLength={500}
-              required
-              placeholder="Misal: halaman tidak bisa dibuka"
-              autoComplete="off"
-            />
+            <label htmlFor="report-alasan">Apa yang salah?</label>
+            <input id="report-alasan" type="text" value={alasan} onChange={(e) => setAlasan(e.target.value.slice(0, 500))} maxLength={500} required placeholder="Misalnya: halaman tidak bisa dibuka" autoComplete="off" />
           </div>
-          {sent && <p className="note-line ok">{labels.reportSent}</p>}
+          {sent && (
+            <p className="note ok" role="status">
+              <Icon name="check" size={18} />
+              Laporan terkirim. Terima kasih.
+            </p>
+          )}
           {reportError && (
-            <p className="note-line">
+            <p className="note" role="alert">
+              <Icon name="alert" size={18} />
               Laporan gagal terkirim. Periksa koneksi lalu coba lagi.
             </p>
           )}
           <button className="btn small" type="submit" disabled={sending}>
-            {sending ? labels.loading : labels.report}
+            {sending ? "Mengirim..." : "Kirim laporan"}
           </button>
         </form>
       </details>
-    </div>
+    </>
   );
 }

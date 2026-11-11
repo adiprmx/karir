@@ -1,69 +1,51 @@
-/* Umpan perubahan status Karir: daftar perubahan terbaru yang dicatat
- * cron cek ulang harian. Baca /api/changes saat mount. Bila belum ada
- * perubahan, tampilkan kalimat jujur, bukan daftar contoh. */
 "use client";
 
-import { useEffect, useState } from "react";
+/* Umpan perubahan status: 10 perubahan terbaru yang dicatat cron cek ulang
+ * harian dan cek massal admin. Bila belum ada, kalimat jujur, bukan contoh. */
 import Link from "next/link";
-import { StatusStamp } from "@/app/visual";
+import { StatusTag } from "@/app/visual";
 import { isNewChange } from "@/lib/notify";
+import { useChanges } from "@/app/use-changes";
 
-/* Entri baru: dibuat dalam 48 jam terakhir, atau perubahannya menuju
- * "Ada lowongan target". Sumber kebenaran adalah createdAt di koleksi
- * changes. Chip memakai pola chip yang sudah ada (.chip.match). */
-function isNew(c) {
-  return isNewChange(c.createdAt) || c.to === "Ada lowongan target";
-}
-
-export default function ChangesFeed({ labels }) {
-  const [changes, setChanges] = useState(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
-    fetch("/api/changes", { signal: controller.signal })
-      .then((res) => res.json())
-      .then((body) => {
-        if (alive) setChanges(Array.isArray(body.changes) ? body.changes : []);
-      })
-      .catch(() => {
-        if (alive) setFailed(true);
-      })
-      .finally(() => clearTimeout(timer));
-    return () => {
-      alive = false;
-      controller.abort();
-    };
-  }, []);
-
-  if (failed) return <p className="empty-line">{labels.error}</p>;
-  if (changes === null) {
+export default function ChangesFeed() {
+  const { changes, failed } = useChanges();
+  if (failed) {
     return (
-      <div className="skeleton" style={{ height: 72 }} aria-label={labels.loading} />
+      <div className="state">
+        <strong>Umpan perubahan belum bisa dimuat.</strong>
+        <p>Itu tidak berarti tidak ada perubahan. Muat ulang halaman sebentar lagi.</p>
+      </div>
     );
   }
-  if (changes.length === 0) return <p className="empty-line">{labels.empty}</p>;
+  if (changes === null) return <div className="skeleton" style={{ height: 96 }} aria-label="Memuat perubahan" />;
+  if (changes.length === 0) {
+    return (
+      <div className="state">
+        <strong>Belum ada perubahan status yang tercatat.</strong>
+        <p>
+          Setiap hari pukul 01.00 WIB, portal target dicek ulang. Kalau ada
+          status yang berubah, muncul di sini.
+        </p>
+      </div>
+    );
+  }
   return (
     <ol className="changes">
       {changes.map((c, i) => (
         <li key={c.id || `${c.companyNo}-${c.createdAt || i}`}>
           <Link href={`/perusahaan/${c.companyNo}`}>
             <span className="changes-name">
-              {c.perusahaan}
-              {isNew(c) && (
-                <span className="chip match" style={{ marginLeft: 8 }}>
-                  Baru
-                </span>
+              {c.perusahaan}{" "}
+              {(isNewChange(c.createdAt) || c.to === "Ada lowongan target") && (
+                <span className="tag baru">Baru</span>
               )}
             </span>
             <span className="changes-flow">
-              <StatusStamp status={c.from} />
-              <span aria-hidden="true">→</span>
-              <StatusStamp status={c.to} />
+              <StatusTag status={c.from} />
+              <span aria-label="menjadi">menjadi</span>
+              <StatusTag status={c.to} />
             </span>
-            <span className="changes-date">{c.checkedAt}</span>
+            <span className="changes-date">Dicek {c.checkedAt}</span>
           </Link>
         </li>
       ))}

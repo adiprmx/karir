@@ -1,9 +1,9 @@
 "use client";
 
-/* Halaman Mulai: onboarding 3 langkah (domisili, posisi, ringkasan).
- * Bukan pendaftaran, tidak ada akun. Di langkah terakhir pengunjung
- * langsung melihat berapa kanal yang cocok, lalu diantar ke /cari dengan
- * filter terisi. Jawaban tersimpan di browser saja. */
+/* Halaman Mulai: tiga langkah (kota, posisi, ringkasan). Bukan
+ * pendaftaran. Di langkah terakhir pengunjung melihat berapa kanal yang
+ * cocok, lalu diantar ke /cari dengan isian terbawa. Jawaban tersimpan di
+ * browser saja. */
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,28 +11,8 @@ import { useOnboarding } from "@/app/onboarding";
 import { useCompanyIndex, rank } from "@/app/company-index";
 import { Icon } from "@/app/visual";
 
-const CITY_CHIPS = [
-  "Depok",
-  "Bogor",
-  "Bekasi",
-  "Cikarang",
-  "Karawang",
-  "Tangerang",
-  "Jakarta",
-  "Cibinong",
-  "Bandung",
-  "Semarang",
-  "Surabaya",
-];
-const ROLE_CHIPS = [
-  "Helper Gudang",
-  "Staff Gudang",
-  "Cleaning Service",
-  "Office Boy",
-  "Packing",
-  "Operator Produksi",
-  "Crew Store",
-];
+const CITY_CHIPS = ["Depok", "Bogor", "Bekasi", "Cikarang", "Karawang", "Tangerang", "Jakarta", "Cibinong", "Bandung", "Semarang", "Surabaya"];
+const ROLE_CHIPS = ["Helper Gudang", "Staff Gudang", "Cleaning Service", "Office Boy", "Packing", "Operator Produksi", "Crew Store"];
 
 export default function Mulai() {
   const router = useRouter();
@@ -43,9 +23,8 @@ export default function Mulai() {
   const [step, setStep] = useState(1);
   const [editing, setEditing] = useState(false);
 
-  /* Isi formulir dari data tersimpan begitu data selesai dibaca.
-   * Penyesuaian state saat render (pola resmi React untuk state yang
-   * mengikuti perubahan nilai lain), bukan setState di dalam effect. */
+  /* Isi formulir dari data tersimpan begitu selesai dibaca (penyesuaian
+   * state saat render, bukan setState di effect). */
   const [prevLoaded, setPrevLoaded] = useState(loaded);
   if (loaded !== prevLoaded) {
     setPrevLoaded(loaded);
@@ -60,11 +39,9 @@ export default function Mulai() {
     const r = rank(index, { domisili, posisi, urutan: "relevansi" });
     let verified = 0;
     for (const e of r.results) {
-      if (r.matched.has(e.company.no) && e.company.status === "Ada lowongan target") {
-        verified++;
-      }
+      if (r.matched.has(e.company.no) && e.company.status === "Ada lowongan target") verified++;
     }
-    return { matched: r.matched.size, verified, top: r.results.slice(0, 3) };
+    return { matched: r.matched.size, verified };
   }, [index, domisili, posisi]);
 
   function goToResults() {
@@ -98,18 +75,16 @@ export default function Mulai() {
   return (
     <div className="wrap narrow">
       <div className="page-head">
-        <h1>Mulai</h1>
-        <p className="lede">
-          Jawab dua hal ini, kami tunjukkan kanal lowongan yang paling cocok.
-        </p>
+        <h1>Mulai dari dua jawaban</h1>
+        <p className="lede">Jawab dua hal ini, lalu kami tunjukkan kanal lowongan yang paling cocok. Boleh dilewati.</p>
       </div>
 
       {showSummary ? (
         <section className="panel" aria-label="Pilihanmu saat ini">
-          <p className="label">Pilihanmu saat ini</p>
+          <h2 className="panel-title">Pilihanmu saat ini</h2>
           <dl className="facts">
             <div>
-              <dt>Domisili</dt>
+              <dt>Kota</dt>
               <dd>{data.domisili || "Belum diisi"}</dd>
             </div>
             <div>
@@ -117,10 +92,9 @@ export default function Mulai() {
               <dd>{data.posisi || "Belum diisi"}</dd>
             </div>
           </dl>
-          <div className="actions-row">
-            <button type="button" className="btn" onClick={goToResults}>
+          <div className="actions">
+            <button type="button" className="btn hi" onClick={goToResults}>
               Lihat lowongan yang cocok
-              <Icon name="arrow" size={18} />
             </button>
             <button type="button" className="btn ghost" onClick={onEdit}>
               Ubah pilihan
@@ -129,18 +103,16 @@ export default function Mulai() {
               Hapus pilihanku
             </button>
           </div>
-          <p className="hint">
-            Pilihanmu tersimpan di browser ini saja, tidak dikirim ke mana pun.
-          </p>
+          <p className="hint">Pilihanmu tersimpan di browser ini saja, tidak dikirim ke server.</p>
         </section>
       ) : (
-        <section className="panel wizard" aria-label="Tiga langkah singkat">
+        <section className="panel" aria-label="Tiga langkah singkat">
           <div className="wiz-steps" aria-hidden="true">
             {[1, 2, 3].map((n) => (
               <span key={n} className={n <= step ? "on" : ""} />
             ))}
           </div>
-          <p className="label" aria-live="polite">
+          <p className="lbl" aria-live="polite">
             Langkah {step} dari 3
           </p>
 
@@ -148,28 +120,15 @@ export default function Mulai() {
             {step === 1 && (
               <>
                 <div className="field">
-                  <label htmlFor="mulai-domisili">Di mana kamu tinggal?</label>
-                  <div className="input-wrap">
-                    <Icon name="pin" size={18} />
-                    <input
-                      id="mulai-domisili"
-                      type="text"
-                      value={domisili}
-                      placeholder="mis. Bogor, Depok, Cibinong"
-                      autoComplete="off"
-                      onChange={(e) => setDomisili(e.target.value)}
-                    />
+                  <label htmlFor="mulai-domisili">Di kota mana kamu tinggal?</label>
+                  <div className="in-icon">
+                    <Icon name="pin" size={20} />
+                    <input id="mulai-domisili" type="text" value={domisili} placeholder="Bogor, Depok, Cibinong" autoComplete="off" onChange={(e) => setDomisili(e.target.value)} />
                   </div>
                 </div>
-                <div className="chips-wrap">
+                <div className="chips">
                   {CITY_CHIPS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      className="chip-btn"
-                      aria-pressed={domisili === c}
-                      onClick={() => setDomisili(c)}
-                    >
+                    <button key={c} type="button" className="chip" aria-pressed={domisili === c} onClick={() => setDomisili(c)}>
                       {c}
                     </button>
                   ))}
@@ -180,27 +139,14 @@ export default function Mulai() {
               <>
                 <div className="field">
                   <label htmlFor="mulai-posisi">Posisi apa yang kamu cari?</label>
-                  <div className="input-wrap">
-                    <Icon name="search" size={18} />
-                    <input
-                      id="mulai-posisi"
-                      type="text"
-                      value={posisi}
-                      placeholder="mis. Helper Gudang, Cleaning Service"
-                      autoComplete="off"
-                      onChange={(e) => setPosisi(e.target.value)}
-                    />
+                  <div className="in-icon">
+                    <Icon name="search" size={20} />
+                    <input id="mulai-posisi" type="text" value={posisi} placeholder="Helper Gudang, Cleaning Service" autoComplete="off" onChange={(e) => setPosisi(e.target.value)} />
                   </div>
                 </div>
-                <div className="chips-wrap">
+                <div className="chips">
                   {ROLE_CHIPS.map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      className="chip-btn"
-                      aria-pressed={posisi === r}
-                      onClick={() => setPosisi(r)}
-                    >
+                    <button key={r} type="button" className="chip" aria-pressed={posisi === r} onClick={() => setPosisi(r)}>
                       {r}
                     </button>
                   ))}
@@ -211,7 +157,7 @@ export default function Mulai() {
               <>
                 <dl className="facts">
                   <div>
-                    <dt>Domisili</dt>
+                    <dt>Kota</dt>
                     <dd>{domisili.trim() || "Belum diisi"}</dd>
                   </div>
                   <div>
@@ -219,21 +165,16 @@ export default function Mulai() {
                     <dd>{posisi.trim() || "Belum diisi"}</dd>
                   </div>
                 </dl>
-                <div className="wiz-result" aria-live="polite">
+                <div aria-live="polite">
                   {preview ? (
                     <>
                       <p className="wiz-big">
                         <span className="num">{preview.matched}</span> kanal cocok
                       </p>
-                      <p className="hint">
-                        {preview.verified} di antaranya lowongan terverifikasi.
-                      </p>
+                      <p className="hint">{preview.verified} di antaranya lowongan terverifikasi.</p>
                     </>
                   ) : state === "error" ? (
-                    <p className="hint">
-                      Jumlah kanal belum bisa dihitung, tetapi tombol di bawah
-                      tetap berfungsi.
-                    </p>
+                    <p className="hint">Jumlah kanal belum bisa dihitung, tetapi tombol di bawah tetap berfungsi.</p>
                   ) : domisili.trim() || posisi.trim() ? (
                     <div className="skeleton" style={{ height: 44, width: 200 }} />
                   ) : (
@@ -258,18 +199,14 @@ export default function Mulai() {
             {step < 3 ? (
               <button type="button" className="btn" onClick={() => setStep(step + 1)}>
                 Lanjut
-                <Icon name="arrow" size={18} />
               </button>
             ) : (
-              <button type="button" className="btn" onClick={goToResults}>
+              <button type="button" className="btn hi" onClick={goToResults}>
                 Lihat lowongan yang cocok
-                <Icon name="arrow" size={18} />
               </button>
             )}
           </div>
-          <p className="hint">
-            Pilihanmu tersimpan di browser ini saja, tidak dikirim ke mana pun.
-          </p>
+          <p className="hint">Pilihanmu tersimpan di browser ini saja, tidak dikirim ke server.</p>
         </section>
       )}
     </div>

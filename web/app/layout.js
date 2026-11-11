@@ -2,44 +2,38 @@ import Link from "next/link";
 import { Suspense } from "react";
 import localFont from "next/font/local";
 import "./globals.css";
-import { getStats } from "@/lib/companies";
-import { getLocale, t } from "@/lib/i18n";
+import { getStatsOrSeed } from "@/lib/companies";
+import { formatDate } from "@/lib/dates";
 import SiteNav from "./site-nav";
 import AnalyticsTrack from "./analytics-track";
-import { Icon, ToastHost } from "./visual";
+import { ToastHost } from "./visual";
 
-/* Plus Jakarta Sans: huruf rancangan studio Indonesia (Tokotype), dibuat
- * untuk teks layar kecil dan terbaca jelas di HP murah. Berkasnya ikut di
- * repo (lisensi OFL), jadi tidak ada permintaan ke server font luar. */
-const jakarta = localFont({
-  src: "./fonts/PlusJakartaSans.woff2",
-  variable: "--font-jakarta",
-  weight: "200 800",
+/* Archivo variabel (tebal + lebar): huruf papan nama industri, nomor urut
+ * bisa dipadatkan dan teks tetap lebar. Berkas lokal (OFL), tanpa
+ * permintaan ke server font luar. */
+const archivo = localFont({
+  src: "./fonts/Archivo-wdth-wght.woff2",
+  variable: "--font-archivo",
+  weight: "100 900",
   display: "swap",
+  declarations: [{ prop: "font-stretch", value: "62% 125%" }],
 });
+
+const DESC =
+  "Kanal karir resmi perusahaan Indonesia yang dicek langsung di browser. Cari berdasarkan domisili dan posisi.";
 
 export const metadata = {
   metadataBase: new URL("https://karir-adiprmx.vercel.app"),
-  title: {
-    default: "Karir — Cari Kanal Lowongan Kerja",
-    template: "%s — Karir",
-  },
-  description:
-    "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser. Cari berdasarkan domisili dan posisi.",
+  title: { default: "Karir: cari kanal lowongan kerja", template: "%s | Karir" },
+  description: DESC,
   openGraph: {
     type: "website",
     locale: "id_ID",
     siteName: "Karir",
-    title: "Karir — Cari Kanal Lowongan Kerja",
-    description:
-      "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser. Cari berdasarkan domisili dan posisi.",
+    title: "Karir: cari kanal lowongan kerja",
+    description: DESC,
   },
-  twitter: {
-    card: "summary",
-    title: "Karir — Cari Kanal Lowongan Kerja",
-    description:
-      "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser.",
-  },
+  twitter: { card: "summary", title: "Karir: cari kanal lowongan kerja", description: DESC },
 };
 
 export const viewport = {
@@ -47,78 +41,65 @@ export const viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f1ea" },
-    { media: "(prefers-color-scheme: dark)", color: "#12120f" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f6f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1410" },
   ],
 };
 
-/* Dijalankan sebelum cat pertama supaya tema tidak berkedip. Memakai
- * pilihan tersimpan; tanpa pilihan, mengikuti pengaturan perangkat. */
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('karir-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()`;
+/* Jalan sebelum cat pertama supaya tema tidak berkedip. */
+const BOOT = `(function(){var d=document.documentElement;d.classList.add('js');try{var t=localStorage.getItem('karir-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.dataset.theme=t}catch(e){}})()`;
 
 export default async function RootLayout({ children }) {
-  const locale = await getLocale();
-  // Hitungan header tidak boleh menggagalkan build: kalau Firestore tidak
-  // bisa dijangkau saat build, header tampil tanpa angka.
-  let total = null;
+  /* Tanggal cek di footer dibaca dari data, bukan ditulis tangan. */
+  let latest = null;
   try {
-    total = (await getStats()).total;
+    const stats = await getStatsOrSeed();
+    const keys = Object.keys(stats.byDate).sort();
+    latest = keys.length ? keys[keys.length - 1] : null;
   } catch {
-    total = null;
+    latest = null;
   }
-  const labels = {
-    home: t(locale, "nav.home"),
-    search: t(locale, "nav.search"),
-    map: t(locale, "nav.map"),
-    lamaran: t(locale, "nav.lamaran"),
-    dashboard: t(locale, "nav.dashboard"),
-    about: t(locale, "nav.about"),
-    method: t(locale, "nav.method"),
-    faq: t(locale, "nav.faq"),
-    changelog: t(locale, "nav.changelog"),
-    settings: t(locale, "nav.settings"),
-    mulai: t(locale, "nav.mulai"),
-    menu: t(locale, "nav.menu"),
-    theme: t(locale, "nav.theme"),
-    count: total ? t(locale, "header.count", { n: total }) : "",
-  };
   return (
-    <html lang={locale} className={jakarta.variable} suppressHydrationWarning>
+    <html lang="id" className={archivo.variable} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-        <noscript>
-          <style>{`.reveal{opacity:1!important;transform:none!important}`}</style>
-        </noscript>
+        <script dangerouslySetInnerHTML={{ __html: BOOT }} />
       </head>
       <body>
         <a className="skip" href="#main">
-          {locale === "en" ? "Skip to content" : "Lewati ke isi"}
+          Lewati ke isi
         </a>
         <Suspense fallback={null}>
-          <SiteNav labels={labels} locale={locale} />
+          <SiteNav />
         </Suspense>
         <Suspense fallback={null}>
           <AnalyticsTrack />
         </Suspense>
         <main id="main">{children}</main>
         <footer className="foot">
-          <div className="wrap foot-inner">
-            <p className="foot-note">{t(locale, "footer.note")}</p>
-            <p className="foot-note">{t(locale, "footer.privacy")}</p>
-            <nav className="foot-links" aria-label="Footer">
-              <Link href="/tentang">{t(locale, "footer.about")}</Link>
-              <Link href="/metode">{t(locale, "footer.method")}</Link>
-              <Link href="/faq">{t(locale, "footer.faq")}</Link>
-              <Link href="/changelog">{t(locale, "footer.changelog")}</Link>
-              <Link href="/peta">{t(locale, "footer.map")}</Link>
-              <Link href="/pengaturan">{t(locale, "footer.settings")}</Link>
-              <a
-                href="https://github.com/adiprmx/karir"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t(locale, "footer.repo")}
-                <Icon name="ext" size={13} />
+          <div className="wrap foot-in">
+            <div>
+              <p>
+                {latest
+                  ? `Data terakhir dicek ${formatDate(latest)}. `
+                  : ""}
+                Lowongan bisa berubah setelah tanggal cek, selalu periksa portal resminya.
+              </p>
+              <p style={{ marginTop: 8 }}>
+                Masuk akun itu pilihan. Tanpa masuk, semua fitur tetap bisa
+                dipakai dan lamaranmu hanya tersimpan di browser ini. Situs
+                mencatat kunjungan secara anonim (halaman yang dibuka dan kata
+                pencarian), tanpa nama atau email.
+              </p>
+            </div>
+            <nav className="foot-links" aria-label="Tautan bawah">
+              <Link href="/mulai">Mulai</Link>
+              <Link href="/tentang">Tentang</Link>
+              <Link href="/metode">Metode</Link>
+              <Link href="/faq">FAQ</Link>
+              <Link href="/changelog">Perubahan</Link>
+              <Link href="/pengaturan">Pengaturan</Link>
+              <a href="https://github.com/adiprmx/karir" target="_blank" rel="noopener noreferrer">
+                Repo GitHub
               </a>
             </nav>
           </div>

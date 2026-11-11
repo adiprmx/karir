@@ -1,11 +1,11 @@
 "use client";
 
-/* Kerangka navigasi Karir. Di HP: bilah atas tipis dan tab bawah yang
- * terjangkau jempol (5 tujuan, satu di antaranya Menu). Di layar lebar:
- * navigasi di bilah atas. Tema terang/gelap disimpan di browser. */
-import { useEffect, useState, useCallback } from "react";
+/* Kerangka navigasi. HP: bilah atas tipis + dock bawah 5 tujuan (satu
+ * adalah Menu, berlabel). Layar lebar: tautan di bilah atas, panel
+ * Menu dari kanan. Tema terang/gelap disimpan di browser. */
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Icon, Sheet } from "./visual";
 import { useTracker } from "./tracker";
 import AuthPanel, { AuthWatcher, useAuthUser } from "./auth-panel";
@@ -15,16 +15,12 @@ function isActive(pathname, href) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function ThemeToggle({ label }) {
+function ThemeToggle() {
   const [theme, setTheme] = useState("light");
   useEffect(() => {
-    /* Baca tema awal dijadwalkan sebagai microtask: setState di dalam
-     * callback, bukan sinkron di badan effect. */
-    queueMicrotask(() => {
-      setTheme(
-        document.documentElement.dataset.theme === "dark" ? "dark" : "light",
-      );
-    });
+    queueMicrotask(() =>
+      setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light"),
+    );
   }, []);
   function flip() {
     const next = theme === "dark" ? "light" : "dark";
@@ -33,7 +29,7 @@ function ThemeToggle({ label }) {
     try {
       localStorage.setItem("karir-theme", next);
     } catch {
-      /* Browser menolak tulis: tema tetap berubah untuk sesi ini. */
+      /* Tema tetap berubah untuk sesi ini. */
     }
   }
   return (
@@ -41,172 +37,128 @@ function ThemeToggle({ label }) {
       type="button"
       className="icon-btn"
       onClick={flip}
-      aria-label={label}
+      aria-label="Ganti tema terang atau gelap"
       aria-pressed={theme === "dark"}
     >
-      <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
+      <Icon name={theme === "dark" ? "sun" : "moon"} size={20} />
     </button>
   );
 }
 
-function LocaleSwitch({ locale }) {
-  const pathname = usePathname();
-  const search = useSearchParams();
-  const qs = search.toString();
-  const next = encodeURIComponent(pathname + (qs ? `?${qs}` : ""));
-  return (
-    <span className="locale" role="group" aria-label="Bahasa / Language">
-      <a
-        href={`/api/locale?lang=id&next=${next}`}
-        aria-current={locale === "id" ? "true" : undefined}
-      >
-        ID
-      </a>
-      <a
-        href={`/api/locale?lang=en&next=${next}`}
-        aria-current={locale === "en" ? "true" : undefined}
-      >
-        EN
-      </a>
-    </span>
-  );
-}
+const MAIN = [
+  { href: "/", label: "Beranda", icon: "home" },
+  { href: "/cari", label: "Cari", icon: "search" },
+  { href: "/peta", label: "Peta", icon: "map" },
+  { href: "/lamaran", label: "Lamaran", icon: "flag" },
+];
+const MORE = [
+  { href: "/dasbor", label: "Dasbor", icon: "bars" },
+  { href: "/mulai", label: "Mulai", icon: "user" },
+  { href: "/pengaturan", label: "Pengaturan", icon: "sliders" },
+  { href: "/tentang", label: "Tentang", icon: "info" },
+  { href: "/metode", label: "Metode pengecekan", icon: "check" },
+  { href: "/faq", label: "Pertanyaan umum", icon: "info" },
+  { href: "/changelog", label: "Riwayat perubahan", icon: "arrow" },
+];
 
-export default function SiteNav({ labels, locale }) {
+export default function SiteNav() {
   const pathname = usePathname();
   const [menu, setMenu] = useState(false);
   const { entries } = useTracker();
   const tracked = Object.keys(entries || {}).length;
   const authUser = useAuthUser();
-  const authLabel = authUser
-    ? (authUser.displayName || authUser.email || "Akun")
-        .split("@")[0]
-        .slice(0, 12) || "Akun"
-    : "Masuk";
   const close = useCallback(() => setMenu(false), []);
 
-  /* Tutup menu begitu halaman berpindah. Penyesuaian state saat render
-   * (pola resmi React untuk state yang mengikuti perubahan nilai lain),
-   * bukan setState di dalam effect. */
-  const [prevPathname, setPrevPathname] = useState(pathname);
-  if (pathname !== prevPathname) {
-    setPrevPathname(pathname);
+  /* Tutup menu begitu halaman berpindah (penyesuaian state saat render). */
+  const [prev, setPrev] = useState(pathname);
+  if (pathname !== prev) {
+    setPrev(pathname);
     setMenu(false);
   }
 
-  const main = [
-    { href: "/", label: labels.home, icon: "home" },
-    { href: "/cari", label: labels.search, icon: "search" },
-    { href: "/peta", label: labels.map, icon: "map" },
-    { href: "/lamaran", label: labels.lamaran, icon: "bookmark", badge: tracked },
-  ];
-  const more = [
-    { href: "/dasbor", label: labels.dashboard, icon: "bars" },
-    { href: "/mulai", label: labels.mulai, icon: "user" },
-    { href: "/pengaturan", label: labels.settings, icon: "sliders" },
-    { href: "/tentang", label: labels.about, icon: "info" },
-    { href: "/metode", label: labels.method, icon: "check" },
-    { href: "/faq", label: labels.faq, icon: "info" },
-    { href: "/changelog", label: labels.changelog, icon: "arrow" },
-  ];
-  const moreActive = more.some((m) => isActive(pathname, m.href));
+  const moreActive = MORE.some((m) => isActive(pathname, m.href));
 
   return (
     <>
       <AuthWatcher />
-      <header className="topbar">
-        <div className="wrap topbar-in">
-          <Link href="/" className="brand" aria-label="Karir, beranda">
-            <span className="brand-mark" aria-hidden="true">
-              <Icon name="check" size={16} />
-            </span>
-            <span className="brand-word">karir</span>
+      <header className="top">
+        <div className="wrap top-in">
+          <Link href="/" className="brand" aria-label="Karir, ke beranda">
+            <span className="brand-sq" aria-hidden="true" />
+            karir
           </Link>
-          <nav className="topnav" aria-label="Navigasi utama">
-            {[...main, more[0]].map((n) => (
+          <nav className="top-nav" aria-label="Navigasi utama">
+            {[...MAIN, MORE[0]].map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
                 aria-current={isActive(pathname, n.href) ? "page" : undefined}
               >
                 {n.label}
-                {n.badge > 0 && <span className="badge-n num">{n.badge}</span>}
+                {n.href === "/lamaran" && tracked > 0 && (
+                  <span className="count num">{tracked}</span>
+                )}
               </Link>
             ))}
           </nav>
-          <div className="topbar-end">
-            {labels.count && <span className="topbar-count num">{labels.count}</span>}
+          <div className="top-end">
             <button
               type="button"
-              className="btn small ghost"
+              className="btn ghost small"
               onClick={() => setMenu(true)}
-              aria-label={
-                authUser ? `Akun ${authUser.email}` : "Masuk atau daftar"
-              }
+              aria-haspopup="dialog"
             >
-              <Icon name="user" size={16} />
-              {authLabel}
+              <Icon name="user" size={18} />
+              {authUser ? "Akun" : "Masuk"}
             </button>
-            <LocaleSwitch locale={locale} />
-            <ThemeToggle label={labels.theme} />
-            <Link href="/mulai" className="btn small top-cta">
-              {labels.mulai}
-            </Link>
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
-      <nav className="tabbar" aria-label="Navigasi utama">
-        {main.map((n) => (
+      <nav className="dock" aria-label="Navigasi bawah">
+        {MAIN.map((n) => (
           <Link
             key={n.href}
             href={n.href}
-            className="tab"
             aria-current={isActive(pathname, n.href) ? "page" : undefined}
           >
-            <span className="ti">
-              <Icon name={n.icon} size={20} />
-              {n.badge > 0 && <span className="badge-n num">{n.badge}</span>}
-            </span>
+            <Icon name={n.icon} size={22} />
             {n.label}
+            {n.href === "/lamaran" && tracked > 0 && (
+              <span className="count num">{tracked}</span>
+            )}
           </Link>
         ))}
         <button
           type="button"
-          className="tab"
           aria-haspopup="dialog"
           aria-expanded={menu}
           aria-current={moreActive ? "page" : undefined}
           onClick={() => setMenu(true)}
         >
-          <span className="ti">
-            <Icon name="menu" size={20} />
-          </span>
-          {labels.menu}
+          <Icon name="menu" size={22} />
+          Menu
         </button>
       </nav>
 
-      <Sheet open={menu} onClose={close} title={labels.menu}>
-        <AuthPanel />
-        <ul className="menu-list">
-          {more.map((m) => (
+      <Sheet open={menu} onClose={close} title="Menu">
+        <ul className="mini-list">
+          {MORE.map((m) => (
             <li key={m.href}>
               <Link
                 href={m.href}
                 aria-current={isActive(pathname, m.href) ? "page" : undefined}
                 onClick={close}
               >
-                <Icon name={m.icon} size={20} />
-                {m.label}
-                <Icon name="arrow" size={16} className="menu-go" />
+                <span className="mini-name">
+                  <Icon name={m.icon} size={18} /> {m.label}
+                </span>
               </Link>
             </li>
           ))}
         </ul>
-        <div className="menu-tools">
-          <LocaleSwitch locale={locale} />
-          <ThemeToggle label={labels.theme} />
-        </div>
+        <AuthPanel />
       </Sheet>
     </>
   );

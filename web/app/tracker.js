@@ -203,8 +203,7 @@ export function TrackerControl({ company }) {
   const entry = entries[String(company.no)];
   const [tanggal, setTanggal] = useState(todayLocal());
   const [catatan, setCatatan] = useState("");
-  /* Detail dikirim sekali saat komponen mount. Ref penjaga supaya
-   * StrictMode (mount ganda di dev) tidak mengirim dua kali. */
+  /* Ref penjaga supaya StrictMode tidak mengirim event detail dua kali. */
   const detailSent = useRef(false);
   useEffect(() => {
     if (detailSent.current) return;
@@ -218,8 +217,6 @@ export function TrackerControl({ company }) {
 
   useEffect(() => {
     if (!loaded) return;
-    /* Isi tanggal/catatan dijadwalkan sebagai microtask: setState di
-     * dalam callback, bukan sinkron di badan effect. */
     queueMicrotask(() => {
       setTanggal(entry && entry.tanggal ? entry.tanggal : todayLocal());
       setCatatan(entry && entry.catatan ? entry.catatan : "");
@@ -233,8 +230,6 @@ export function TrackerControl({ company }) {
       tanggal: (patch.tanggal ?? tanggal) || todayLocal(),
       catatan: String(patch.catatan ?? catatan).trim().slice(0, 200),
     });
-    /* Hanya saat status disimpan; ubah tanggal/catatan saja tidak
-     * dikirim. */
     if (ok && patch.status) {
       trackEvent({
         type: "tracker_mark",
@@ -254,7 +249,7 @@ export function TrackerControl({ company }) {
         Lamaran saya
       </h2>
       {!loaded ? (
-        <div className="skeleton" style={{ height: 52 }} />
+        <div className="skeleton" style={{ height: 56 }} />
       ) : (
         <>
           <div
@@ -302,9 +297,7 @@ export function TrackerControl({ company }) {
                   autoComplete="off"
                   onChange={(e) => setCatatan(e.target.value)}
                   onBlur={() => {
-                    if (catatan.trim() !== (entry.catatan || "")) {
-                      commit({ catatan });
-                    }
+                    if (catatan.trim() !== (entry.catatan || "")) commit({ catatan });
                   }}
                 />
               </div>
@@ -316,23 +309,20 @@ export function TrackerControl({ company }) {
                   showToast("Dihapus dari lamaran.");
                 }}
               >
-                <Icon name="trash" size={16} />
+                <Icon name="trash" size={18} />
                 Hapus dari lamaran
               </button>
             </div>
           ) : (
-            <p className="hint">
-              Ketuk satu status untuk mulai melacak perusahaan ini.
-            </p>
+            <p className="hint">Ketuk satu status untuk mulai melacak perusahaan ini.</p>
           )}
           <p className="hint">
             {synced
               ? "Tersimpan di browser ini dan di akun."
-              : "Tersimpan di browser ini saja. Masuk dari menu untuk menyimpan ke akun juga."}
+              : "Tersimpan di browser ini saja. Masuk dari Menu untuk menyimpan ke akun juga."}
           </p>
         </>
       )}
     </section>
   );
 }
-

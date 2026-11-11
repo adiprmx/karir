@@ -1,11 +1,12 @@
 /* Pembantu kecil yang aman dipakai di server maupun klien. */
+export { formatDate, daysSince, daysUntil, deadlineInfo } from "@/lib/dates";
 
 export function safeLink(url) {
   return typeof url === "string" && /^https?:\/\//.test(url);
 }
 
 /* Penjelasan satu kalimat per status, diambil dari makna yang sudah
- * ditulis di FAQ dan halaman Tentang, bukan klaim baru. */
+ * ditulis di FAQ dan halaman Metode, bukan klaim baru. */
 export const STATUS_EXPLAIN = {
   "Ada lowongan target":
     "Saat dicek, portal ini punya lowongan untuk posisi target.",
@@ -20,23 +21,3 @@ export const STATUS_EXPLAIN = {
   "Portal tidak bisa dibuka":
     "Portal gagal dibuka saat dicek. Itu bukan bukti tidak ada lowongan.",
 };
-
-/* "2026-11-05" menjadi "5 Nov 2026". */
-export function formatDate(value, locale = "id") {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
-  if (!m) return null;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  return d.toLocaleDateString(locale === "en" ? "en-GB" : "id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-/* Selisih hari dari tanggal cek sampai sekarang, atau null. */
-export function daysSince(value) {
-  const t = Date.parse(`${value}T00:00:00Z`);
-  if (Number.isNaN(t)) return null;
-  return Math.max(0, Math.floor((Date.now() - t) / 86400000));
-}

@@ -18,8 +18,8 @@ export default async function Image({ params }) {
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          background: "#ffffff",
-          color: "#0a0a0a",
+          background: "#f4f6f0",
+          color: "#101c16",
           padding: 80,
           fontFamily: "system-ui, sans-serif",
         }}
@@ -36,7 +36,7 @@ export default async function Image({ params }) {
         {status ? (
           <div style={{ fontSize: 32, marginTop: 28 }}>{status}</div>
         ) : null}
-        <div style={{ fontSize: 28, color: "#52525b", marginTop: 16 }}>
+        <div style={{ fontSize: 28, color: "#3a4840", marginTop: 16 }}>
           Karir
         </div>
       </div>

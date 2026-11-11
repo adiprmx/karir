@@ -1,20 +1,20 @@
-import { getLocale } from "@/lib/i18n";
-
 export const metadata = {
   title: "Riwayat perubahan",
-  description:
-    "Apa yang berubah di tiap versi Karir, dari versi pertama sampai versi full stack.",
-};
-
-const COPY = {
-  title: { id: "Riwayat perubahan", en: "Changelog" },
-  lede: {
-    id: "Apa yang berubah di tiap versi Karir.",
-    en: "What changed in each version of Karir.",
-  },
+  description: "Apa yang berubah di tiap versi Karir, dari versi pertama sampai versi sekarang.",
 };
 
 const VERSIONS = [
+  {
+    version: "3.0.0",
+    date: "10 November 2026",
+    points: [
+      "Tampilan dan navigasi dibangun ulang dari nol: nomor urut perusahaan jadi lajur utama daftar, status dibedakan lewat bentuk dan teks, dan oranye hanya berarti ada lowongan terverifikasi.",
+      "Batas lamar yang tercatat di data tampil di baris perusahaan dan halaman detail, dengan penanda khusus bila tinggal 0 sampai 3 hari.",
+      "Beranda lebih ringan: foto dari situs luar dan logo di tiap baris dihapus, dan umpan perubahan dibaca sekali per halaman.",
+      "Antarmuka kini hanya berbahasa Indonesia. Tombol bahasa Inggris dihapus dari tampilan.",
+      "API /api/changes kini dijaga batas laju dan penolak program otomatis, dan jawaban galat Firestore tidak lagi menahan tiap halaman 10 detik.",
+    ],
+  },
   {
     version: "2.8.2",
     date: "8 November 2026",
@@ -173,33 +173,30 @@ const VERSIONS = [
   },
 ];
 
-export default async function Changelog() {
-  const locale = await getLocale();
-
+export default function Changelog() {
   return (
-    <div className="wrap">
+    <div className="wrap narrow">
       <div className="page-head">
-        <h1>{COPY.title[locale]}</h1>
-        <p className="lede">{COPY.lede[locale]}</p>
+        <h1>Riwayat perubahan</h1>
+        <p className="lede">Apa yang berubah di tiap versi Karir.</p>
       </div>
-
-      {VERSIONS.map((v) => (
-        <section
-          className="dash-section"
-          aria-label={`Versi ${v.version}`}
-          key={v.version}
-        >
-          <p className="section-label">{v.date}</p>
-          <h2>
-            <span className="num">{v.version}</span>
-          </h2>
-          <ul className="recheck-list">
-            {v.points.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      <div className="doc">
+        {VERSIONS.map((v) => (
+          <section key={v.version} className="ver" aria-label={`Versi ${v.version}`}>
+            <div className="ver-h">
+              <b className="num">{v.version}</b>
+              <span className="hint">{v.date}</span>
+            </div>
+            <div className="prose">
+              <ul>
+                {v.points.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

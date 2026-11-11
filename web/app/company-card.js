@@ -1,14 +1,14 @@
 "use client";
 
-/* Kartu perusahaan: dipakai di hasil Beranda, halaman Cari, daftar
- * target, dan Lamaran. Seluruh kartu menaut ke halaman detail; dua
- * tombol kecil di kanan (tandai, buka portal) punya perilaku sendiri. */
+/* Baris register perusahaan: dipakai di Cari, daftar target, dan hasil.
+ * Seluruh baris menaut ke halaman detail (tautan nama diperluas lewat
+ * ::after); tombol tanda dan portal punya perilaku sendiri. Nomor urut di
+ * lajur kiri adalah nomor asli di data (no), bukan hiasan. */
 import Link from "next/link";
-import { CompanyLogo } from "@/lib/logos";
-import { safeLink } from "@/app/components";
-import { Highlight, Icon, StatusStamp } from "@/app/visual";
+import { deadlineInfo, safeLink } from "@/app/components";
+import { Highlight, Icon, StatusTag } from "@/app/visual";
 
-export function CompanyCard({
+export function CompanyRow({
   company: c,
   reasons = [],
   terms,
@@ -17,59 +17,57 @@ export function CompanyCard({
   notice = false,
   noticeText,
   isNew = false,
-  index = 0,
   compact = false,
-  labels = {},
 }) {
   const hasPortal = safeLink(c.link_karir) && c.status !== "Portal tidak bisa dibuka";
-  const matchChips = reasons.filter(
-    (r) => r === "Posisi cocok" || r === "Lokasi cocok",
-  );
+  const matches = reasons.filter((r) => r === "Posisi cocok" || r === "Lokasi cocok");
+  const isOpen = c.status === "Ada lowongan target";
+  const deadline = isOpen ? deadlineInfo(c.batas_lamar) : null;
   return (
-    <article
-      className={`co${compact ? " compact" : ""}`}
-      data-no={c.no}
-      style={{ "--i": index }}
-    >
-      <CompanyLogo linkKarir={c.link_karir} name={c.perusahaan} size={44} />
-      <div className="co-main">
-        <h3 className="co-name">
+    <article className={`reg${isOpen ? " is-open" : ""}`} data-no={c.no}>
+      <div className="reg-no num" aria-hidden="true">
+        {c.no}
+      </div>
+      <div className="reg-body">
+        <h3 className="reg-name">
           <Link href={`/perusahaan/${c.no}`}>
+            <span className="sr-only">Nomor {c.no}: </span>
             <Highlight text={c.perusahaan} terms={terms && terms.pos} />
           </Link>
         </h3>
-        <p className="co-meta">
-          {c.kategori && <span className="co-cat">{c.kategori}</span>}
-          {c.lokasi && (
-            <span className="co-loc">
-              <Highlight text={c.lokasi} terms={terms && terms.loc} />
+        <p className="reg-meta">
+          {c.kategori}
+          {c.kategori && c.lokasi ? " · " : ""}
+          {c.lokasi && <Highlight text={c.lokasi} terms={terms && terms.loc} />}
+        </p>
+        <div className="reg-line">
+          <StatusTag status={c.status} />
+          {isNew && <span className="tag baru">Baru</span>}
+          {deadline && (
+            <span className={`tag${deadline.urgent ? " deadline" : " none"}`}>
+              {deadline.text}
             </span>
           )}
-        </p>
-        <StatusStamp status={c.status} index={index} />
+          {matches.map((r) => (
+            <span key={r} className="match">
+              <Icon name="check" size={14} />
+              {r}
+            </span>
+          ))}
+        </div>
         {!compact && c.posisi && (
-          <p className="co-pos">
+          <p className="reg-pos">
             <Highlight text={c.posisi} terms={terms && terms.pos} />
           </p>
         )}
-        {(matchChips.length > 0 || isNew) && (
-          <p className="co-chips">
-            {isNew && <span className="chip match">Baru</span>}
-            {matchChips.map((r) => (
-              <span key={r} className="chip match">
-                {r}
-              </span>
-            ))}
-          </p>
-        )}
         {notice && (
-          <p className="co-note">
-            <Icon name="info" size={14} />
+          <p className="reg-note">
+            <Icon name="info" size={16} />
             {noticeText}
           </p>
         )}
       </div>
-      <div className="co-actions">
+      <div className="reg-act">
         {onToggle &&
           (tracked && tracked.status !== "Ditandai" ? (
             <Link
@@ -78,17 +76,17 @@ export function CompanyCard({
               aria-label={`${tracked.status}: ${c.perusahaan}`}
               title={tracked.status}
             >
-              <Icon name="check" size={18} />
+              <Icon name="check" size={22} />
             </Link>
           ) : (
             <button
               type="button"
-              className={`icon-btn${tracked ? " on pop" : ""}`}
+              className={`icon-btn${tracked ? " pop" : ""}`}
               aria-pressed={Boolean(tracked)}
-              aria-label={`${tracked ? labels.unmark || "Lepas tanda" : labels.mark || "Tandai"}: ${c.perusahaan}`}
+              aria-label={`${tracked ? "Lepas tanda" : "Tandai untuk dilamar"}: ${c.perusahaan}`}
               onClick={() => onToggle(c)}
             >
-              <Icon name="bookmark" size={18} filled={Boolean(tracked)} />
+              <Icon name="flag" size={22} filled={Boolean(tracked)} />
             </button>
           ))}
         {hasPortal && (
@@ -97,10 +95,10 @@ export function CompanyCard({
             href={c.link_karir}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={`${labels.open || "Buka portal"}: ${c.perusahaan}`}
-            title={labels.open || "Buka portal"}
+            aria-label={`Buka portal karir resmi: ${c.perusahaan}`}
+            title="Buka portal karir resmi"
           >
-            <Icon name="ext" size={18} />
+            <Icon name="ext" size={20} />
           </a>
         )}
       </div>
@@ -108,17 +106,18 @@ export function CompanyCard({
   );
 }
 
-export function CardSkeletons({ n = 5 }) {
+export function RowSkeletons({ n = 5 }) {
   return (
-    <div className="co-list" aria-hidden="true">
+    <div className="reg-list" aria-hidden="true">
       {Array.from({ length: n }, (_, i) => (
-        <div className="co skel" key={i}>
-          <span className="skeleton" style={{ width: 44, height: 44 }} />
-          <div className="co-main">
-            <span className="skeleton" style={{ width: "60%", height: 18 }} />
-            <span className="skeleton" style={{ width: "40%", height: 14 }} />
-            <span className="skeleton" style={{ width: "30%", height: 22 }} />
+        <div className="reg skel" key={i}>
+          <span className="skeleton" style={{ height: 28, width: 36, justifySelf: "end" }} />
+          <div className="reg-body">
+            <span className="skeleton" style={{ width: "62%", height: 20 }} />
+            <span className="skeleton" style={{ width: "42%", height: 14 }} />
+            <span className="skeleton" style={{ width: "34%", height: 24 }} />
           </div>
+          <span />
         </div>
       ))}
     </div>
