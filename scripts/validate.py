@@ -2,8 +2,10 @@
 """Validate data/daftar-link-karir.csv.
 
 Checks: expected columns, row count, status vocabulary, date format,
-no duplicate company names, and links are http(s) URLs or empty only
-when the note explains that no official site was found.
+no duplicate company names, links are http(s) URLs or empty only when
+the note explains that no official site was found or when at least one
+application channel (email_hrd, wa_hrd, kontak_lain) is filled, and
+channel fields have a valid format when filled.
 
 Usage: python3 scripts/validate.py
 Exits non-zero and prints every problem found.
@@ -28,6 +30,9 @@ EXPECTED_COLUMNS = [
     "catatan",
     "lokasi",
     "posisi",
+    "email_hrd",
+    "wa_hrd",
+    "kontak_lain",
 ]
 VALID_STATUSES = {
     "Tidak ada lowongan target",
@@ -38,6 +43,8 @@ VALID_STATUSES = {
     "Ada lowongan target (tidak cocok)",
 }
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+WA_RE = re.compile(r"^\+?[0-9][0-9 \-]{7,17}$")
 
 
 def main() -> int:
@@ -75,8 +82,21 @@ def main() -> int:
         if link and not link.startswith(("http://", "https://")):
             errors.append(f"baris {i}: link_karir bukan URL http(s): {link!r}")
         note = (row["catatan"] or "").lower()
-        if not link and not ("situs resmi" in note and ("tidak ada" in note or "tidak ditemukan" in note or "not found" in note)):
-            errors.append(f"baris {i}: link kosong tanpa penjelasan di catatan")
+        has_channel = any(
+            (row[c] or "").strip() for c in ("email_hrd", "wa_hrd", "kontak_lain")
+        )
+        if not link and not has_channel and not ("situs resmi" in note and ("tidak ada" in note or "tidak ditemukan" in note or "not found" in note)):
+            errors.append(f"baris {i}: link kosong tanpa kanal melamar dan tanpa penjelasan di catatan")
+        email = (row["email_hrd"] or "").strip()
+        if email and not all(
+            EMAIL_RE.match(part.strip()) for part in email.split(";")
+        ):
+            errors.append(f"baris {i}: email_hrd bukan alamat email: {email!r}")
+        wa = (row["wa_hrd"] or "").strip()
+        if wa and not all(
+            WA_RE.match(part.strip()) for part in wa.split(";")
+        ):
+            errors.append(f"baris {i}: wa_hrd bukan nomor telepon: {wa!r}")
         for col in ("perusahaan", "kategori", "status", "lokasi", "posisi"):
             if not (row[col] or "").strip():
                 errors.append(f"baris {i}: kolom {col} kosong")

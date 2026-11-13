@@ -25,6 +25,15 @@ function shortDescription(company) {
   return withLocation.slice(0, 160);
 }
 
+/* Normalisasi nomor WhatsApp ke tautan wa.me: buang spasi/strip,
+ * awalan 0 diganti 62. Null bila tidak ada digit sama sekali. */
+function waLink(number) {
+  const digits = String(number || "").replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  const intl = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
+  return `https://wa.me/${intl}`;
+}
+
 export async function generateMetadata({ params }) {
   const { no } = await params;
   const company = await getCompanyByIdOrSeed(no);
@@ -51,6 +60,10 @@ export default async function CompanyDetail({ params }) {
   if (!company) notFound();
   const related = await getRelatedOrSeed(company, 4);
   const hasLink = safeLink(company.link_karir);
+  const hasChannels = Boolean(
+    company.email_hrd || company.wa_hrd || company.kontak_lain,
+  );
+  const waUrl = waLink(company.wa_hrd);
   const url = `${SITE_URL}/perusahaan/${company.no}`;
   const description = shortDescription(company);
   const days = daysSince(company.tanggal_cek);
@@ -135,6 +148,46 @@ export default async function CompanyDetail({ params }) {
           }}
         />
       </div>
+
+      {hasChannels && (
+        <section className="panel" aria-labelledby="channels-h">
+          <h2 id="channels-h" className="panel-title">
+            {t(locale, "detail.applyChannels")}
+          </h2>
+          <dl className="facts">
+            {company.email_hrd && (
+              <div>
+                <dt>{t(locale, "detail.emailHrd")}</dt>
+                <dd>
+                  <a href={`mailto:${company.email_hrd}`}>
+                    {company.email_hrd}
+                  </a>
+                </dd>
+              </div>
+            )}
+            {company.wa_hrd && (
+              <div>
+                <dt>{t(locale, "detail.waHrd")}</dt>
+                <dd>
+                  {waUrl ? (
+                    <a href={waUrl} target="_blank" rel="noopener noreferrer">
+                      {company.wa_hrd}
+                    </a>
+                  ) : (
+                    company.wa_hrd
+                  )}
+                </dd>
+              </div>
+            )}
+            {company.kontak_lain && (
+              <div>
+                <dt>{t(locale, "detail.otherChannels")}</dt>
+                <dd>{company.kontak_lain}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
 
       <div className="d-grid">
         <Reveal className="d-col">

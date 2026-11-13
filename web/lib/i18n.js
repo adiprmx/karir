@@ -210,6 +210,10 @@ const DICT = {
     "detail.noPositions": "Tidak ada posisi terlihat",
     "detail.noNotes": "Tidak ada catatan.",
     "detail.noRelated": "Belum ada perusahaan sejenis dalam kategori ini.",
+    "detail.applyChannels": "Cara lain melamar",
+    "detail.emailHrd": "Email HRD",
+    "detail.waHrd": "WhatsApp HRD",
+    "detail.otherChannels": "Kanal lain",
   },
   en: {
     "nav.home": "Home",
@@ -416,6 +420,10 @@ const DICT = {
     "detail.noPositions": "No roles visible",
     "detail.noNotes": "No notes.",
     "detail.noRelated": "No similar companies in this category yet.",
+    "detail.applyChannels": "Other ways to apply",
+    "detail.emailHrd": "HR email",
+    "detail.waHrd": "HR WhatsApp",
+    "detail.otherChannels": "Other channels",
   },
 };
 

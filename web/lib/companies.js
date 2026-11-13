@@ -68,6 +68,12 @@ function docToCompany(d) {
      * Kosong bila tidak ada batas yang tercatat. Dipakai cron untuk
      * peringatan batas lamar (lihat lib/notify.js). */
     batas_lamar: s("batas_lamar"),
+    /* Kanal melamar lain (opsional, kosong bila tidak ditemukan):
+     * email HRD, nomor WhatsApp HRD, dan kanal lain (formulir, alamat
+     * kirim langsung). Ditampilkan di halaman detail bila ada. */
+    email_hrd: s("email_hrd"),
+    wa_hrd: s("wa_hrd"),
+    kontak_lain: s("kontak_lain"),
   };
 }
 
