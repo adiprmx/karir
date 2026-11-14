@@ -1,14 +1,15 @@
 /* API pencarian server Karir.
- * GET /api/companies?domisili=&posisi=&q=&kategori=&status=&urutan=&limit=&offset=
+ * GET /api/companies?domisili=&posisi=&q=&kota=&kategori=&status=&urutan=&limit=&offset=
  * Pencarian dan skor jalan di server (bukan di browser), memakai logika
  * yang sama dengan halaman Cari. Mengembalikan JSON.
  * Respons membawa `source` ("live" | "seed") + `seedDate`: "seed"
  * berarti hasil dihitung dari seed cadangan karena Firestore sedang
  * tidak bisa dibaca (mis. kuota habis) — bukan 503 (arsitektur
- * seed-first S3). */
+ * seed-first S3). Respons juga membawa `groups` (hitungan per kelompok
+ * "Perusahaan"/"Lowongan" di mode perusahaan, null di mode semua). */
 import { NextResponse } from "next/server";
 import { getCompaniesWithSource } from "@/lib/companies";
-import { runSearch, tokenize, fieldMatchesAffirmative } from "@/lib/search";
+import { runSearch, matchesFreeText } from "@/lib/search";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
 import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
@@ -58,18 +59,15 @@ export async function GET(request) {
     let companies = all;
     // Pencarian bebas: saring ke baris yang menyebut kata kunci di nama,
     // posisi, lokasi, atau catatan, lalu skor dengan kata kunci itu.
+    // matchesFreeText mengecek tiap field terpisah lalu OR (CARI-05):
+    // string gabungan membuat jendela penyangkalan bocor lintas field.
     if (q) {
-      const tokens = tokenize(q);
-      companies = companies.filter((c) =>
-        fieldMatchesAffirmative(
-          `${c.perusahaan} ${c.posisi} ${c.lokasi} ${c.catatan}`,
-          tokens,
-        ),
-      );
+      companies = companies.filter((c) => matchesFreeText(c, q));
     }
-    const { results, mode } = runSearch(companies, {
+    const { results, mode, groups } = runSearch(companies, {
       domisili: params.get("domisili") || "",
       posisi: q || params.get("posisi") || "",
+      kota: params.get("kota") || "",
       kategori: params.get("kategori") || "",
       status: params.get("status") || "",
       urutan: params.get("urutan") || "relevansi",
@@ -79,6 +77,12 @@ export async function GET(request) {
       seedDate,
       total: results.length,
       mode,
+      groups: groups
+        ? {
+            companies: groups.companies.length,
+            roles: groups.roles.length,
+          }
+        : null,
       limit,
       offset,
       results: results.slice(offset, offset + limit).map((e) => ({

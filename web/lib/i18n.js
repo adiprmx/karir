@@ -43,6 +43,16 @@ const DICT = {
       "Portal ini tidak bisa dibuka saat terakhir dicek. Tautan di bawah tetap bisa dicoba.",
     "detail.tryPortalAnyway": "Tetap coba buka portal",
     /* --- akhir T18 --- */
+    /* --- T2 (pencarian: filter kota, kelompok hasil, bagikan hasil):
+     * hanya kunci baru di blok ini, nilai kunci lama tidak diubah. --- */
+    "search.city": "Kota",
+    "search.allCities": "Semua kota",
+    "search.groupCompanies": "Perusahaan ({n})",
+    "search.groupRoles": "Lowongan ({n})",
+    "search.share": "Bagikan hasil ini",
+    "search.shareCopied": "Tautan disalin.",
+    "search.shareFailed": "Tautan tidak bisa disalin otomatis. Salin alamat di bilah browser.",
+    /* --- akhir T2 --- */
     "landing.trustLabel": "Angka ringkas",
     "landing.trustChecked": "kanal dicek",
     "landing.trustTarget": "ada lowongan",
@@ -178,7 +188,7 @@ const DICT = {
     "dash.statusQuestion": "Dari {n} kanal, apa hasil cek-nya?",
     "hero.vizQuestion": "Dari {n} kanal, berapa yang cocok denganmu?",
     "hero.vizIdle": "{a} dari {b} kanal ada lowongan.",
-    "hero.vizMatch": "{a} dari {b} kanal cocok dengan carianmu.",
+    "hero.vizMatch": "{a} dari {b} kanal cocok dengan pencarianmu.",
     "hero.vizVerified": "{n} di antaranya lowongan terverifikasi.",
     "hero.vizLoading": "Memuat {n} kanal…",
     "hero.vizError": "Kanal belum bisa dimuat. Tombol Cari tetap berfungsi.",
@@ -200,11 +210,11 @@ const DICT = {
     "home.changesLoading": "Memuat perubahan…",
     "home.shareTargets": "Bagikan daftar lowongan",
     "home.printTargets": "Cetak daftar lowongan",
-    "search.matchCount": "{m} cocok dengan carianmu.",
+    "search.matchCount": "{m} cocok dengan pencarianmu.",
     "search.filters": "Filter",
     "search.apply": "Tampilkan hasil",
     "search.empty": "Tidak ada perusahaan yang cocok.",
-    "search.emptyHint": "Coba kata kunci lain, atau atur ulang filter untuk melihat semua perusahaan.",
+    "search.emptyHint": "Coba ubah atau atur ulang filter untuk melihat semua perusahaan.",
     "search.loading": "Memuat kanal…",
     "search.error": "Data perusahaan tidak bisa dimuat.",
     "search.retry": "Coba lagi",
@@ -266,6 +276,16 @@ const DICT = {
       "This portal could not be opened when last checked. You can still try the link below.",
     "detail.tryPortalAnyway": "Try opening the portal anyway",
     /* --- akhir T18 --- */
+    /* --- T2 (search: city filter, result groups, share results):
+     * new keys only in this block, existing key values untouched. --- */
+    "search.city": "City",
+    "search.allCities": "All cities",
+    "search.groupCompanies": "Companies ({n})",
+    "search.groupRoles": "Openings ({n})",
+    "search.share": "Share these results",
+    "search.shareCopied": "Link copied.",
+    "search.shareFailed": "The link could not be copied automatically. Copy the address from the browser bar.",
+    /* --- end T2 --- */
     "landing.trustLabel": "Key numbers",
     "landing.trustChecked": "channels checked",
     "landing.trustTarget": "openings",
@@ -427,7 +447,7 @@ const DICT = {
     "search.filters": "Filters",
     "search.apply": "Show results",
     "search.empty": "No companies match.",
-    "search.emptyHint": "Try other keywords, or reset the filters to see all companies.",
+    "search.emptyHint": "Try changing or resetting the filters to see all companies.",
     "search.loading": "Loading channels…",
     "search.error": "Company data could not be loaded.",
     "search.retry": "Try again",

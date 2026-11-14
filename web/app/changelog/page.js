@@ -16,6 +16,16 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.13.0",
+    date: "15 November 2026",
+    points: [
+      "Mencari kata peran seperti “gudang” kini menampilkan semua lowongan yang cocok, bukan hanya satu perusahaan.",
+      "Hasil pencarian nama perusahaan kini dikelompokkan: perusahaan dulu, lalu lowongan.",
+      "Filter kota baru di halaman Cari — persempit hasil ke kotamu.",
+      "Tombol bagikan hasil pencarian kini tersedia di halaman Cari.",
+    ],
+  },
+  {
     version: "2.12.0",
     date: "15 November 2026",
     points: [

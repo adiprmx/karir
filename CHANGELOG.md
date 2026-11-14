@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.13.0 — 2026-11-15
+
+Pencarian (T2, Fase 4 gelombang 3): mode nama tidak lagi membajak kata peran, filter kota, dan tombol bagikan.
+
+- Pencarian: kata peran umum (mis. "gudang") tidak pernah lagi memicu mode nama — "gudang" kini menampilkan 59 kecocokan peran; kata kunci nama asli menampilkan kedua kelompok berlabel ("Perusahaan" lalu "Lowongan"); 15 kata peran satu kata ditambahkan ke daftar sinonim.
+- Filter kota di /cari (dropdown sidebar + Sheet HP, `?kota=` di URL, chip aktif, validasi nilai URL); API `/api/companies` menerima `kota` + mengembalikan hitungan `groups` per kelompok; pra-filter `q` kini per-field (`matchesFreeText`, CARI-05).
+- Tombol "Bagikan hasil ini" di /cari (berbagi sistem atau salin tautan).
+- Analitik: event `search` membawa jumlah hasil, event `filter` membawa string `kategori:X|status:Y`.
+- Copy: "carianmu" → "pencarianmu"; hint kosong diluruskan (filter, bukan kata kunci, yang mengosongkan hasil).
+- Tes: 510 lolos, 0 gagal. Build sukses; lint 0 error.
+
 ## 2.12.0 — 2026-11-15
 
 Fase 4 gelombang 3 hasil audit full-stack 32 tim: analitik, ketahanan baca, gerbang rute, kualitas data, dokumen, dan notifikasi.

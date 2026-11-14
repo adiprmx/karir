@@ -4,8 +4,12 @@
  * (lib/search.js, aturan skor yang sama dengan server), jadi mengetik
  * langsung menggeser urutan. Kartu yang sudah ada meluncur ke posisi
  * barunya; kartu baru masuk. Alamat halaman ikut berubah supaya hasil
- * bisa dibagikan. Di HP, filter lanjutan ada di panel bawah. */
+ * bisa dibagikan, dan tombol bagikan menyalin tautan itu. Filter kota
+ * menyaring ke satu kota; kata kunci nama menampilkan dua kelompok
+ * berlabel (Perusahaan, lalu Lowongan). Di HP, filter lanjutan ada di
+ * panel bawah. */
 import {
+  Fragment,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -15,11 +19,12 @@ import {
   useState,
 } from "react";
 import { useCompanyIndex, rank } from "@/app/company-index";
+import { matchCity } from "@/lib/cities";
 import { saveRecentSearch } from "@/app/recent";
 import { trackEvent } from "@/app/analytics-track";
 import { CompanyCard, CardSkeletons } from "@/app/company-card";
 import { useTracker } from "@/app/tracker";
-import { Icon, Sheet, reducedMotion } from "@/app/visual";
+import { Icon, Sheet, reducedMotion, showToast } from "@/app/visual";
 
 const PAGE_SIZE = 20;
 
@@ -29,7 +34,21 @@ function fill(template, vars) {
   return s;
 }
 
-function FilterControls({ idp, state, set, categories, statuses, labels }) {
+/* Alamat hasil untuk satu state pencarian, dipakai alamat halaman
+ * (replaceState) dan tombol bagikan supaya keduanya selalu sama. */
+function searchUrl(state) {
+  const qs = new URLSearchParams();
+  if (state.domisili.trim()) qs.set("domisili", state.domisili.trim());
+  if (state.posisi.trim()) qs.set("posisi", state.posisi.trim());
+  if (state.kategori) qs.set("kategori", state.kategori);
+  if (state.kota) qs.set("kota", state.kota);
+  if (state.status) qs.set("status", state.status);
+  if (state.urutan !== "relevansi") qs.set("urutan", state.urutan);
+  const s = qs.toString();
+  return s ? `/cari?${s}` : "/cari";
+}
+
+function FilterControls({ idp, state, set, categories, cities, statuses, labels }) {
   return (
     <div className="filter-controls">
       <div className="field">
@@ -41,6 +60,21 @@ function FilterControls({ idp, state, set, categories, statuses, labels }) {
         >
           <option value="">{labels.allCategories}</option>
           {categories.map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor={`${idp}-kota`}>{labels.city}</label>
+        <select
+          id={`${idp}-kota`}
+          value={state.kota}
+          onChange={(e) => set({ kota: e.target.value })}
+        >
+          <option value="">{labels.allCities}</option>
+          {cities.map((k) => (
             <option key={k} value={k}>
               {k}
             </option>
@@ -118,6 +152,31 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
     [index, dq],
   );
 
+  /* Kota yang ada di data (dari indeks yang sudah dimuat), supaya
+   * dropdown kota hanya menawarkan kota yang benar-benar punya
+   * perusahaan. Nilai kota dari alamat tetap ditawarkan walau indeks
+   * belum dimuat, supaya pilihan awal tidak hilang. */
+  const cities = useMemo(() => {
+    const set = new Set();
+    if (index) {
+      for (const c of index) {
+        const m = matchCity(c.lokasi);
+        if (m) set.add(m.name);
+      }
+    }
+    if (state.kota) set.add(state.kota);
+    return [...set].sort((a, b) => a.localeCompare(b, "id"));
+  }, [index, state.kota]);
+
+  /* Hasil terbaru untuk event analitik. Nilai r di dalam timeout efek
+   * di bawah adalah nilai saat efek dijadwalkan, satu ketikan
+   * tertinggal karena useDeferredValue, jadi jumlah hasil dibaca lewat
+   * ref supaya yang dikirim adalah jumlah saat pencarian selesai. */
+  const rRef = useRef(null);
+  useEffect(() => {
+    rRef.current = r;
+  }, [r]);
+
   /* Alamat ikut berubah (tanpa menumpuk riwayat) dan pencarian terakhir
    * disimpan, keduanya setelah pengguna berhenti mengetik. Titik yang
    * sama dipakai untuk mengirim satu event pencarian/filter: hanya
@@ -125,14 +184,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
    * bukan per ketukan. */
   useEffect(() => {
     const id = setTimeout(() => {
-      const qs = new URLSearchParams();
-      if (state.domisili.trim()) qs.set("domisili", state.domisili.trim());
-      if (state.posisi.trim()) qs.set("posisi", state.posisi.trim());
-      if (state.kategori) qs.set("kategori", state.kategori);
-      if (state.status) qs.set("status", state.status);
-      if (state.urutan !== "relevansi") qs.set("urutan", state.urutan);
-      const s = qs.toString();
-      window.history.replaceState(null, "", s ? `/cari?${s}` : "/cari");
+      window.history.replaceState(null, "", searchUrl(state));
       saveRecentSearch(state.domisili, state.posisi);
       /* Lewati kiriman pertama: itu isi awal dari alamat halaman,
        * bukan perubahan yang dibuat pengguna di halaman ini. */
@@ -142,6 +194,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
           state.domisili.trim(),
           state.posisi.trim(),
           state.kategori,
+          state.kota,
           state.status,
         ].join("|");
         return;
@@ -150,6 +203,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
         state.domisili.trim(),
         state.posisi.trim(),
         state.kategori,
+        state.kota,
         state.status,
       ].join("|");
       if (sig === lastSentSig.current) return;
@@ -159,9 +213,23 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
         .join(" ")
         .slice(0, 200);
       if (keyword) {
-        trackEvent({ type: "search", path: "/cari", q: keyword });
+        trackEvent({
+          type: "search",
+          path: "/cari",
+          q: keyword,
+          results: rRef.current ? rRef.current.results.length : 0,
+        });
       } else if (state.kategori || state.status) {
-        trackEvent({ type: "filter", path: "/cari" });
+        trackEvent({
+          type: "filter",
+          path: "/cari",
+          filter: [
+            state.kategori ? `kategori:${state.kategori}` : null,
+            state.status ? `status:${state.status}` : null,
+          ]
+            .filter(Boolean)
+            .join("|"),
+        });
       }
     }, 600);
     return () => clearTimeout(id);
@@ -198,6 +266,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
   const activeFilters = [];
   if (state.kategori)
     activeFilters.push({ key: "kategori", text: state.kategori });
+  if (state.kota) activeFilters.push({ key: "kota", text: state.kota });
   if (state.status) activeFilters.push({ key: "status", text: state.status });
   const filterCount =
     activeFilters.length + (state.urutan !== "relevansi" ? 1 : 0);
@@ -205,16 +274,62 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
   const queryHasPosisi = r ? r.hasP : false;
   const anyPositionMatch =
     r && (r.mode === "perusahaan" || r.results.some((e) => e.positionMatched));
+  /* Kelompok hasil mode nama (S5): hitungan memakai seluruh hasil,
+   * bukan hanya potongan yang tampil, supaya judul kelompok jujur. */
+  const grouped = r ? r.mode === "perusahaan" : false;
+  const companyCount = grouped
+    ? r.results.filter((e) => e.nameMatched).length
+    : 0;
+  const roleCount = grouped ? r.results.length - companyCount : 0;
+
   const reset = () => {
     setState({
       domisili: "",
       posisi: "",
       kategori: "",
+      kota: "",
       status: "",
       urutan: "relevansi",
     });
     setLimit(PAGE_SIZE);
   };
+
+  /* Bagikan hasil ini: menu bagikan bawaan HP bila ada, kalau tidak
+   * salin tautan (pola yang sama dengan halaman detail). Tautan
+   * dibangun dari state saat ini, bukan dari bilah alamat, supaya
+   * tidak tertinggal debounce 600 mdtk. */
+  async function share() {
+    const url = `${window.location.origin}${searchUrl(state)}`;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: labels.title, url });
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast(labels.shareCopied);
+    } catch {
+      showToast(labels.shareFailed);
+    }
+  }
+
+  const cardFor = (e, i) => (
+    <CompanyCard
+      key={e.company.no}
+      company={e.company}
+      reasons={e.reasons}
+      terms={r.terms}
+      tracked={entries[String(e.company.no)]}
+      onToggle={toggle}
+      index={Math.min(i, 8)}
+      notice={queryHasPosisi && !e.positionMatched && !e.nameMatched}
+      noticeText={labels.verifyNote}
+      labels={labels}
+    />
+  );
 
   return (
     <div className="wrap cari">
@@ -231,6 +346,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
               state={state}
               set={set}
               categories={categories}
+              cities={cities}
               statuses={statuses}
               labels={labels}
             />
@@ -329,6 +445,14 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
                     <> {fill(labels.matchCount, { m: r.matched.size })}</>
                   )}
                 </p>
+                <button
+                  type="button"
+                  className="btn ghost small"
+                  onClick={share}
+                >
+                  <Icon name="share" size={16} />
+                  {labels.share}
+                </button>
                 {meta?.source === "seed" && (
                   <p className="note-line">
                     <Icon name="info" size={16} />
@@ -352,22 +476,21 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
                 ) : (
                   <div className="co-list" ref={listRef}>
                     {shown.map((e, i) => (
-                      <CompanyCard
-                        key={e.company.no}
-                        company={e.company}
-                        reasons={e.reasons}
-                        terms={r.terms}
-                        tracked={entries[String(e.company.no)]}
-                        onToggle={toggle}
-                        index={Math.min(i, 8)}
-                        notice={
-                          queryHasPosisi &&
-                          !e.positionMatched &&
-                          !e.nameMatched
-                        }
-                        noticeText={labels.verifyNote}
-                        labels={labels}
-                      />
+                      <Fragment key={e.company.no}>
+                        {grouped && e.nameMatched && i === 0 && (
+                          <h2 className="panel-title">
+                            {fill(labels.groupCompanies, { n: companyCount })}
+                          </h2>
+                        )}
+                        {grouped &&
+                          !e.nameMatched &&
+                          (i === 0 || shown[i - 1].nameMatched) && (
+                            <h2 className="panel-title">
+                              {fill(labels.groupRoles, { n: roleCount })}
+                            </h2>
+                          )}
+                        {cardFor(e, i)}
+                      </Fragment>
                     ))}
                   </div>
                 )}
@@ -394,6 +517,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
           state={state}
           set={set}
           categories={categories}
+          cities={cities}
           statuses={statuses}
           labels={labels}
         />

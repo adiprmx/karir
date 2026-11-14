@@ -15,6 +15,7 @@ Parameter query:
 | `domisili` | Domisili yang dicari, mis. Bogor | kosong |
 | `posisi` | Posisi atau nama perusahaan | kosong |
 | `q` | Pencarian bebas; bila diisi, `posisi` memakai nilai ini dan hasil disaring ke baris yang menyebut kata kunci di nama, posisi, lokasi, atau catatan | kosong |
+| `kota` | Saring kota persis, mis. Depok (aturan pemetaan kota yang sama dengan peta) | kosong |
 | `kategori` | Saring kategori persis, mis. Manufaktur | kosong |
 | `status` | Saring satu dari 4 status | kosong |
 | `urutan` | `relevansi` atau `nama` | `relevansi` |
@@ -29,6 +30,7 @@ Contoh: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang`
   "seedDate": "2026-11-14",
   "total": 610,
   "mode": "semua",
+  "groups": null,
   "limit": 20,
   "offset": 0,
   "results": [
@@ -51,7 +53,7 @@ Contoh: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang`
 }
 ```
 
-`total` adalah jumlah hasil sebelum paginasi. `mode` bernilai `perusahaan` bila kata kunci posisi cocok dengan nama perusahaan, sehingga hanya perusahaan itu yang tampil; selain itu `semua`. Skor: posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, portal mati -20, tidak dapat diverifikasi -10.
+`total` adalah jumlah hasil sebelum paginasi. `mode` bernilai `perusahaan` bila kata kunci cocok dengan nama perusahaan dan bukan kata peran umum; hasilnya dikelompokkan (kecocokan nama dulu, lalu kecocokan peran) dan `groups` membawa hitungan per kelompok (`{ "companies": n, "roles": m }`, null bila mode `semua`). Kata peran umum (mis. "gudang") tidak pernah memicu mode perusahaan. Skor: posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, portal mati -20, tidak dapat diverifikasi -10.
 
 `source` bernilai `live` bila hasil dihitung dari Firestore, `seed` bila dihitung dari seed cadangan karena Firestore sedang tidak bisa dibaca (mis. kuota baca harian habis — insiden 15 Nov 2026). `seedDate` adalah tanggal cek terbaru di seed. Saat `source` = `seed`, rute ini tetap menjawab 200 dengan data cadangan, bukan 503 (arsitektur seed-first S3, lihat `ARCHITECTURE.md` dan bagian Marker di bawah). 503 hanya bila seed ikut tidak bisa dimuat:
 

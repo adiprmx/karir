@@ -5,19 +5,23 @@
  * perusahaan, jendela penyangkalan 60 karakter, dan mode nama. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   normalizeText,
   expandToken,
   tokenize,
   tokenizeRaw,
+  isRoleKeyword,
   fieldMatches,
   fieldMatchesAffirmative,
+  matchesFreeText,
   scoreCompany,
   compareByScore,
   countBy,
   topEntries,
   runSearch,
 } from "./search.js";
+import { matchCity } from "./cities.js";
 
 function company(overrides = {}) {
   return {
@@ -199,7 +203,12 @@ describe("skor", () => {
 });
 
 describe("runSearch", () => {
-  it("mode perusahaan bila ada nama yang cocok, dan hanya nama itu yang tampil", () => {
+  /* PERILAKU BARU YANG DISENGAJA (CARI-01, keputusan S5): mode nama
+   * tidak lagi membuang hasil lain. Nama asli ("Novell") menampilkan
+   * KEDUA kelompok: perusahaan cocok nama dulu, lalu lowongan cocok
+   * peran. Tes ini diperbarui dari versi lama yang mengunci perilaku
+   * bajak ("hanya nama itu yang tampil"). */
+  it("mode perusahaan menampilkan kelompok nama dulu lalu kelompok peran", () => {
     const companies = [
       company({
         perusahaan: "PT Novell Pharmaceutical Laboratories",
@@ -210,18 +219,86 @@ describe("runSearch", () => {
       }),
       company({
         perusahaan: "PT Lain",
-        posisi: "Helper Gudang",
+        posisi: "Novell Support Engineer",
         lokasi: "Bogor",
         status: "Ada lowongan",
         link_karir: "https://lain.id",
       }),
+      company({
+        perusahaan: "PT Acak",
+        posisi: "Helper Gudang",
+        lokasi: "Bogor",
+        status: "Ada lowongan",
+        link_karir: "https://acak.id",
+      }),
     ];
-    const { results, mode } = runSearch(companies, { posisi: "Novell" });
+    const { results, mode, groups } = runSearch(companies, {
+      posisi: "Novell",
+    });
+    assert.equal(mode, "perusahaan");
+    assert.deepEqual(
+      results.map((e) => e.company.perusahaan),
+      [
+        "PT Novell Pharmaceutical Laboratories",
+        "PT Lain",
+      ],
+    );
+    assert.deepEqual(
+      groups.companies.map((e) => e.company.perusahaan),
+      ["PT Novell Pharmaceutical Laboratories"],
+    );
+    assert.deepEqual(
+      groups.roles.map((e) => e.company.perusahaan),
+      ["PT Lain"],
+    );
+    /* Perusahaan yang tidak cocok nama maupun peran tidak tampil,
+     * supaya label kelompok jujur. */
+    assert.equal(
+      results.some((e) => e.company.perusahaan === "PT Acak"),
+      false,
+    );
+  });
+
+  it("nama asli tanpa kecocokan peran hanya menampilkan kelompok nama", () => {
+    const companies = [
+      company({
+        perusahaan: "PT Novell Pharmaceutical Laboratories",
+        posisi: "HELPER",
+        status: "Ada lowongan",
+      }),
+      company({
+        perusahaan: "PT Lain",
+        posisi: "Helper Gudang",
+        status: "Ada lowongan",
+      }),
+    ];
+    const { results, mode, groups } = runSearch(companies, {
+      posisi: "Novell",
+    });
     assert.equal(mode, "perusahaan");
     assert.equal(results.length, 1);
     assert.equal(
       results[0].company.perusahaan,
       "PT Novell Pharmaceutical Laboratories",
+    );
+    assert.deepEqual(groups.roles, []);
+  });
+
+  it("urutan nama mengurutkan di dalam tiap kelompok, nama tetap di atas", () => {
+    const companies = [
+      company({ perusahaan: "PT Zulu Novell", posisi: "Admin" }),
+      company({ perusahaan: "PT Alpha Novell", posisi: "Admin" }),
+      company({ perusahaan: "PT Zulu", posisi: "Novell Engineer" }),
+      company({ perusahaan: "PT Alpha", posisi: "Novell Engineer" }),
+    ];
+    const { results, mode } = runSearch(companies, {
+      posisi: "Novell",
+      urutan: "nama",
+    });
+    assert.equal(mode, "perusahaan");
+    assert.deepEqual(
+      results.map((e) => e.company.perusahaan),
+      ["PT Alpha Novell", "PT Zulu Novell", "PT Alpha", "PT Zulu"],
     );
   });
 
@@ -265,6 +342,323 @@ describe("runSearch", () => {
       results.map((e) => e.company.perusahaan),
       ["PT Alpha", "PT Zulu"],
     );
+  });
+});
+
+describe("kata peran umum (CARI-01, keputusan S5)", () => {
+  it("isRoleKeyword: kata di daftar sinonim adalah kata peran", () => {
+    assert.equal(isRoleKeyword("gudang"), true);
+    assert.equal(isRoleKeyword("warehouse"), true);
+    assert.equal(isRoleKeyword("office boy"), true);
+    assert.equal(isRoleKeyword("staff gudang"), true);
+    assert.equal(isRoleKeyword("cleaning service"), true);
+    assert.equal(isRoleKeyword("staff"), true);
+    assert.equal(isRoleKeyword("sales"), true);
+    assert.equal(isRoleKeyword("Novell"), false);
+    assert.equal(isRoleKeyword("gudang novell"), false);
+    assert.equal(isRoleKeyword(""), false);
+  });
+
+  it("kata peran satu kata baru tidak mengubah pencocokan", () => {
+    assert.deepEqual(tokenize("staff"), [["staff"]]);
+    assert.deepEqual(tokenize("service"), [["service"]]);
+    assert.deepEqual(tokenize("sales"), [["sales"]]);
+  });
+
+  it("'gudang' tidak dibajak GudangAda: mode semua, peran di atas", () => {
+    const companies = [
+      company({ perusahaan: "GudangAda", posisi: "Admin", status: "Ada lowongan" }),
+      company({ perusahaan: "PT Contoh", posisi: "Staff Gudang", status: "Ada lowongan" }),
+      company({ perusahaan: "PT Lain", posisi: "Helper Gudang", status: "Tidak ada lowongan" }),
+    ];
+    const { results, mode, groups } = runSearch(companies, { posisi: "gudang" });
+    assert.equal(mode, "semua");
+    assert.equal(groups, null);
+    assert.equal(results.length, 3);
+    assert.deepEqual(
+      results.map((e) => e.company.perusahaan),
+      ["PT Contoh", "PT Lain", "GudangAda"],
+    );
+    const gudangAda = results.find((e) => e.company.perusahaan === "GudangAda");
+    assert.equal(gudangAda.nameMatched, true);
+    assert.equal(gudangAda.positionMatched, false);
+  });
+
+  it("'staff' tidak dibajak perusahaan bernama Staff", () => {
+    const companies = [
+      company({ perusahaan: "PT Staffindo", posisi: "Admin", status: "Ada lowongan" }),
+      company({ perusahaan: "PT Contoh", posisi: "Staff Gudang", status: "Ada lowongan" }),
+    ];
+    const { results, mode } = runSearch(companies, { posisi: "staff" });
+    assert.equal(mode, "semua");
+    assert.equal(results[0].company.perusahaan, "PT Contoh");
+    assert.equal(results[0].positionMatched, true);
+  });
+
+  it("chip beranda tidak bisa dibajak nama: semua kata chip adalah kata peran", () => {
+    for (const role of [
+      "Helper Gudang",
+      "Staff Gudang",
+      "Cleaning Service",
+      "Office Boy",
+      "Packing",
+      "Operator Produksi",
+      "Crew Store",
+    ]) {
+      assert.equal(isRoleKeyword(role), true, role);
+    }
+  });
+});
+
+describe("filter kota (CARI-03)", () => {
+  const companies = [
+    company({ perusahaan: "PT A", lokasi: "Depok", posisi: "Staff Gudang" }),
+    company({ perusahaan: "PT B", lokasi: "Bogor", posisi: "Staff Gudang" }),
+    company({ perusahaan: "PT C", lokasi: "Gunung Putri Bogor", posisi: "Admin" }),
+    company({ perusahaan: "PT D", lokasi: "", posisi: "Admin" }),
+  ];
+
+  it("hanya perusahaan di kota itu yang tampil", () => {
+    const { results } = runSearch(companies, { kota: "Depok" });
+    assert.deepEqual(
+      results.map((e) => e.company.perusahaan),
+      ["PT A"],
+    );
+  });
+
+  it("'Gunung Putri Bogor' masuk Gunung Putri, bukan Bogor", () => {
+    assert.deepEqual(
+      runSearch(companies, { kota: "Bogor" }).results.map(
+        (e) => e.company.perusahaan,
+      ),
+      ["PT B"],
+    );
+    assert.deepEqual(
+      runSearch(companies, { kota: "Gunung Putri" }).results.map(
+        (e) => e.company.perusahaan,
+      ),
+      ["PT C"],
+    );
+  });
+
+  it("kota tidak dikenal menghasilkan daftar kosong", () => {
+    assert.equal(runSearch(companies, { kota: "Atlantis" }).results.length, 0);
+  });
+
+  it("filter kota digabung dengan kata kunci dan filter lain", () => {
+    const { results } = runSearch(companies, {
+      posisi: "gudang",
+      kota: "Depok",
+    });
+    assert.deepEqual(
+      results.map((e) => e.company.perusahaan),
+      ["PT A"],
+    );
+    const byStatus = runSearch(
+      [
+        company({ perusahaan: "PT A", lokasi: "Depok", status: "Ada lowongan" }),
+        company({ perusahaan: "PT B", lokasi: "Depok", status: "Tidak ada lowongan" }),
+      ],
+      { kota: "Depok", status: "Ada lowongan" },
+    );
+    assert.deepEqual(
+      byStatus.results.map((e) => e.company.perusahaan),
+      ["PT A"],
+    );
+  });
+});
+
+describe("matchesFreeText per field (CARI-05)", () => {
+  it("GudangAda ditemukan walau posisinya mengandung 'tidak'", () => {
+    const c = company({ perusahaan: "GudangAda", posisi: "Tidak bisa dicek" });
+    assert.equal(matchesFreeText(c, "gudang"), true);
+    /* Cara lama (string gabungan) gagal di kasus ini: "tidak" di posisi
+     * membatalkan kecocokan nama. */
+    assert.equal(
+      fieldMatchesAffirmative(
+        `${c.perusahaan} ${c.posisi} ${c.lokasi} ${c.catatan}`,
+        tokenize("gudang"),
+      ),
+      false,
+    );
+  });
+
+  it("'gudang' di catatan tidak dibatalkan penyangkal di field lain", () => {
+    const c = company({
+      perusahaan: "Bank Danamon",
+      posisi: "Tidak ada lowongan terlihat",
+      catatan: "Pernah buka Staff Gudang",
+    });
+    assert.equal(matchesFreeText(c, "gudang"), true);
+    assert.equal(
+      fieldMatchesAffirmative(
+        `${c.perusahaan} ${c.posisi} ${c.lokasi} ${c.catatan}`,
+        tokenize("gudang"),
+      ),
+      false,
+    );
+  });
+
+  it("sinonim tidak mencocokkan nama perusahaan", () => {
+    const c = company({ perusahaan: "GudangAda", posisi: "Admin" });
+    assert.equal(matchesFreeText(c, "warehouse"), false);
+    assert.equal(matchesFreeText(c, "gudang"), true);
+  });
+
+  it("kata kunci kosong tidak cocok; perusahaan tanpa kecocokan tidak lolos", () => {
+    assert.equal(matchesFreeText(company({}), ""), false);
+    assert.equal(
+      matchesFreeText(
+        company({ perusahaan: "PT B", posisi: "Office Boy" }),
+        "gudang",
+      ),
+      false,
+    );
+  });
+
+  it("kata kunci multi-kata harus cocok seluruhnya di satu field", () => {
+    const tersebar = company({
+      perusahaan: "PT A",
+      posisi: "Staff",
+      catatan: "Gudang besar",
+    });
+    assert.equal(matchesFreeText(tersebar, "staff gudang"), false);
+    const satuField = company({ perusahaan: "PT B", posisi: "Staff Gudang" });
+    assert.equal(matchesFreeText(satuField, "staff gudang"), true);
+  });
+});
+
+describe("jalur halaman vs API (CARI-02)", () => {
+  const companies = [
+    company({ perusahaan: "GudangAda", posisi: "Tidak bisa dicek", status: "Ada lowongan" }),
+    company({ perusahaan: "PT Contoh", posisi: "Staff Gudang", status: "Ada lowongan" }),
+    company({ perusahaan: "PT Lain", posisi: "Helper Gudang", status: "Tidak ada lowongan" }),
+    company({
+      perusahaan: "Bank Danamon",
+      posisi: "Tidak ada lowongan terlihat",
+      catatan: "Pernah buka Staff Gudang",
+      status: "Tidak ada lowongan",
+    }),
+    company({ perusahaan: "PT Acak", posisi: "Office Boy", status: "Ada lowongan" }),
+  ];
+
+  /* Meniru jalur API: pra-filter matchesFreeText lalu runSearch. */
+  function apiPath(list, q) {
+    return runSearch(
+      list.filter((c) => matchesFreeText(c, q)),
+      { posisi: q },
+    );
+  }
+
+  it("'gudang': halaman dan API sepakat soal mode dan urutan yang cocok", () => {
+    const page = runSearch(companies, { posisi: "gudang" });
+    const api = apiPath(companies, "gudang");
+    assert.equal(page.mode, "semua");
+    assert.equal(api.mode, page.mode);
+    assert.deepEqual(
+      api.results.map((e) => e.company.perusahaan),
+      page.results
+        .filter((e) => e.positionMatched || e.nameMatched)
+        .map((e) => e.company.perusahaan),
+    );
+    /* GudangAda + Bank Danamon tidak hilang dari jalur API (CARI-05). */
+    assert.equal(
+      api.results.some((e) => e.company.perusahaan === "GudangAda"),
+      true,
+    );
+    assert.equal(
+      api.results.some((e) => e.company.perusahaan === "Bank Danamon"),
+      true,
+    );
+  });
+
+  it("'Novell': halaman dan API sepakat soal kelompok", () => {
+    const list = [
+      company({ perusahaan: "PT Novell Pharmaceutical Laboratories", posisi: "HELPER", status: "Ada lowongan" }),
+      company({ perusahaan: "PT Lain", posisi: "Novell Support Engineer", status: "Ada lowongan" }),
+      company({ perusahaan: "PT Acak", posisi: "Helper Gudang", status: "Ada lowongan" }),
+    ];
+    const page = runSearch(list, { posisi: "Novell" });
+    const api = apiPath(list, "Novell");
+    assert.equal(page.mode, "perusahaan");
+    assert.equal(api.mode, "perusahaan");
+    assert.deepEqual(
+      api.results.map((e) => e.company.perusahaan),
+      page.results.map((e) => e.company.perusahaan),
+    );
+    assert.deepEqual(
+      api.groups.companies.map((e) => e.company.perusahaan),
+      ["PT Novell Pharmaceutical Laboratories"],
+    );
+  });
+});
+
+describe("seed lokal (FIN-10 + CARI-01 data nyata)", () => {
+  const seed = JSON.parse(
+    readFileSync(new URL("../data/companies.json", import.meta.url), "utf8"),
+  );
+
+  it("seed bisa dibaca dan dicari tanpa Firestore", () => {
+    assert.ok(seed.length >= 610);
+    const { results } = runSearch(seed, {});
+    assert.equal(results.length, seed.length);
+  });
+
+  it("'gudang' di data nyata: mode semua, puluhan peran, GudangAda tidak membajak", () => {
+    const { results, mode } = runSearch(seed, { posisi: "gudang" });
+    assert.equal(mode, "semua");
+    const roleMatches = results.filter((e) => e.positionMatched);
+    assert.ok(roleMatches.length >= 50);
+    assert.equal(results[0].positionMatched, true);
+    const gudangAda = results.find(
+      (e) => e.company.perusahaan === "GudangAda",
+    );
+    assert.ok(gudangAda);
+    assert.equal(gudangAda.nameMatched, true);
+  });
+
+  it("'staff' di data nyata: mode semua walau ada nama yang cocok", () => {
+    const { mode, results } = runSearch(seed, { posisi: "staff" });
+    assert.equal(mode, "semua");
+    assert.ok(results.some((e) => e.nameMatched));
+    assert.ok(results.filter((e) => e.positionMatched).length >= 50);
+  });
+
+  it("'Novell' di data nyata: mode perusahaan dengan kelompok nama", () => {
+    const { mode, groups } = runSearch(seed, { posisi: "Novell" });
+    assert.equal(mode, "perusahaan");
+    assert.ok(groups.companies.length >= 1);
+    assert.ok(
+      groups.companies.every((e) =>
+        e.company.perusahaan.toLowerCase().includes("novell"),
+      ),
+    );
+  });
+
+  it("filter kota di data nyata: Depok hanya berisi Depok", () => {
+    const { results } = runSearch(seed, { kota: "Depok" });
+    assert.ok(results.length > 0);
+    /* Aserti memakai aturan yang sama dengan filter (matchCity), bukan
+     * substring "depok": Cimanggis adalah alias Depok (kunci
+     * "cimanggis" di lib/cities.js), jadi perusahaan berlokasi
+     * Cimanggis tanpa kata "Depok" — mis. PT Bayer Indonesia —
+     * benar masuk hasil Depok. */
+    for (const e of results) {
+      assert.equal(
+        matchCity(e.company.lokasi)?.name,
+        "Depok",
+        e.company.perusahaan,
+      );
+    }
+  });
+
+  it("CARI-05 di data nyata: GudangAda + Bank Danamon lolos matchesFreeText", () => {
+    const byName = new Map(seed.map((c) => [c.perusahaan, c]));
+    for (const name of ["GudangAda", "Bank Danamon"]) {
+      const c = byName.get(name);
+      assert.ok(c, name);
+      assert.equal(matchesFreeText(c, "gudang"), true);
+    }
   });
 });
 

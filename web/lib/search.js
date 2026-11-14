@@ -7,7 +7,16 @@
  * Sinonim peran: tokenize() memperluas tiap kata kunci dengan
  * padanannya (mis. cleaner juga cocok dengan cleaning dan
  * kebersihan), jadi pencari tidak harus menebak kata yang persis
- * tertulis di data. */
+ * tertulis di data.
+ * Mode nama (keputusan S5, CARI-01): kata kunci yang seluruhnya kata
+ * peran umum (ada di daftar sinonim, mis. "gudang") TIDAK PERNAH
+ * memicu mode nama, kecocokan nama tidak boleh membajak kata peran.
+ * Kata kunci nama asli (mis. "Novell") menampilkan KEDUA kelompok:
+ * "Perusahaan" (cocok nama) dulu, lalu "Lowongan" (cocok peran).
+ * Filter kota (CARI-03) memakai matchCity dari lib/cities.js, aturan
+ * yang sama dengan peta. */
+
+import { matchCity } from "./cities.js";
 
 export function normalizeText(value) {
   if (!value) return "";
@@ -37,6 +46,32 @@ const SYNONYM_GROUPS = [
   { words: ["store", "toko"], match: ["store", "toko"] },
   { words: ["barista"], match: ["barista"] },
   { words: ["baker"], match: ["baker"] },
+  /* Kata peran umum satu kata (CARI-01): kelompok ini tidak mengubah
+   * pencocokan (tiap kata hanya cocok dengan dirinya sendiri), tapi
+   * menandai kata itu sebagai kata peran sehingga isRoleKeyword()
+   * melindunginya dari pembajakan mode nama. Dipilih dari kata peran
+   * yang paling sering muncul di kolom posisi data (staff 135x, sales
+   * 80x, manager 144x, engineer 98x, supervisor 94x, officer 69x,
+   * marketing 42x, specialist 38x, service 36x, analyst 33x,
+   * finance 33x, business 33x, development 40x, teknisi 23x,
+   * 5x, dihitung dari seed 610 baris, 15 Nov 2026). "service"
+   * dan "staff" juga menutup chip beranda "Cleaning Service" dan
+   * "Staff Gudang" supaya hitungannya tidak pernah dibajak nama. */
+  { words: ["staff"], match: ["staff"] },
+  { words: ["sales"], match: ["sales"] },
+  { words: ["marketing"], match: ["marketing"] },
+  { words: ["teknisi"], match: ["teknisi"] },
+  { words: ["kurir"], match: ["kurir"] },
+  { words: ["manager"], match: ["manager"] },
+  { words: ["engineer"], match: ["engineer"] },
+  { words: ["supervisor"], match: ["supervisor"] },
+  { words: ["officer"], match: ["officer"] },
+  { words: ["specialist"], match: ["specialist"] },
+  { words: ["service"], match: ["service"] },
+  { words: ["analyst"], match: ["analyst"] },
+  { words: ["finance"], match: ["finance"] },
+  { words: ["business"], match: ["business"] },
+  { words: ["development"], match: ["development"] },
 ];
 
 const SYNONYM_LOOKUP = new Map();
@@ -68,6 +103,17 @@ export function tokenizeRaw(value) {
   return normalizeText(value)
     .split(" ")
     .filter((t) => t.length > 0);
+}
+
+/* Apakah kata kunci seluruhnya kata peran umum, yaitu setiap katanya
+ * ada di daftar sinonim? Kata seperti itu tidak boleh memicu mode nama
+ * (CARI-01, keputusan S5): "gudang" adalah peran, bukan pencarian
+ * perusahaan bernama GudangAda. Kata kunci kosong bukan kata peran. */
+export function isRoleKeyword(value) {
+  const tokens = tokenizeRaw(value);
+  return (
+    tokens.length > 0 && tokens.every((t) => SYNONYM_LOOKUP.has(t))
+  );
 }
 
 /* Kata kunci pendek (1-2 huruf, mis. "ob" dan "og" dari sinonim office
@@ -111,6 +157,26 @@ export function fieldMatchesAffirmative(field, tokenGroups) {
   const text = normalizeText(field);
   return tokenGroups.every((group) =>
     group.some((t) => tokenHasAffirmativeOccurrence(text, t)),
+  );
+}
+
+/* Cek pencarian bebas per field (untuk /api/companies?q=, CARI-05):
+ * tiap field dicek afirmasinya sendiri lalu digabung dengan OR, supaya
+ * kata penyangkal di satu field tidak membatalkan kecocokan asli di
+ * field lain. Cara lama (satu string gabungan) menghilangkan GudangAda
+ * dan Bank Danamon dari hasil "gudang": "tidak" di posisi/catatan
+ * tetangga membatalkan kecocokan nama/catatan. Nama perusahaan dicek
+ * dengan token mentah (tanpa sinonim), sama seperti scoreCompany;
+ * field lain dengan token bersinonim. Catatan: kata kunci multi-kata
+ * harus cocok seluruhnya di SATU field; kecocokan yang tersebar
+ * lintas field tidak dihitung, sama seperti jalur halaman. */
+export function matchesFreeText(company, q) {
+  const tokenGroups = tokenize(q);
+  if (tokenGroups.length === 0) return false;
+  const rawGroups = tokenizeRaw(q).map((t) => [t]);
+  if (fieldMatches(company.perusahaan || "", rawGroups)) return true;
+  return ["posisi", "lokasi", "catatan"].some((field) =>
+    fieldMatchesAffirmative(company[field] || "", tokenGroups),
   );
 }
 
@@ -189,7 +255,18 @@ export function topEntries(counts, n) {
 
 /* Jalankan satu pencarian penuh atas daftar perusahaan.
  * Mengembalikan entri { company, score, reasons, positionMatched,
- * nameMatched } yang sudah diurutkan, plus mode ("semua" / "perusahaan"). */
+ * nameMatched } yang sudah diurutkan, plus mode ("semua" /
+ * "perusahaan") dan groups (null kecuali mode "perusahaan", berisi
+ * { companies, roles } dalam urutan tampil).
+ * Mode "perusahaan" (keputusan S5): hanya bila kata kunci BUKAN kata
+ * peran umum dan ada nama yang cocok. Hasilnya dua kelompok berlabel:
+ * kecocokan nama dulu, lalu kecocokan peran. Keduanya terlihat,
+ * tidak ada yang dibuang. Kata peran umum ("gudang", "toko", "crew")
+ * selalu mode "semua": seluruh daftar tampil terurut skor, kecocokan
+ * peran di atas.
+ * Filter: kategori, status (cocok persis), kota (kota dari
+ * matchCity atas kolom lokasi; lokasi tanpa kota yang dikenali tidak
+ * lolos bila filter kota aktif). */
 export function runSearch(companies, query) {
   const q = {
     domisiliTokens: tokenize(query.domisili || ""),
@@ -213,18 +290,47 @@ export function runSearch(companies, query) {
   if (query.status) {
     scored = scored.filter((e) => e.company.status === query.status);
   }
+  if (query.kota) {
+    scored = scored.filter(
+      (e) => matchCity(e.company.lokasi)?.name === query.kota,
+    );
+  }
 
   let mode = "semua";
   if (q.posisiTokens.length > 0) {
     const nameMatches = scored.filter((e) => e.nameMatched);
-    if (nameMatches.length > 0) {
-      scored = nameMatches;
+    if (nameMatches.length > 0 && !isRoleKeyword(query.posisi || "")) {
+      /* Kelompok nama dulu, lalu kelompok peran; perusahaan yang tidak
+       * cocok keduanya tidak tampil di mode ini, supaya label kelompok
+       * jujur (bukan daftar 610 baris dengan dua judul). */
+      scored = [
+        ...nameMatches,
+        ...scored.filter((e) => !e.nameMatched && e.positionMatched),
+      ];
       mode = "perusahaan";
     }
   }
 
-  if (query.urutan === "nama") scored.sort(compareByName);
-  else scored.sort(compareByScore);
+  /* Dalam mode perusahaan, kelompok nama selalu di atas kelompok
+   * peran; di dalam tiap kelompok, urutan normal berlaku. */
+  const byGroupThen = (cmp) => (a, b) => {
+    if (mode === "perusahaan") {
+      const ga = a.nameMatched ? 0 : 1;
+      const gb = b.nameMatched ? 0 : 1;
+      if (ga !== gb) return ga - gb;
+    }
+    return cmp(a, b);
+  };
+  if (query.urutan === "nama") scored.sort(byGroupThen(compareByName));
+  else scored.sort(byGroupThen(compareByScore));
 
-  return { results: scored, mode, query: q };
+  const groups =
+    mode === "perusahaan"
+      ? {
+          companies: scored.filter((e) => e.nameMatched),
+          roles: scored.filter((e) => !e.nameMatched),
+        }
+      : null;
+
+  return { results: scored, mode, groups, query: q };
 }
