@@ -139,9 +139,13 @@ Rute ini menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 6
 
 ## GET /api/index
 
-Indeks pencarian untuk halaman Cari. Wajib token valid di header `Authorization: Bearer <token>` (lihat `/api/token` di bawah). Menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 30 permintaan per menit per hash IP (cakupan `index`). Respons memakai `Cache-Control: private, no-store`. Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503.
+Indeks pencarian untuk halaman Cari, Beranda, Mulai, dan Lamaran. Wajib token valid di header `Authorization: Bearer <token>` (lihat `/api/token` di bawah). Menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 30 permintaan per menit per hash IP (cakupan `index`). Respons memakai `Cache-Control: private, no-store`. Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503.
 
-Respons berbentuk `{ "companies": [...], "source": "live", "seedDate": "2026-11-14" }`. `source` dan `seedDate` sama seperti di `/api/companies`: saat Firestore tidak bisa dijangkau, rute ini menjawab 200 dengan daftar dari seed cadangan (`source: "seed"`), dan klien menampilkan catatan "data cadangan" di halaman Cari dan Beranda.
+Respons berbentuk `{ "companies": [...], "source": "live", "seedDate": "2026-11-14", "rev": 12 }`. `source` dan `seedDate` sama seperti di `/api/companies`: saat Firestore tidak bisa dijangkau, rute ini menjawab 200 dengan daftar dari seed cadangan (`source: "seed"`), dan klien menampilkan catatan "data cadangan" di halaman Cari dan Beranda.
+
+Tiap perusahaan hanya membawa 8 field yang dipakai pemakai indeks: `no`, `perusahaan`, `kategori`, `link_karir`, `status`, `catatan`, `lokasi`, `posisi` (`catatan` dipakai pencarian: token posisi dicocokkan ke catatan). Field `tanggal_cek`, `batas_lamar`, `email_hrd`, `wa_hrd`, dan `kontak_lain` tidak dikirim — kelimanya hanya dipakai halaman detail, yang memuat satu perusahaan lewat `/api/companies/[no]`. Pemangkasan ini mengecilkan respons dari ~511 KB menjadi ~436 KB (sekitar 15%, diukur dari seed 610 perusahaan).
+
+`rev` adalah revisi data dari marker `meta/lastChange` (lihat bagian Marker di bawah). Klien menyimpan daftar di localStorage (TTL 24 jam) beserta `rev`-nya; di sesi berikutnya klien memvalidasi ulang dengan `GET /api/index?rev=N` dan menerima 304 tanpa isi bila data belum berubah — tanpa mengunduh ulang daftar. Bila `rev` berubah, server menjawab 200 dengan daftar baru. Gerbang (bot, batas laju, token) tetap berlaku untuk request validasi ulang. Bila marker tidak bisa dibaca, atau bila daftar berasal dari seed, `rev` bernilai null dan klien tidak memakai validasi rev (daftar seed tidak pernah disimpan sebagai cache).
 
 ## GET /api/token
 
@@ -219,7 +223,7 @@ Bila cron berjalan, jawabannya 200 dengan bentuk:
 { "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "openSkipped": 0, "truncated": false, "alerts": 0, "alertsFailed": 0, "telegram": "none", "telegramMarked": 0, "alertPhaseTruncated": false, "snapshotKnown": true, "snapshotWritten": true, "queue": { "urgent": 1, "open": 237, "dead": 55, "total": 293 }, "markerBumped": true, "heartbeatWritten": true }
 ```
 
-`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `openSkipped` adalah perusahaan tier mendesak/terbuka yang tidak sempat dicek karena terpotong, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, `alertsFailed` adalah alert yang gagal ditulis, `telegram` bernilai `sent`, `failed`, `skipped-no-token`, `skipped-timeout`, atau `none` (tidak ada alert baru), `telegramMarked` adalah alert yang berhasil ditandai terkirim sesudah kirim langsung, `alertPhaseTruncated` menandakan fase alert kehabisan anggarannya sendiri (15 detik), `snapshotKnown`/`snapshotWritten` menandakan snapshot target run sebelumnya dibaca/ditulis, `queue` adalah ukuran antrean per tier (`urgent` + `open` + `dead` = `total`), `markerBumped` menandakan marker kesegaran `meta/lastChange` dinaikkan di run ini (true bila ada status perusahaan yang berubah), dan `heartbeatWritten` menandakan ringkasan run tercatat di `cron-runs/{tanggal-WIB}`. Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
+`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `openSkipped` adalah perusahaan tier mendesak/terbuka yang tidak sempat dicek karena terpotong, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, `alertsFailed` adalah alert yang gagal ditulis, `telegram` bernilai `sent`, `failed`, `skipped-no-token`, atau `none` (tidak ada alert baru), `telegramMarked` adalah alert yang berhasil ditandai terkirim sesudah kirim langsung, `alertPhaseTruncated` menandakan fase alert kehabisan anggarannya sendiri (15 detik), `snapshotKnown`/`snapshotWritten` menandakan snapshot target run sebelumnya dibaca/ditulis, `queue` adalah ukuran antrean per tier (`urgent` + `open` + `dead` = `total`), `markerBumped` menandakan marker kesegaran `meta/lastChange` dinaikkan di run ini (true bila ada status perusahaan yang berubah), dan `heartbeatWritten` menandakan ringkasan run tercatat di `cron-runs/{tanggal-WIB}`. Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
 
 ### Notifikasi
 
@@ -227,17 +231,26 @@ Fase alert jalan DULU, sebelum loop cek portal (anggaran 15 detik, tulis paralel
 
 ## GET /api/cron/cleanup
 
-Hapus event analitik mentah yang lebih tua dari 90 hari (retensi analitik S8), maksimal 200 event per run. Dijalankan Vercel Cron tiap Senin 02:00 WIB (`0 19 * * 0` UTC).
+Hapus dokumen lama dari empat koleksi Firestore sesuai kebijakan retensi di bawah. Dijalankan Vercel Cron tiap Senin 02:00 WIB (`0 19 * * 0` UTC).
 
-Request wajib membawa header `Authorization: Bearer <CRON_SECRET>`; tanpa header yang cocok jawabannya 401 `{ "error": "Tidak diizinkan." }`. Bila `CRON_SECRET` atau service account belum dipasang di env, jawabannya 503 dan rute tidak berjalan. Penghapusan hanya bisa lewat token service account, karena aturan Firestore menutup hapus event dari klien.
+| Koleksi | Disimpan | Alasan | Maks per run |
+| --- | --- | --- | --- |
+| `analytics_events` | 90 hari | Dasbor admin hanya memakai 30 hari terakhir; 90 hari memberi ruang melihat tren (retensi analitik S8) | 200 |
+| `rate_limits` | 7 hari | Semua jendela batas laju adalah 60 detik; dokumen yang tidak disentuh 7 hari hanya berisi hit kedaluwarsa yang sudah diabaikan | 200 |
+| `alerts` | 90 hari | Alert deadline menyangkut batas lamar 0-3 hari dan alert baru basi dalam hitungan hari; alert 90 hari sudah tidak layak dikirim, dan watcher membaca seluruh koleksi tiap run | 100 |
+| `changes` | 180 hari | Umpan hanya menampilkan 10 terbaru (maks 50); 180 hari menyimpan riwayat setengah tahun sebagai jejak audit | 100 |
+
+Anggaran hapus per run: maksimal 600 hapus (200 + 200 + 100 + 100), seminggu sekali — jauh di bawah batas hapus Firestore 20.000/hari. Tiap koleksi dihapus dalam satu panggilan batchWrite (maks 500 tulis/panggilan). Dokumen tanpa field penanda umur (`ts` untuk analitik, `updatedAt` untuk rate_limits, `createdAt` untuk alerts/changes) tidak pernah cocok dengan query dan dibiarkan.
+
+Request wajib membawa header `Authorization: Bearer <CRON_SECRET>`; tanpa header yang cocok jawabannya 401 `{ "error": "Tidak diizinkan." }`. Bila `CRON_SECRET` atau service account belum dipasang di env, jawabannya 503 dan rute tidak berjalan. Penghapusan hanya bisa lewat token service account, karena aturan Firestore menutup hapus dari klien.
 
 Bila berjalan, jawabannya 200 dengan bentuk:
 
 ```json
-{ "deleted": 12, "cutoff": "2026-08-17T00:00:00.000Z", "hasMore": false }
+{ "deleted": 12, "cutoff": "2026-08-17T00:00:00.000Z", "hasMore": false, "retention": { "rate_limits": { "deleted": 3, "cutoff": "2026-11-08T19:00:00.000Z", "hasMore": false }, "alerts": { "deleted": 0, "cutoff": "2026-08-17T19:00:00.000Z", "hasMore": false }, "changes": { "deleted": 0, "cutoff": "2026-05-19T19:00:00.000Z", "hasMore": false } } }
 ```
 
-`deleted` adalah event yang dihapus di run ini, `cutoff` adalah batas umur (90 hari sebelum run), `hasMore` menandakan masih ada event lama yang tersisa (batas 200 per run tercapai). Bila penghapusan gagal, jawabannya 500 `{ "error": "Pembersihan event gagal." }`.
+`deleted`, `cutoff`, dan `hasMore` di tingkat atas adalah hasil analitik: `deleted` adalah event yang dihapus di run ini, `cutoff` adalah batas umur (90 hari sebelum run), `hasMore` menandakan masih ada event lama yang tersisa (batas 200 per run tercapai). `retention` membawa hasil yang sama per koleksi (batas umur mengikuti retensi tiap koleksi). Bila penghapusan analitik gagal, jawabannya 500 `{ "error": "Pembersihan event gagal." }`; bila penghapusan salah satu koleksi retensi gagal, jawabannya 500 `{ "error": "Pembersihan retensi gagal." }` — run berikutnya mencoba lagi dari awal (penghapusan bersifat idempotent).
 
 ## Marker kesegaran `meta/lastChange`
 
