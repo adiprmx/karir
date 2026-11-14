@@ -35,8 +35,21 @@
  *    bisa dicek lewat URL) dan tidak menyumbat antrean.
  *
  * Balasan: {checked, changed, updated, skipped, truncated, alerts,
- * telegram}. alerts = alert baru yang dibuat di run ini; telegram =
- * "sent" | "failed" | "skipped-no-token" | "none".
+ * telegram, markerBumped}. alerts = alert baru yang dibuat di run ini;
+ * telegram = "sent" | "failed" | "skipped-no-token" | "none";
+ * markerBumped = true bila marker kesegaran dinaikkan di run ini.
+ *
+ * Marker kesegaran (meta/lastChange, arsitektur seed-first S3): bila
+ * run ini mengubah status perusahaan apa pun (PATCH status berhasil)
+ * atau memperbarui tanggal_cek perusahaan, rev marker dinaikkan 1
+ * (updatedAt=now) supaya semua instance server web refill dari
+ * Firestore di cek marker berikut. Bila tidak ada perubahan sama
+ * sekali, marker TIDAK disentuh. Tulis memakai token
+ * service account yang sama (melewati rules). Cron adalah PENULIS
+ * data, jadi ia TIDAK boleh berjalan dari seed: bila data yang
+ * dimuat berasal dari seed (Firestore tidak bisa dibaca), run
+ * dilewati dengan 503 supaya tidak ada alert palsu atau tulis
+ * berdasarkan data basi.
  *
  * Notifikasi (lihat lib/notify.js):
  * - Sebelum loop cek, daftar perusahaan yang ada lowongannya dibandingkan
@@ -53,7 +66,7 @@
 import { NextResponse } from "next/server";
 import { createSign, timingSafeEqual } from "node:crypto";
 import { requireEnv } from "@/lib/require-env";
-import { getCompanies, STATUS_ORDER } from "@/lib/companies";
+import { getCompaniesWithSource, STATUS_ORDER } from "@/lib/companies";
 import { checkUrl } from "@/lib/check";
 import {
   OPEN_STATUS,
@@ -213,6 +226,52 @@ async function createAlert(fsBase, token, alert) {
   }
 }
 
+/* Naikkan marker kesegaran meta/lastChange (rev+1, updatedAt=now)
+ * setelah run mengubah status atau tanggal_cek perusahaan. Bila dokumen belum ada,
+ * buat lengkap dengan pencacah nol (rev 1). Bila sudah ada, PATCH
+ * hanya rev + updatedAt supaya pencacah refill (refillsToday,
+ * readsEstimate, counterDay) tidak terganggu. Kembalikan true bila
+ * tulis berhasil, false bila gagal (tidak pernah melempar: kegagalan
+ * menaikkan marker tidak boleh menggagalkan balasan cron). */
+async function bumpMarker(fsBase, token, today) {
+  try {
+    const existing = await firestoreGet(`${fsBase}/meta/lastChange`, token);
+    if (!existing) {
+      await firestoreFetch(`${fsBase}/meta/lastChange`, token, {
+        method: "PATCH",
+        body: JSON.stringify({
+          fields: {
+            rev: { integerValue: "1" },
+            updatedAt: { stringValue: new Date().toISOString() },
+            counterDay: { stringValue: today },
+            refillsToday: { integerValue: "0" },
+            readsEstimate: { integerValue: "0" },
+          },
+        }),
+      });
+      return true;
+    }
+    const rev = Number(existing.fields?.rev?.integerValue || 0);
+    await firestoreFetch(
+      `${fsBase}/meta/lastChange` +
+        `?updateMask.fieldPaths=rev&updateMask.fieldPaths=updatedAt`,
+      token,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          fields: {
+            rev: { integerValue: String(rev + 1) },
+            updatedAt: { stringValue: new Date().toISOString() },
+          },
+        }),
+      },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /* Perbandingan string timing-safe: panjang beda langsung gagal, isi
  * dibandingkan tanpa bocor lewat waktu. */
 function secretsEqual(a, b) {
@@ -279,9 +338,23 @@ export async function GET(request) {
   const deadline = startedAt + DEADLINE_MS;
   const today = todayWib();
 
+  /* Cron adalah penulis: ia hanya boleh berjalan dari data LIVE.
+   * Bila Firestore tidak bisa dibaca (source=seed), lewati run —
+   * bertindak dari seed bisa membuat alert palsu dan tulis
+   * berdasarkan data basi. */
   let companies;
   try {
-    companies = await getCompanies();
+    const loaded = await getCompaniesWithSource();
+    if (loaded.source !== "live") {
+      return NextResponse.json(
+        {
+          error: "Data live tidak bisa dimuat, cron dilewati.",
+          detail: "Firestore tidak bisa dibaca saat ini.",
+        },
+        { status: 503 },
+      );
+    }
+    companies = loaded.companies;
   } catch {
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
@@ -343,6 +416,7 @@ export async function GET(request) {
     truncated: false,
     alerts: 0,
     telegram: "none",
+    markerBumped: false,
   };
 
   /* Status tiap perusahaan, mulai dari data yang baru dimuat. Fase
@@ -424,7 +498,12 @@ export async function GET(request) {
 
   /* 6. Loop cek portal, tetap dibatasi anggaran 50 detik. Bila waktu
    * habis di tengah jalan, sisanya dicatat sebagai terpotong dan
-   * menunggu hari berikut. */
+   * menunggu hari berikut.
+   * statusPatched menghitung PATCH status perusahaan yang BERHASIL
+   * (berbeda dari summary.changed yang baru naik setelah entri
+   * changes ikut tertulis): bila PATCH status berhasil tapi tulis
+   * changes gagal, data tetap berubah dan marker tetap harus naik. */
+  let statusPatched = 0;
   for (let i = 0; i < queue.length; i += BATCH) {
     if (Date.now() > deadline) {
       summary.truncated = true;
@@ -484,6 +563,9 @@ export async function GET(request) {
               method: "PATCH",
               body: JSON.stringify(patchBody),
             });
+            /* Status di Firestore sudah berubah di titik ini —
+             * marker wajib naik walau tulis changes di bawah gagal. */
+            statusPatched += 1;
             await firestoreFetch(`${fsBase}/changes`, token, {
               method: "POST",
               body: JSON.stringify(changeBody),
@@ -509,6 +591,17 @@ export async function GET(request) {
       }
     }
     await Promise.all(writes);
+  }
+
+  /* 7. Marker kesegaran: naikkan bila run ini mengubah status
+   * perusahaan apa pun (statusPatched, bukan summary.changed —
+   * lihat catatan di atas) ATAU memperbarui tanggal_cek perusahaan
+   * (summary.updated). Tanpa keduanya, marker tidak disentuh.
+   * Tanggal_cek ikut memicu bump supaya tanggal cek yang tampil
+   * tidak basi: biayanya ~1 refill/hari/instance (±610 baca),
+   * jauh di bawah kuota, dan metering FIN-02 menjaganya. */
+  if (statusPatched > 0 || summary.updated > 0) {
+    summary.markerBumped = await bumpMarker(fsBase, token, today);
   }
 
   return NextResponse.json(summary);

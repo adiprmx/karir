@@ -9,6 +9,7 @@ import { runSearch } from "@/lib/search";
 import { createIndexFetcher } from "@/lib/index-token";
 
 let cached = null;
+let cachedMeta = null;
 let inflight = null;
 /* Satu pemakai izin untuk semua pemanggil loadIndex: izin diminta
  * sekali, dipakai ulang sampai hampir habis (lihat lib/index-token). */
@@ -21,6 +22,7 @@ export function loadIndex() {
       .fetchIndex()
       .then((list) => {
         cached = list;
+        cachedMeta = indexFetcher.getIndexMeta();
         return cached;
       })
       .finally(() => {
@@ -32,13 +34,18 @@ export function loadIndex() {
 
 /* eager: mulai muat saat mount. Selain itu, dimuat saat browser
  * menganggur (atau saat pengguna mulai mengetik, lewat start()). */
+/* meta: {source, seedDate} dari respons /api/index terakhir (null
+ * sebelum indeks dimuat). Pemakai menampilkan catatan "data cadangan"
+ * bila meta.source === "seed". */
 export function useCompanyIndex({ eager = false } = {}) {
   const [index, setIndex] = useState(cached);
+  const [meta, setMeta] = useState(cachedMeta);
   const [state, setState] = useState(cached ? "ok" : "idle");
 
   const start = useCallback(() => {
     if (cached) {
       setIndex(cached);
+      setMeta(cachedMeta);
       setState("ok");
       return;
     }
@@ -46,6 +53,7 @@ export function useCompanyIndex({ eager = false } = {}) {
     loadIndex()
       .then((list) => {
         setIndex(list);
+        setMeta(cachedMeta);
         setState("ok");
       })
       .catch(() => setState("error"));
@@ -68,7 +76,7 @@ export function useCompanyIndex({ eager = false } = {}) {
     return () => window.clearTimeout(id);
   }, [eager, start]);
 
-  return { index, state, start };
+  return { index, meta, state, start };
 }
 
 /* Urutkan dan tandai yang cocok. "Cocok" berarti memenuhi semua isian

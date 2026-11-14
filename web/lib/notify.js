@@ -21,6 +21,43 @@ export const DEADLINE_WINDOW_DAYS = 3;
 export const OPEN_STATUS = "Ada lowongan";
 export const DEFAULT_CHAT_ID = "2028330429";
 
+/* Kuota baca harian Firestore paket Spark (50.000 baca/hari, reset
+ * tengah malam Pasifik / 15:00 WIB). Lapisan data (lib/companies.js)
+ * menghitung sendiri pemakaian lewat pencacah di dokumen
+ * meta/lastChange: tiap refill daftar penuh menaikkan refillsToday
+ * dan readsEstimate. Begitu estimasi mencapai 70% kuota, satu alert
+ * `quota` dibuat di koleksi alerts (id deterministik per hari, jadi
+ * hanya satu per hari) supaya watcher agent-side bisa meneruskannya.
+ * Insiden 15 Nov 2026: kuota habis 00:15 WIB dan semua baca 429 —
+ * alert ini peringatan dini sebelum itu terulang. */
+export const QUOTA_DAILY_LIMIT = 50000;
+export const QUOTA_ALERT_RATIO = 0.7;
+export const QUOTA_ALERT_READS = Math.round(
+  QUOTA_DAILY_LIMIT * QUOTA_ALERT_RATIO,
+);
+export const QUOTA_ALERT_TYPE = "quota";
+
+export function quotaAlertId(dayIso) {
+  return `quota-70-${dayIso}`;
+}
+
+/* Persen pemakaian kuota dari estimasi baca, dibulatkan. */
+export function quotaPercent(readsEstimate) {
+  const n = Number(readsEstimate) || 0;
+  return Math.round((n / QUOTA_DAILY_LIMIT) * 100);
+}
+
+/* Teks pesan alert kuota, untuk diteruskan watcher ke Telegram.
+ * Bentuknya mengikuti formatTelegramMessage di bawah. */
+export function formatQuotaAlertMessage(readsEstimate, dayIso) {
+  const n = Number(readsEstimate) || 0;
+  return [
+    `Pemakaian baca Firestore Karir sudah ${quotaPercent(n)}% dari kuota harian (${n.toLocaleString("id-ID")} dari ${QUOTA_DAILY_LIMIT.toLocaleString("id-ID")} baca, ${formatTanggalId(dayIso)}).`,
+    "Bila kuota habis, situs tetap jalan dari data cadangan, tapi data live tidak bisa diperbarui sampai kuota reset pukul 15:00 WIB.",
+    "Lihat panel admin di https://karir-adiprmx.vercel.app/admin",
+  ].join("\n");
+}
+
 const BULAN = {
   jan: 0,
   januari: 0,

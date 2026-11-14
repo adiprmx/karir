@@ -78,6 +78,7 @@ export default async function Beranda() {
     vizVerified: t(locale, "hero.vizVerified"),
     vizLoading: t(locale, "hero.vizLoading"),
     vizError: t(locale, "hero.vizError"),
+    seedNote: t(locale, "common.seedNote"),
     legendTarget: t(locale, "hero.legendTarget"),
     legendMatch: t(locale, "hero.legendMatch"),
     legendOther: t(locale, "hero.legendOther"),

@@ -39,6 +39,11 @@ service cloud.firestore {
     // lewat service account (melewati rules) atau admin.
     // Entri yang sudah tercatat tidak bisa diubah atau dihapus dari
     // klien, supaya status terkirim tidak bisa dipalsukan.
+    // Pengecualian: alert kuota (type 'quota', id quota-70-YYYY-MM-DD)
+    // boleh dibuat server web lewat API key publik saat estimasi baca
+    // mencapai 70% kuota harian — bentuknya dikekang ketat (companyNo
+    // 0, perusahaan kosong, readsEstimate >= 35000, percent >= 70)
+    // dan id deterministik per hari mencegah duplikat.
     match /alerts/{doc} {
       allow read: if true;
       allow create: if isAdmin()
@@ -50,12 +55,81 @@ service cloud.firestore {
         && request.resource.data.perusahaan is string
         && request.resource.data.sent is bool
         && request.resource.data.createdAt is string;
+      allow create: if request.resource.data.type == 'quota'
+        && doc.matches('^quota-70-[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly([
+          'type', 'companyNo', 'perusahaan', 'sent', 'createdAt',
+          'readsEstimate', 'percent'
+        ])
+        && request.resource.data.companyNo == 0
+        && request.resource.data.perusahaan == ''
+        && request.resource.data.sent == false
+        && request.resource.data.createdAt is string
+        && request.resource.data.readsEstimate is int
+        && request.resource.data.readsEstimate >= 35000
+        && request.resource.data.percent is int
+        && request.resource.data.percent >= 70;
       allow update, delete: if false;
+    }
+    // Marker kesegaran (meta/lastChange, arsitektur seed-first S3):
+    // {rev, updatedAt, counterDay, refillsToday, readsEstimate}.
+    // Dibaca server web tiap jendela TTL 5 menit (1 baca) untuk
+    // memutuskan refill, dan dibaca panel admin untuk tampilan
+    // pemakaian kuota — karena itu baca terbuka untuk siapa pun
+    // (isinya hanya angka, bukan data pengguna).
+    // Tulis rev hanya dua jalur: service account (cron, impor —
+    // melewati rules) dan admin (naik tepat 1, pencacah tidak
+    // berubah). Server web lewat API key publik HANYA boleh
+    // menaikkan pencacah refill: rev dan updatedAt tidak boleh
+    // berubah lewat jalur itu, jadi tidak ada yang bisa memaksa
+    // refill dari luar. Hari sama: refillsToday naik tepat 1 dan
+    // estimasi naik. Ganti hari: pencacah mulai lagi dari 1.
+    // Sisa risiko: siapa pun yang punya API key publik bisa
+    // menaikkan atau me-reset pencacah (estimasi jadi tidak akurat)
+    // — tapi tidak bisa memaksa refill atau menghabiskan kuota baca,
+    // dan alert kuota tetap idempotent per hari.
+    match /meta/lastChange {
+      allow read: if true;
+      allow create: if isAdmin()
+        && request.resource.data.rev == 1
+        && request.resource.data.updatedAt is string
+        && request.resource.data.counterDay is string
+        && request.resource.data.counterDay.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.refillsToday == 0
+        && request.resource.data.readsEstimate == 0
+        && request.resource.data.keys().hasOnly([
+          'rev', 'updatedAt', 'counterDay', 'refillsToday', 'readsEstimate'
+        ]);
+      allow update: if isAdmin()
+        && request.resource.data.rev == resource.data.rev + 1
+        && request.resource.data.updatedAt is string
+        && request.resource.data.counterDay == resource.data.counterDay
+        && request.resource.data.refillsToday == resource.data.refillsToday
+        && request.resource.data.readsEstimate == resource.data.readsEstimate
+        && request.resource.data.keys().hasOnly([
+          'rev', 'updatedAt', 'counterDay', 'refillsToday', 'readsEstimate'
+        ]);
+      allow update: if request.resource.data.rev == resource.data.rev
+        && request.resource.data.updatedAt == resource.data.updatedAt
+        && request.resource.data.keys().hasOnly([
+          'rev', 'updatedAt', 'counterDay', 'refillsToday', 'readsEstimate'
+        ])
+        && ((request.resource.data.counterDay == resource.data.counterDay
+          && request.resource.data.refillsToday == resource.data.refillsToday + 1
+          && request.resource.data.readsEstimate is int
+          && request.resource.data.readsEstimate > resource.data.readsEstimate)
+        || (request.resource.data.counterDay != resource.data.counterDay
+          && request.resource.data.counterDay.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.refillsToday == 1
+          && request.resource.data.readsEstimate is int
+          && request.resource.data.readsEstimate > 0));
+      allow delete: if false;
     }
     // Snapshot internal cron (meta/targets: daftar nomor perusahaan
     // yang ada lowongannya run sebelumnya). Hanya service account
     // yang menulis dan membaca (melewati rules); klien tidak
-    // mendapat akses sama sekali.
+    // mendapat akses sama sekali. Dokumen meta lain di luar
+    // lastChange juga tertutup.
     match /meta/{doc} {
       allow read, write: if false;
     }

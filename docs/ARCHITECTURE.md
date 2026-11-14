@@ -11,12 +11,17 @@ data. Aplikasi live tidak membaca CSV; aplikasi membaca Firestore.
 flowchart LR
     CSV[data/daftar-link-karir.csv] --> IMPOR[import_canonical.py\n13 field, updateMask lengkap]
     IMPOR --> FS[(Firestore karir-9d53a)]
+    IMPOR -.-> MARK[meta/lastChange\nmarker rev]
     CSV --> SEED[web/data/companies.json\nseed cadangan]
-    FS --> REST[lib/companies.js dan lib/changes.js\nFirestore REST API]
+    SEED --> REST[lib/companies.js\nseed-first + marker]
+    FS --> REST
+    MARK -.-> REST
     REST --> API[Rute /api/*]
     REST --> HAL[Next.js: Beranda, Cari, Dasbor,\ndetail, Peta, Lamaran]
     ADMIN[Panel admin /admin\nFirebase Auth + SDK] --> FS
+    ADMIN -.-> MARK
     CRON[Vercel Cron 01:00 WIB\n/api/cron/recheck] --> FS
+    CRON -.-> MARK
     FS -.-> WB[Write-back harian\nstatus/tanggal_cek live -> CSV + seed]
     WB -.-> CSV
     HAL -.-> LS[(localStorage di browser\ntracker tamu, onboarding,\npencarian terakhir)]
@@ -56,9 +61,59 @@ Aturan jendela: data live boleh lebih baru dari CSV maksimal 24 jam
 lebih baru lebih dari 24 jam, `scripts/check-consistency.py --live`
 gagal — itu tanda write-back macet dan harus diperiksa.
 
+## Arsitektur seed-first (keputusan S3, 15 Nov 2026)
+
+Latar: 15 Nov 2026 sekitar 00:15 WIB, kuota baca harian Firestore paket
+Spark (50.000 baca/hari, reset 15:00 WIB) habis — semua baca
+mengembalikan 429 RESOURCE_EXHAUSTED dan `/api/stats`, `/api/companies`,
+`/api/index` menjawab 503. Akarnya: lapisan baca lama memuat daftar
+penuh (610 baca) tiap cache 5 menit habis di tiap instance serverless,
+jadi baca dokumen menumpuk sepanjang hari.
+
+Perbaikan (T15): seed menjadi DEFAULT, Firestore hanya di-refill bila
+ada bukti data berubah.
+
+- **Seed dulu.** `getCompanies()` menyajikan `web/data/companies.json`
+  sebagai default. Seed adalah salinan CSV yang dijaga
+  `check-consistency.py`, jadi isinya data asli dengan tanggal cek
+  aslinya.
+- **Marker kecil.** Satu dokumen `meta/lastChange`
+  `{rev, updatedAt, counterDay, refillsToday, readsEstimate}` dibaca
+  1 baca per jendela TTL 5 menit (cache memori + dedup inflight).
+  Refill penuh dari Firestore (610 baca) HANYA bila `rev` berubah
+  sejak refill terakhir, atau saat instance dingin pertama kali.
+- **Yang menaikkan rev:** cron cek ulang (bila ada status berubah atau
+  tanggal_cek diperbarui), impor kanonis (bila ada dokumen tertulis),
+  panel admin (bila ada simpan/hapus/impor). Tulis tidak kena kuota
+  baca. Tanpa perubahan, marker tidak disentuh.
+- **Degradasi tanpa 503.** Baca marker gagal (429/offline/error apa
+  pun) atau refill gagal (429) -> sajikan seed atau cache live lama,
+  tanpa melempar. Rute API tetap 200 dan respons membawa
+  `source: "live" | "seed"` + `seedDate`; klien menampilkan catatan
+  "data cadangan" bila `source=seed`.
+- **Self-metering (FIN-02).** Tiap refill menaikkan pencacah di marker
+  (1 tulis PATCH, best-effort): `refillsToday` +1,
+  `readsEstimate` += jumlah dokumen. Panel admin menampilkan estimasi
+  pemakaian dari marker (1 baca). Begitu estimasi mencapai 70% kuota
+  harian (35.000 baca), satu alert tipe `quota` dibuat di koleksi
+  `alerts` (id deterministik `quota-70-{tanggal}`, satu per hari).
+- **Batas hemat lain (FIN-04/FIN-05).** Seksi admin Jejak, Laporan,
+  dan Pengunjung dimuat malas (saat dibuka) dengan batas lebih kecil;
+  umpan `changes` di-cache memori 1 jam (berubah maks 1x sehari);
+  `getCompanyById` di-cache 5 menit + dedup inflight; perusahaan
+  sejenis dihitung dari seed, bukan dari daftar penuh.
+- **Cron tidak boleh jalan dari seed.** Cron adalah penulis: bila data
+  yang dimuat berasal dari seed (Firestore tidak bisa dibaca), run
+  dilewati dengan 503 supaya tidak ada alert palsu atau tulis dari
+  data basi.
+
+Perkiraan pemakaian setelah perbaikan: instance hangat memakai ~1 baca
+marker per 5 menit (~288/hari/instance) + 1 refill (~610 baca) per
+perubahan data — dua orde di bawah pola lama.
+
 ## Koleksi Firestore
 
-Proyek `karir-9d53a`, region asia-southeast1, paket Spark. Empat koleksi:
+Proyek `karir-9d53a`, region asia-southeast1, paket Spark.
 
 | Koleksi | Isi | Baca | Tulis |
 | --- | --- | --- | --- |
@@ -66,12 +121,14 @@ Proyek `karir-9d53a`, region asia-southeast1, paket Spark. Empat koleksi:
 | `changes` | Perubahan status dari cek ulang harian | Terbuka | Admin login, 6 kolom wajib, `from` dan `to` salah satu dari 4 status; tidak bisa diubah atau dihapus |
 | `audit_logs` | Jejak perubahan data oleh admin | Admin login | Admin login; tidak bisa diubah atau dihapus |
 | `reports` | Laporan tautan mati dari pengunjung | Admin login | Siapa pun, bentuk divalidasi (`no` angka, `alasan` 1 sampai 499 karakter); tidak bisa diubah atau dihapus |
+| `alerts` | Alert notifikasi (`new-target`, `deadline`, `quota`) | Terbuka | Admin login; alert `quota` boleh dibuat server lewat API key publik dengan bentuk terkekang; tidak bisa diubah atau dihapus |
+| `meta` | `targets` (snapshot cron) dan `lastChange` (marker kesegaran seed-first) | `lastChange` terbuka; sisanya tertutup | `lastChange`: rev hanya admin/service account, pencacah refill hanya naik 1 per tulis; `targets` hanya service account |
 
-Aturannya ada di `web/firestore.rules`. Aturan untuk `changes` sudah ditulis di file itu dan menunggu diterbitkan dari Firebase Console.
+Aturannya ada di `web/firestore.rules`.
 
 ## Lapisan baca
 
-Aplikasi membaca Firestore lewat REST API (`fetch` biasa) di `lib/companies.js` dan `lib/changes.js`, dengan timeout 10 detik untuk daftar perusahaan dan 5 detik untuk umpan perubahan. Cache memori server 5 menit; admin yang menulis data memanggil `revalidateCompanies()` supaya cache dibersihkan. Daftar perusahaan diambil per halaman 300 dokumen dengan `pageToken` sampai habis.
+Aplikasi membaca Firestore lewat REST API (`fetch` biasa) di `lib/companies.js` dan `lib/changes.js`, dengan timeout 10 detik untuk daftar perusahaan dan 5 detik untuk umpan perubahan dan marker. Polanya seed-first (keputusan S3, lihat bagian di atas): seed adalah default, marker `meta/lastChange` dicek 1 baca per 5 menit, dan refill daftar penuh (per halaman 300 dokumen dengan `pageToken` sampai habis) hanya bila rev marker berubah. Umpan perubahan di-cache memori 1 jam. Marker adalah mekanisme invalidasi lintas-instance untuk serverless; `revalidateCompanies()` hanya membersihkan cache instance ini.
 
 SDK JS Firestore (gRPC) tidak dipakai untuk baca server karena tidak menembus proxy egress di lingkungan build: request-nya timeout lalu mengembalikan 0 baris tanpa error yang jelas. REST terbukti andal di jalur yang sama, termasuk saat impor 406 dokumen.
 

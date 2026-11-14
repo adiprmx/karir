@@ -28,7 +28,7 @@ export default function HeroSearch({ labels, nos, targetMask, roles }) {
   const [domisili, setDomisili] = useState("");
   const [posisi, setPosisi] = useState("");
   const [recent, setRecent] = useState(null);
-  const { index, state, start } = useCompanyIndex();
+  const { index, meta, state, start } = useCompanyIndex();
   const { entries, toggle } = useTracker();
   const formRef = useRef(null);
 
@@ -238,6 +238,12 @@ export default function HeroSearch({ labels, nos, targetMask, roles }) {
             <span className="sw" /> {labels.legendOther}
           </li>
         </ul>
+        {meta?.source === "seed" && (
+          <p className="note-line">
+            <Icon name="info" size={16} />
+            {labels.seedNote}
+          </p>
+        )}
       </section>
 
       {hasQuery && (

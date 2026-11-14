@@ -4,9 +4,14 @@
  * Gerbang: tolak UA otomatis (403), batas laju 30/menit per hash IP
  * (429), lalu wajib token valid di header Authorization Bearer (401).
  * Respons memakai "private, no-store": data ber-token tidak boleh
- * disajikan dari edge cache tanpa token. */
+ * disajikan dari edge cache tanpa token.
+ * Respons membawa `source` ("live" | "seed") + `seedDate`: "seed"
+ * berarti daftar berasal dari seed cadangan karena Firestore sedang
+ * tidak bisa dibaca (mis. kuota habis) — bukan 503 (arsitektur
+ * seed-first S3). Klien menampilkan catatan "data cadangan" bila
+ * source=seed. */
 import { NextResponse } from "next/server";
-import { getCompanies } from "@/lib/companies";
+import { getCompaniesWithSource } from "@/lib/companies";
 import {
   isBotUa,
   getClientIp,
@@ -67,9 +72,9 @@ export async function GET(request) {
     );
   }
   try {
-    const companies = await getCompanies();
+    const { companies, source, seedDate } = await getCompaniesWithSource();
     return NextResponse.json(
-      { companies },
+      { companies, source, seedDate },
       {
         headers: {
           "Cache-Control": "private, no-store",
@@ -77,6 +82,9 @@ export async function GET(request) {
       },
     );
   } catch {
+    /* getCompaniesWithSource tidak pernah melempar karena Firestore
+     * (jatuh ke seed); 503 di sini hanya untuk kegagalan tak terduga
+     * (mis. seed ikut tidak bisa dimuat). */
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
       { status: 503 },

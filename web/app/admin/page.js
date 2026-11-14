@@ -7,6 +7,15 @@
  * dengan refresh paksa sekali): hanya akun dengan klaim admin yang
  * melihat panel. Akun biasa yang masuk melihat pesan penolakan, bukan
  * panel. Tulis hanya diizinkan untuk admin (aturan Firestore).
+ *
+ * Hemat kuota baca (FIN-04, arsitektur seed-first S3): seksi Jejak
+ * perubahan, Laporan tautan mati, dan Pengunjung TIDAK dimuat saat
+ * panel dibuka — masing-masing dimuat sekali saat admin membukanya
+ * (tombol Tampilkan). Batas baca tiap seksi juga diperkecil.
+ * Seksi Pemakaian kuota membaca satu dokumen marker meta/lastChange
+ * (1 baca) dan menampilkan estimasi pemakaian kuota baca harian.
+ * Setiap simpan/hapus/impor yang mengubah data perusahaan menaikkan
+ * marker (bumpMarker) supaya instance web refill data live.
  */
 import { useEffect, useState } from "react";
 import {
@@ -20,11 +29,14 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
+  increment,
   limit,
   orderBy,
   query,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { STATUS_ORDER } from "@/lib/companies";
@@ -56,8 +68,16 @@ const CSV_HEADER = [
 const PAGE_SIZE = 20;
 const MAX_IMPORT = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const VISITOR_LIMIT = 1000;
+/* Batas baca seksi admin (FIN-04): diperkecil dari nilai lama
+ * (pengunjung 1000 -> 300, profil 500 -> 100, jejak/laporan 20 -> 10)
+ * supaya satu kali buka panel tidak menghabiskan ribuan baca. */
+const VISITOR_LIMIT = 300;
+const PROFILES_LIMIT = 100;
+const AUDIT_LIMIT = 10;
+const REPORTS_LIMIT = 10;
 const VISITOR_DAYS = 30;
+/* Kuota baca harian Firestore paket Spark. */
+const QUOTA_DAILY_LIMIT = 50000;
 const TRACKER_ACTIONS = ["Ditandai", "Sudah dilamar", "Dipanggil", "Ditolak"];
 
 /* Hari (YYYY-MM-DD) dari satu catatan pengunjung: pakai kolom `day`
@@ -467,6 +487,15 @@ export default function Admin() {
   const [visitorsCapped, setVisitorsCapped] = useState(false);
   const [userProfiles, setUserProfiles] = useState([]);
   const [profilesError, setProfilesError] = useState("");
+  /* Seksi malas (FIN-04): false = belum dibuka, datanya belum dibaca.
+   * Sekali dibuka, datanya dimuat sekali dan dipakai ulang. */
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [visitorsOpen, setVisitorsOpen] = useState(false);
+  /* Marker kesegaran meta/lastChange (1 baca saat panel dibuka):
+   * null = belum dimuat, "missing" = dokumen belum ada,
+   * "error" = tidak bisa dibaca, objek = isi marker. */
+  const [quota, setQuota] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -519,7 +548,11 @@ export default function Admin() {
     setAuditError("");
     try {
       const snap = await getDocs(
-        query(collection(db, "audit_logs"), orderBy("at", "desc"), limit(20)),
+        query(
+          collection(db, "audit_logs"),
+          orderBy("at", "desc"),
+          limit(AUDIT_LIMIT),
+        ),
       );
       setAuditEntries(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch {
@@ -531,11 +564,62 @@ export default function Admin() {
     setReportsError("");
     try {
       const snap = await getDocs(
-        query(collection(db, "reports"), orderBy("dibuat", "desc"), limit(20)),
+        query(
+          collection(db, "reports"),
+          orderBy("dibuat", "desc"),
+          limit(REPORTS_LIMIT),
+        ),
       );
       setReports(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch {
       setReportsError("Laporan tautan mati tidak bisa dimuat.");
+    }
+  }
+
+  /* Baca marker kesegaran (1 baca) untuk tampilan pemakaian kuota.
+   * Gagal baca tidak menggagalkan panel: seksi kuota menampilkan
+   * pesan "belum bisa dibaca" (mis. aturan marker belum terbit). */
+  async function loadQuota() {
+    try {
+      const snap = await getDoc(doc(db, "meta", "lastChange"));
+      if (!snap.exists()) {
+        setQuota("missing");
+        return;
+      }
+      setQuota(snap.data());
+    } catch {
+      setQuota("error");
+    }
+  }
+
+  /* Naikkan marker kesegaran (rev+1) setelah data perusahaan berubah,
+   * supaya instance web refill data live. Best-effort: tidak pernah
+   * melempar, kegagalan ditelan (admin tetap melihat pesan simpan
+   * yang benar; marker tertinggal hanya berarti data live tampil
+   * terlambat sampai bump berikutnya). Bila dokumen belum ada,
+   * dibuat lengkap dengan pencacah nol — hanya bila update gagal
+   * karena dokumen tidak ditemukan, bukan karena alasan lain
+   * (setDoc buta bisa me-reset rev yang sudah ada). */
+  async function bumpMarker() {
+    try {
+      await updateDoc(doc(db, "meta", "lastChange"), {
+        rev: increment(1),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      if (err && err.code === "not-found") {
+        try {
+          await setDoc(doc(db, "meta", "lastChange"), {
+            rev: 1,
+            updatedAt: new Date().toISOString(),
+            counterDay: todayStr(),
+            refillsToday: 0,
+            readsEstimate: 0,
+          });
+        } catch {
+          /* Best-effort. */
+        }
+      }
     }
   }
 
@@ -564,7 +648,7 @@ export default function Admin() {
     setProfilesError("");
     try {
       const snap = await getDocs(
-        query(collection(db, "user_profiles"), limit(500)),
+        query(collection(db, "user_profiles"), limit(PROFILES_LIMIT)),
       );
       setUserProfiles(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch {
@@ -576,13 +660,13 @@ export default function Admin() {
     if (!user || !isAdmin) return;
     /* Pemuat mengatur state awal (loading / reset error) secara sinkron,
      * jadi pemanggilannya dijadwalkan sebagai microtask: setState di
-     * dalam callback, bukan sinkron di badan effect. */
+     * dalam callback, bukan sinkron di badan effect.
+     * FIN-04: saat panel dibuka HANYA perusahaan + marker kuota yang
+     * dimuat. Jejak, laporan, dan pengunjung dimuat saat admin
+     * membuka seksinya (tombol Tampilkan di tiap seksi). */
     queueMicrotask(() => {
       loadCompanies();
-      loadAudit();
-      loadReports();
-      loadVisitors();
-      loadProfiles();
+      loadQuota();
     });
   }, [user, isAdmin]);
 
@@ -727,7 +811,9 @@ export default function Admin() {
           ? `Tersimpan: ${data.perusahaan}.`
           : `Tersimpan: ${data.perusahaan}. Tapi jejak perubahannya gagal ditulis.`,
       );
-      loadAudit();
+      /* Data berubah: naikkan marker supaya instance web refill. */
+      await bumpMarker();
+      if (auditOpen) loadAudit();
     } catch {
       setMessage("Gagal menyimpan. Periksa aturan Firestore dan koneksi.");
     }
@@ -755,7 +841,9 @@ export default function Admin() {
           ? "Dihapus."
           : "Dihapus. Tapi jejak perubahannya gagal ditulis.",
       );
-      loadAudit();
+      /* Data berubah: naikkan marker supaya instance web refill. */
+      await bumpMarker();
+      if (auditOpen) loadAudit();
     } catch {
       setMessage("Gagal menghapus. Periksa aturan Firestore dan koneksi.");
     }
@@ -1011,7 +1099,9 @@ export default function Admin() {
     setCsvValid([]);
     setCsvRejected([]);
     setCsvFileName("");
-    loadAudit();
+    /* Data berubah: naikkan marker supaya instance web refill. */
+    if (okCount > 0) await bumpMarker();
+    if (auditOpen) loadAudit();
     setImporting(false);
   }
 
@@ -1229,6 +1319,56 @@ export default function Admin() {
             Menampilkan baris yang bermasalah saja. Ketuk angka yang sama
             untuk melihat semua data lagi.
           </p>
+        )}
+      </div>
+
+      <div className="filters" style={{ marginTop: 24 }}>
+        <p className="section-label">Pemakaian kuota baca</p>
+        <p className="section-note">
+          Estimasi baca Firestore hari ini (paket Spark: 50.000 baca per
+          hari, reset pukul 15:00 WIB). Dihitung dari pencacah refill di
+          marker kesegaran; baca marker dan baca detail tidak ikut
+          terhitung, jadi angka sebenarnya sedikit lebih besar.
+        </p>
+        {quota === null && (
+          <p className="notice">Memuat data pemakaian…</p>
+        )}
+        {quota === "missing" && (
+          <p className="notice">
+            Belum ada data pemakaian (marker belum dibuat).
+          </p>
+        )}
+        {quota === "error" && (
+          <p className="notice">
+            Data pemakaian belum bisa dibaca. Periksa aturan Firestore
+            untuk dokumen meta/lastChange.
+          </p>
+        )}
+        {quota && typeof quota === "object" && (
+          <>
+            <div className="stat-row">
+              <span className="stat-num num">
+                {(Number(quota.readsEstimate) || 0).toLocaleString("id-ID")}{" "}
+                dari {QUOTA_DAILY_LIMIT.toLocaleString("id-ID")}
+              </span>
+              <span className="stat-label">
+                baca hari ini (
+                {Math.round(
+                  ((Number(quota.readsEstimate) || 0) / QUOTA_DAILY_LIMIT) *
+                    100,
+                )}
+                % kuota, {Number(quota.refillsToday) || 0} kali refill
+                daftar).
+              </span>
+            </div>
+            <p className="section-note">
+              Revisi data: {Number(quota.rev) || 0} · Terakhir berubah:{" "}
+              {quota.updatedAt
+                ? formatTime(quota.updatedAt)
+                : "tidak tercatat"}
+              .
+            </p>
+          </>
         )}
       </div>
 
@@ -1569,41 +1709,74 @@ export default function Admin() {
       <div className="filters" style={{ marginTop: 24 }}>
         <p className="section-label">Jejak perubahan</p>
         <p className="section-note">
-          20 perubahan terakhir yang dicatat panel ini.
+          10 perubahan terakhir yang dicatat panel ini. Dimuat hanya bila
+          dibuka, supaya hemat kuota baca.
         </p>
-        {auditError && <p className="notice">{auditError}</p>}
-        {auditEntries.length === 0 && !auditError ? (
-          <p className="notice">Belum ada perubahan yang tercatat.</p>
+        {!auditOpen ? (
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => {
+              setAuditOpen(true);
+              loadAudit();
+            }}
+          >
+            Tampilkan jejak perubahan
+          </button>
         ) : (
-          <ul className="recheck-list">
-            {auditEntries.map((a) => (
-              <li key={a.id}>
-                {formatTime(a.at)} · {a.by} ·{" "}
-                {a.action === "delete" ? "Hapus" : "Simpan"} · {a.no}.{" "}
-                {a.perusahaan}
-              </li>
-            ))}
-          </ul>
+          <>
+            {auditError && <p className="notice">{auditError}</p>}
+            {auditEntries.length === 0 && !auditError ? (
+              <p className="notice">Belum ada perubahan yang tercatat.</p>
+            ) : (
+              <ul className="recheck-list">
+                {auditEntries.map((a) => (
+                  <li key={a.id}>
+                    {formatTime(a.at)} · {a.by} ·{" "}
+                    {a.action === "delete" ? "Hapus" : "Simpan"} · {a.no}.{" "}
+                    {a.perusahaan}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
 
       <div className="filters" style={{ marginTop: 24 }}>
         <p className="section-label">Laporan tautan mati</p>
         <p className="section-note">
-          20 laporan terakhir dari pengunjung yang menemukan tautan karir
-          tidak bisa dibuka.
+          10 laporan terakhir dari pengunjung yang menemukan tautan karir
+          tidak bisa dibuka. Dimuat hanya bila dibuka, supaya hemat kuota
+          baca.
         </p>
-        {reportsError && <p className="notice">{reportsError}</p>}
-        {reports.length === 0 && !reportsError ? (
-          <p className="notice">Belum ada laporan.</p>
+        {!reportsOpen ? (
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => {
+              setReportsOpen(true);
+              loadReports();
+            }}
+          >
+            Tampilkan laporan tautan mati
+          </button>
         ) : (
-          <ul className="recheck-list">
-            {reports.map((r) => (
-              <li key={r.id}>
-                {formatTime(r.dibuat)} · {r.no}. {r.perusahaan} · {r.alasan}
-              </li>
-            ))}
-          </ul>
+          <>
+            {reportsError && <p className="notice">{reportsError}</p>}
+            {reports.length === 0 && !reportsError ? (
+              <p className="notice">Belum ada laporan.</p>
+            ) : (
+              <ul className="recheck-list">
+                {reports.map((r) => (
+                  <li key={r.id}>
+                    {formatTime(r.dibuat)} · {r.no}. {r.perusahaan} ·{" "}
+                    {r.alasan}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
 
@@ -1611,8 +1784,23 @@ export default function Admin() {
         <p className="section-label">Pengunjung</p>
         <p className="section-note">
           Ringkasan kunjungan 30 hari terakhir. Angka dihitung dari catatan
-          yang masuk, tanpa menyimpan alamat pengunjung.
+          yang masuk, tanpa menyimpan alamat pengunjung. Dimuat hanya bila
+          dibuka, supaya hemat kuota baca.
         </p>
+        {!visitorsOpen ? (
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => {
+              setVisitorsOpen(true);
+              loadVisitors();
+              loadProfiles();
+            }}
+          >
+            Tampilkan data pengunjung
+          </button>
+        ) : (
+          <>
         {visitorsError && <p className="notice">{visitorsError}</p>}
         {loadingVisitors && (
           <div className="state">
@@ -1908,8 +2096,10 @@ export default function Admin() {
           )}
         {visitorsCapped && !visitorsError && (
           <p className="section-note">
-            Angka di atas dihitung dari 1000 aktivitas terakhir.
+            Angka di atas dihitung dari 300 aktivitas terakhir.
           </p>
+        )}
+          </>
         )}
       </div>
     </div>

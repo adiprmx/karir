@@ -8,7 +8,12 @@
  * gagal, error diteruskan ke pemanggil supaya halaman menampilkan
  * state error yang sudah ada, bukan daftar kosong.
  * Semua fungsi di sini murni dan bisa dites tanpa browser: fetch
- * disuntikkan lewat parameter, waktu lewat parameter now. */
+ * disuntikkan lewat parameter, waktu lewat parameter now.
+ * Respons /api/index membawa `source` ("live" | "seed") + `seedDate`
+ * (arsitektur seed-first S3): fetchIndex merekamnya sebagai meta
+ * terakhir (getIndexMeta) supaya halaman bisa menampilkan catatan
+ * "data cadangan" bila source=seed. Bila server lama belum mengirim
+ * field itu, source dianggap "live". */
 export const TOKEN_TTL_MS = 60_000;
 /* Jangan pakai izin yang sisa berlakunya tinggal kurang dari ini. */
 export const TOKEN_SAFETY_MS = 10_000;
@@ -32,6 +37,12 @@ export function isTokenFresh(cached, now = Date.now()) {
 export function createIndexFetcher(fetchImpl = fetch) {
   let cachedToken = null;
   let inflightToken = null;
+  /* Meta respons /api/index terakhir: {source, seedDate}. */
+  let lastMeta = null;
+
+  function getIndexMeta() {
+    return lastMeta;
+  }
 
   async function getToken(force = false) {
     if (!force && isTokenFresh(cachedToken)) return cachedToken.token;
@@ -65,8 +76,12 @@ export function createIndexFetcher(fetchImpl = fetch) {
     }
     if (!res.ok) throw new Error("gagal");
     const j = await res.json();
+    lastMeta = {
+      source: j.source === "seed" ? "seed" : "live",
+      seedDate: typeof j.seedDate === "string" ? j.seedDate : "",
+    };
     return Array.isArray(j.companies) ? j.companies : [];
   }
 
-  return { fetchIndex, getToken };
+  return { fetchIndex, getToken, getIndexMeta };
 }

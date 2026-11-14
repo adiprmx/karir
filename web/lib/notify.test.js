@@ -18,6 +18,11 @@ import {
   collectDeadlineAlerts,
   formatTelegramMessage,
   sendTelegramMessage,
+  QUOTA_DAILY_LIMIT,
+  QUOTA_ALERT_READS,
+  quotaAlertId,
+  quotaPercent,
+  formatQuotaAlertMessage,
 } from "./notify.js";
 
 function target(overrides = {}) {
@@ -264,5 +269,34 @@ describe("sendTelegramMessage", () => {
     });
     assert.equal(res.ok, false);
     assert.equal(called, false);
+  });
+});
+
+describe("alert kuota baca (FIN-02)", () => {
+  it("ambang alert 70% dari 50.000 baca harian", () => {
+    assert.equal(QUOTA_DAILY_LIMIT, 50000);
+    assert.equal(QUOTA_ALERT_READS, 35000);
+  });
+
+  it("id alert kuota deterministik per hari", () => {
+    assert.equal(quotaAlertId("2026-11-15"), "quota-70-2026-11-15");
+    assert.equal(quotaAlertId("2026-11-15"), quotaAlertId("2026-11-15"));
+    assert.notEqual(quotaAlertId("2026-11-15"), quotaAlertId("2026-11-16"));
+  });
+
+  it("persen kuota dibulatkan", () => {
+    assert.equal(quotaPercent(0), 0);
+    assert.equal(quotaPercent(25000), 50);
+    assert.equal(quotaPercent(35000), 70);
+    assert.equal(quotaPercent(35002), 70);
+    assert.equal(quotaPercent(50000), 100);
+  });
+
+  it("pesan alert kuota menyebut persen dan reset 15:00 WIB", () => {
+    const msg = formatQuotaAlertMessage(35000, "2026-11-15");
+    assert.match(msg, /70%/);
+    assert.match(msg, /35\.000/);
+    assert.match(msg, /15 Nov 2026/);
+    assert.match(msg, /15:00 WIB/);
   });
 });

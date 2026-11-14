@@ -1,8 +1,11 @@
 /* GET /api/stats — angka ringkas data Karir, JSON.
  * Gerbang: tolak UA otomatis (403), batas laju 60/menit per hash IP
- * (429). Bentuk respons sukses tidak berubah. */
+ * (429). Respons membawa `source` ("live" | "seed") + `seedDate`:
+ * "seed" berarti data berasal dari seed cadangan karena Firestore
+ * sedang tidak bisa dibaca (mis. kuota habis) — angkanya tetap
+ * dihitung dari data itu, bukan 503 (arsitektur seed-first S3). */
 import { NextResponse } from "next/server";
-import { getCompanies, getStats, getStaleCount } from "@/lib/companies";
+import { getCompaniesWithSource, getStats, getStaleCount } from "@/lib/companies";
 import { countBy, topEntries } from "@/lib/search";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
 import { getSharedLimiter } from "@/lib/rate-limit";
@@ -35,12 +38,15 @@ export async function GET(request) {
     );
   }
   try {
-    const [companies, stats, stale] = await Promise.all([
-      getCompanies(),
-      getStats(),
-      getStaleCount(),
-    ]);
+    const [{ companies, source, seedDate }, stats, stale] =
+      await Promise.all([
+        getCompaniesWithSource(),
+        getStats(),
+        getStaleCount(),
+      ]);
     return NextResponse.json({
+      source,
+      seedDate,
       total: stats.total,
       byStatus: stats.byStatus,
       byCategory: topEntries(countBy(companies, "kategori"), 8),
@@ -50,6 +56,9 @@ export async function GET(request) {
       stale,
     });
   } catch (err) {
+    /* getCompaniesWithSource tidak pernah melempar karena Firestore
+     * (jatuh ke seed); 503 di sini hanya untuk kegagalan tak terduga
+     * (mis. seed ikut tidak bisa dimuat). */
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
       { status: 503 },

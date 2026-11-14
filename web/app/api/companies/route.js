@@ -1,9 +1,13 @@
 /* API pencarian server Karir.
  * GET /api/companies?domisili=&posisi=&q=&kategori=&status=&urutan=&limit=&offset=
  * Pencarian dan skor jalan di server (bukan di browser), memakai logika
- * yang sama dengan halaman Cari. Mengembalikan JSON. */
+ * yang sama dengan halaman Cari. Mengembalikan JSON.
+ * Respons membawa `source` ("live" | "seed") + `seedDate`: "seed"
+ * berarti hasil dihitung dari seed cadangan karena Firestore sedang
+ * tidak bisa dibaca (mis. kuota habis) — bukan 503 (arsitektur
+ * seed-first S3). */
 import { NextResponse } from "next/server";
-import { getCompanies } from "@/lib/companies";
+import { getCompaniesWithSource } from "@/lib/companies";
 import { runSearch, tokenize, fieldMatchesAffirmative } from "@/lib/search";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
 import { getSharedLimiter } from "@/lib/rate-limit";
@@ -46,7 +50,9 @@ export async function GET(request) {
   );
   const q = params.get("q") || "";
   try {
-    let companies = await getCompanies();
+    const { companies: all, source, seedDate } =
+      await getCompaniesWithSource();
+    let companies = all;
     // Pencarian bebas: saring ke baris yang menyebut kata kunci di nama,
     // posisi, lokasi, atau catatan, lalu skor dengan kata kunci itu.
     if (q) {
@@ -66,6 +72,8 @@ export async function GET(request) {
       urutan: params.get("urutan") || "relevansi",
     });
     return NextResponse.json({
+      source,
+      seedDate,
       total: results.length,
       mode,
       limit,
@@ -77,6 +85,9 @@ export async function GET(request) {
       })),
     });
   } catch (err) {
+    /* getCompaniesWithSource tidak pernah melempar karena Firestore
+     * (jatuh ke seed); 503 di sini hanya untuk kegagalan tak terduga
+     * (mis. seed ikut tidak bisa dimuat). */
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
       { status: 503 },

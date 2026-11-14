@@ -98,7 +98,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
   const [state, setState] = useState(initial);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [sheet, setSheet] = useState(false);
-  const { index, state: loadState, start } = useCompanyIndex({ eager: true });
+  const { index, meta, state: loadState, start } = useCompanyIndex({ eager: true });
   const { entries, toggle } = useTracker();
   const listRef = useRef(null);
   const prevTops = useRef(new Map());
@@ -329,6 +329,12 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
                     <> {fill(labels.matchCount, { m: r.matched.size })}</>
                   )}
                 </p>
+                {meta?.source === "seed" && (
+                  <p className="note-line">
+                    <Icon name="info" size={16} />
+                    {labels.seedNote}
+                  </p>
+                )}
                 {queryHasPosisi && r.mode !== "perusahaan" && !anyPositionMatch && (
                   <p className="note-line">
                     <Icon name="info" size={16} />

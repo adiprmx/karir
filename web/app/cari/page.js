@@ -39,6 +39,7 @@ export default async function Cari({ searchParams }) {
     empty: t(locale, "search.empty"),
     emptyHint: t(locale, "search.emptyHint"),
     loading: t(locale, "search.loading"),
+    seedNote: t(locale, "common.seedNote"),
     error: t(locale, "search.error"),
     retry: t(locale, "search.retry"),
     mark: t(locale, "search.mark"),

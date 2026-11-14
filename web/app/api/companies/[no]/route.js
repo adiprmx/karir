@@ -1,8 +1,11 @@
 /* GET /api/companies/[no] — satu perusahaan, JSON.
  * Gerbang: tolak UA otomatis (403), batas laju 60/menit per hash IP
- * (429). Bentuk respons sukses tidak berubah. */
+ * (429). Respons membawa `source` ("live" | "seed") + `seedDate`:
+ * saat Firestore tidak bisa dibaca, perusahaan diambil dari seed
+ * cadangan (bukan 503) — arsitektur seed-first S3, sama seperti
+ * rute daftar. */
 import { NextResponse } from "next/server";
-import { getCompanyById } from "@/lib/companies";
+import { getCompanyByIdWithSource, getSeedDate } from "@/lib/companies";
 import { isBotUa, checkRateLimit, getClientIp } from "@/lib/api-guard";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
 
@@ -35,15 +38,21 @@ export async function GET(request, { params }) {
   }
   try {
     const { no } = await params;
-    const company = await getCompanyById(no);
+    const [{ company, source }, seedDate] = await Promise.all([
+      getCompanyByIdWithSource(no),
+      getSeedDate(),
+    ]);
     if (!company) {
       return NextResponse.json(
         { error: "Perusahaan tidak ditemukan." },
         { status: 404 },
       );
     }
-    return NextResponse.json({ company });
+    return NextResponse.json({ company, source, seedDate });
   } catch (err) {
+    /* getCompanyByIdWithSource tidak pernah melempar karena Firestore
+     * (jatuh ke seed); 503 di sini hanya untuk kegagalan tak terduga
+     * (mis. seed ikut tidak bisa dimuat). */
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
       { status: 503 },

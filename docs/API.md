@@ -23,6 +23,8 @@ Contoh: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang`
 
 ```json
 {
+  "source": "live",
+  "seedDate": "2026-11-14",
   "total": 610,
   "mode": "semua",
   "limit": 20,
@@ -49,13 +51,11 @@ Contoh: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang`
 
 `total` adalah jumlah hasil sebelum paginasi. `mode` bernilai `perusahaan` bila kata kunci posisi cocok dengan nama perusahaan, sehingga hanya perusahaan itu yang tampil; selain itu `semua`. Skor: posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, portal mati -20, tidak dapat diverifikasi -10.
 
-Gagal memuat data dari Firestore:
+`source` bernilai `live` bila hasil dihitung dari Firestore, `seed` bila dihitung dari seed cadangan karena Firestore sedang tidak bisa dibaca (mis. kuota baca harian habis — insiden 15 Nov 2026). `seedDate` adalah tanggal cek terbaru di seed. Saat `source` = `seed`, rute ini tetap menjawab 200 dengan data cadangan, bukan 503 (arsitektur seed-first S3, lihat `ARCHITECTURE.md` dan bagian Marker di bawah). 503 hanya bila seed ikut tidak bisa dimuat:
 
 ```json
 { "error": "Data perusahaan tidak bisa dimuat." }
 ```
-
-Status HTTP 503.
 
 ## GET /api/companies/[no]
 
@@ -63,6 +63,8 @@ Satu perusahaan berdasarkan nomor baris. Contoh: `GET /api/companies/212`
 
 ```json
 {
+  "source": "live",
+  "seedDate": "2026-11-14",
   "company": {
     "no": 212,
     "perusahaan": "PT Novell Pharmaceutical Laboratories",
@@ -77,7 +79,7 @@ Satu perusahaan berdasarkan nomor baris. Contoh: `GET /api/companies/212`
 }
 ```
 
-Perusahaan tidak ada: `{ "error": "Perusahaan tidak ditemukan." }`, status 404. Firestore tidak bisa dijangkau: `{ "error": "Data perusahaan tidak bisa dimuat." }`, status 503.
+Perusahaan tidak ada: `{ "error": "Perusahaan tidak ditemukan." }`, status 404. Respons sukses juga membawa `source` (`live` | `seed`) dan `seedDate`: saat Firestore tidak bisa dijangkau, perusahaan diambil dari seed cadangan (`source: "seed"`), bukan 503 — sama seperti rute daftar (arsitektur seed-first S3).
 
 ## GET /api/stats
 
@@ -85,6 +87,8 @@ Angka ringkas data. Contoh: `GET /api/stats`
 
 ```json
 {
+  "source": "live",
+  "seedDate": "2026-11-14",
   "total": 610,
   "byStatus": {
     "Ada lowongan": 288,
@@ -108,7 +112,7 @@ Angka ringkas data. Contoh: `GET /api/stats`
 }
 ```
 
-`byCategory` berisi 8 kategori terbanyak. `stale` adalah jumlah baris yang tanggal ceknya sudah lebih dari 30 hari; nilainya 0 saat dokumen ini ditulis karena semua baris dicek 4, 5, dan 7 November 2026. Firestore tidak bisa dijangkau: `{ "error": "Data perusahaan tidak bisa dimuat." }`, status 503.
+`byCategory` berisi 8 kategori terbanyak. `stale` adalah jumlah baris yang tanggal ceknya sudah lebih dari 30 hari; nilainya 0 saat dokumen ini ditulis karena semua baris dicek 4, 5, dan 7 November 2026. `source` dan `seedDate` sama seperti di `/api/companies`: saat Firestore tidak bisa dijangkau, rute ini menjawab 200 dengan angka dari seed cadangan (`source: "seed"`), bukan 503.
 
 ## GET /api/changes
 
@@ -134,6 +138,8 @@ Bila Firestore tidak bisa dijangkau, rute ini mengembalikan `{ "changes": [] }` 
 ## GET /api/index
 
 Indeks pencarian untuk halaman Cari. Wajib token valid di header `Authorization: Bearer <token>` (lihat `/api/token` di bawah). Menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 30 permintaan per menit per hash IP. Respons memakai `Cache-Control: private, no-store`. Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503.
+
+Respons berbentuk `{ "companies": [...], "source": "live", "seedDate": "2026-11-14" }`. `source` dan `seedDate` sama seperti di `/api/companies`: saat Firestore tidak bisa dijangkau, rute ini menjawab 200 dengan daftar dari seed cadangan (`source: "seed"`), dan klien menampilkan catatan "data cadangan" di halaman Cari dan Beranda.
 
 ## GET /api/token
 
@@ -187,17 +193,43 @@ Bila service account belum dipasang, jawabannya 503. Itu keadaan saat dokumen in
 
 Bila service account ada tapi tidak bisa dibaca atau tidak lengkap, `detail` berubah mengikuti masalahnya. Bila token service account gagal dibuat: 503 `{ "error": "Token service account gagal dibuat." }`. Bila data tidak bisa dimuat: 503 `{ "error": "Data perusahaan tidak bisa dimuat." }`.
 
+Cron adalah penulis, jadi ia tidak boleh berjalan dari seed: bila Firestore tidak bisa dibaca dan data yang dimuat berasal dari seed cadangan, run dilewati dengan 503 `{ "error": "Data live tidak bisa dimuat, cron dilewati." }` supaya tidak ada alert palsu atau tulis berdasarkan data basi.
+
 Bila cron berjalan, jawabannya 200 dengan bentuk:
 
 ```json
-{ "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "truncated": false, "alerts": 0, "telegram": "none" }
+{ "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "truncated": false, "alerts": 0, "telegram": "none", "markerBumped": true }
 ```
 
-`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, dan `telegram` bernilai `sent`, `failed`, `skipped-no-token`, `skipped-timeout`, atau `none` (tidak ada alert baru). Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
+`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, `telegram` bernilai `sent`, `failed`, `skipped-no-token`, `skipped-timeout`, atau `none` (tidak ada alert baru), dan `markerBumped` menandakan marker kesegaran `meta/lastChange` dinaikkan di run ini (true bila ada status perusahaan yang berubah). Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
 
 ### Notifikasi
 
 Setelah cek selesai, cron membandingkan daftar target sekarang dengan snapshot run sebelumnya di dokumen `meta/targets`: nomor yang baru muncul jadi alert `new-target`, dan perusahaan target yang batas lamarnya tinggal 0-3 hari jadi alert `deadline`. Alert tercatat di koleksi `alerts` dengan id deterministik (`new-target-{no}-{tanggal}` atau `deadline-{no}-{batas_lamar}`), supaya satu kejadian tidak tercatat dua kali. Bila ada alert baru, cron mengirim satu pesan Telegram gabungan ke pemilik. Kegagalan kirim tidak menggagalkan cron. Bila token Telegram belum dipasang di env (`TELEGRAM_BOT_TOKEN`), pengiriman dilewati dan alert tetap tercatat untuk dibaca watcher agent-side.
+
+## Marker kesegaran `meta/lastChange`
+
+Satu dokumen kecil yang menjadi sinyal kesegaran data live (arsitektur seed-first S3). Server web membacanya 1 baca per jendela 5 menit; refill daftar penuh dari Firestore hanya terjadi bila `rev` berubah sejak refill terakhir.
+
+| Field | Isi |
+| --- | --- |
+| `rev` | Angka revisi, naik 1 tiap ada perubahan data |
+| `updatedAt` | Waktu revisi terakhir naik, ISO 8601 |
+| `counterDay` | Hari (WIB, `YYYY-MM-DD`) yang dihitung pencacah |
+| `refillsToday` | Jumlah refill daftar penuh hari ini |
+| `readsEstimate` | Estimasi baca dokumen hari ini (refill × jumlah dokumen) |
+
+Yang menaikkan `rev` (tulis tidak kena kuota baca):
+
+| Penulis | Kapan |
+| --- | --- |
+| Cron cek ulang (`/api/cron/recheck`, service account) | Bila ada status perusahaan yang berubah di run itu; bila tidak ada, marker tidak disentuh |
+| Impor kanonis (`import_canonical.py`, service account) | Setelah impor menulis dokumen apa pun |
+| Panel admin (akun admin login) | Setelah simpan, hapus, atau impor CSV yang mengubah data |
+
+Yang menaikkan pencacah: tiap refill daftar penuh yang sukses oleh server web (PATCH `refillsToday` +1, `readsEstimate` += jumlah dokumen; ganti hari memulai lagi dari 1). Aturan Firestore membatasi tulis pencacah dari API key publik: `rev` dan `updatedAt` tidak boleh berubah lewat jalur itu. Panel admin menampilkan estimasi pemakaian dari marker (1 baca).
+
+Alert kuota: begitu `readsEstimate` mencapai 70% kuota harian (35.000 dari 50.000 baca), satu alert tipe `quota` dibuat di koleksi `alerts` dengan id deterministik `quota-70-{tanggal}` (satu per hari), supaya watcher agent-side bisa meneruskannya. Field tambahannya: `readsEstimate` dan `percent`.
 
 ## Koleksi Firestore yang dipakai API
 
@@ -205,8 +237,8 @@ Setelah cek selesai, cron membandingkan daftar target sekarang dengan snapshot r
 | --- | --- | --- |
 | `companies` | 610 dokumen perusahaan; kolom `batas_lamar` ("YYYY-MM-DD", opsional) menyimpan tanggal batas lamar yang diparse dari catatan yang sudah ada | Admin login, 9 kolom wajib, `batas_lamar` harus string bila ada |
 | `changes` | Umpan perubahan status | Admin login; entri tidak bisa diubah atau dihapus |
-| `alerts` | Alert notifikasi (`new-target` atau `deadline`) dengan field `type`, `companyNo`, `perusahaan`, `sent`, `createdAt` | Admin login; entri tidak bisa diubah atau dihapus |
-| `meta` | Snapshot internal cron (`meta/targets`: daftar nomor perusahaan yang ada lowongannya run sebelumnya) | Tidak ada akses klien; hanya service account |
+| `alerts` | Alert notifikasi (`new-target`, `deadline`, atau `quota`) dengan field `type`, `companyNo`, `perusahaan`, `sent`, `createdAt`; alert `quota` menambah `readsEstimate` dan `percent` | Admin login; entri tidak bisa diubah atau dihapus; alert `quota` boleh dibuat server lewat API key publik dengan bentuk terkekang |
+| `meta` | Snapshot internal cron (`meta/targets`: daftar nomor perusahaan yang ada lowongannya run sebelumnya) dan marker kesegaran (`meta/lastChange`, baca terbuka, lihat bagian Marker di atas) | `meta/targets`: tidak ada akses klien, hanya service account; `meta/lastChange`: rev hanya admin/service account, pencacah hanya naik 1 per tulis |
 | `rate_limits` | Satu dokumen per hash pengunjung harian: larik waktu hit (maks 60 angka) dan `updatedAt` | Bentuk dibatasi ketat oleh aturan; tidak bisa dihapus |
 | `audit_logs` | Jejak perubahan data oleh admin | Admin login; entri tidak bisa diubah atau dihapus |
 | `reports` | Laporan tautan mati dari pengunjung | Siapa pun boleh membuat satu laporan berbentuk benar; tidak bisa dibaca publik |

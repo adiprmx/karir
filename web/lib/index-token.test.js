@@ -128,4 +128,32 @@ describe("createIndexFetcher", () => {
     const { fetchIndex } = createIndexFetcher(fetchImpl);
     assert.deepEqual(await fetchIndex(), []);
   });
+
+  it("meta respons direkam: source seed + seedDate", async () => {
+    const { fetchImpl } = stubFetch((url) => {
+      if (url === "/api/token") return okJson({ token: "t1" });
+      return okJson({
+        companies: companies(),
+        source: "seed",
+        seedDate: "2026-11-14",
+      });
+    });
+    const { fetchIndex, getIndexMeta } = createIndexFetcher(fetchImpl);
+    assert.equal(getIndexMeta(), null);
+    assert.deepEqual(await fetchIndex(), companies());
+    assert.deepEqual(getIndexMeta(), {
+      source: "seed",
+      seedDate: "2026-11-14",
+    });
+  });
+
+  it("meta kosong dari server lama dianggap live", async () => {
+    const { fetchImpl } = stubFetch((url) => {
+      if (url === "/api/token") return okJson({ token: "t1" });
+      return okJson({ companies: companies() });
+    });
+    const { fetchIndex, getIndexMeta } = createIndexFetcher(fetchImpl);
+    await fetchIndex();
+    assert.deepEqual(getIndexMeta(), { source: "live", seedDate: "" });
+  });
 });
