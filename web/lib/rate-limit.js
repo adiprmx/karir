@@ -19,7 +19,8 @@
  *
  * Semua store memakai kunci yang sama: "<cakupan>:<hash IP harian>".
  * Hash dibuat pemanggil (hashVisitor), jadi modul ini tidak pernah
- * melihat, mencatat, atau menyimpan IP mentah.
+ * melihat, mencatat, atau menyimpan IP mentah. Cakupan dibuat lewat
+ * scopedKey() supaya tiap rute punya embernya sendiri (BE-03).
  *
  * Kegagalan store TIDAK BOLEH mematikan situs: semua store membuka
  * pintu (fail-open) bila backend tidak bisa dijangkau atau menjawab
@@ -35,6 +36,8 @@
  * kerahasiaan token. Yang membatasi penyalahgunaan adalah batas
  * laju per hash IP di sini ditambah penolakan UA otomatis di
  * api-guard.js, bukan token. */
+
+import { jsonWithTimeout } from "./companies.js";
 
 export const RATE_LIMIT_WINDOW_MS = 60_000;
 
@@ -52,6 +55,23 @@ const STORE_TIMEOUT_MS = 3000;
  * huruf, angka, garis bawah, dan strip. */
 export function firestoreDocId(key) {
   return String(key).replace(/[^A-Za-z0-9_-]/g, "-");
+}
+
+/* Cakupan batas laju per rute (BE-03). Tanpa cakupan, satu pengunjung
+ * yang membanjiri satu rute ikut mengunci rute lain untuk dirinya
+ * sendiri, karena semua rute berbagi satu ember dengan kunci yang
+ * sama. Setiap rute WAJIB memanggil check() dengan kunci berawalan
+ * cakupannya sendiri lewat pembantu ini, misal
+ * scopedKey("companies", hash). Cakupan hanya boleh huruf, angka,
+ * garis bawah, dan strip; nilai lain ditolak supaya kunci tidak
+ * pernah mengandung karakter yang merusak store (mis. ":" ganda
+ * atau spasi). */
+export function scopedKey(scope, hash) {
+  const s = String(scope ?? "").trim();
+  if (!/^[A-Za-z0-9_-]+$/.test(s)) {
+    throw new Error("cakupan batas laju tidak valid");
+  }
+  return `${s}:${hash}`;
 }
 
 /* Jendela geser di memori. Dipakai langsung saat tidak ada backend,
@@ -145,7 +165,11 @@ export function createUpstashStore({ url, token, fetchImpl = fetch } = {}) {
       if (!res || !res.ok) return true;
       let data;
       try {
-        data = await res.json();
+        /* res.json() WAJIB bertimeout (BE-09): fetchWithTimeout
+         * mematikan timernya begitu header tiba, jadi tanpa ini
+         * body yang stall menggantung pemeriksaan tanpa batas.
+         * Timeout jatuh ke catch dan fail-open (return true). */
+        data = await jsonWithTimeout(res, STORE_TIMEOUT_MS);
       } catch {
         return true;
       }
@@ -234,7 +258,9 @@ export function createFirestoreStore({
     if (!res || !res.ok) return;
     let doc;
     try {
-      doc = await res.json();
+      /* Lihat catatan di store Redis: res.json() tanpa timeout
+       * bisa menggantung karena timer fetch sudah dimatikan. */
+      doc = await jsonWithTimeout(res, STORE_TIMEOUT_MS);
     } catch {
       return;
     }

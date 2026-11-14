@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import {
   parseBatasLamar,
   formatTanggalId,
+  todayWib,
   daysUntil,
   isNewChange,
   newTargetAlertId,
@@ -18,6 +19,10 @@ import {
   collectDeadlineAlerts,
   formatTelegramMessage,
   sendTelegramMessage,
+  splitTelegramMessage,
+  markAlertsSent,
+  buildCronRunRecord,
+  TELEGRAM_MESSAGE_LIMIT,
   QUOTA_DAILY_LIMIT,
   QUOTA_ALERT_READS,
   quotaAlertId,
@@ -298,5 +303,212 @@ describe("alert kuota baca (FIN-02)", () => {
     assert.match(msg, /35\.000/);
     assert.match(msg, /15 Nov 2026/);
     assert.match(msg, /15:00 WIB/);
+  });
+});
+
+describe("todayWib (regresi UTC, T11d)", () => {
+  it("tanggal memakai WIB, bukan UTC", () => {
+    /* 15 Nov 2026 00:30 WIB = 14 Nov 17:30 UTC: tanggal WIB-nya
+     * 15 Nov, bukan 14 Nov. Bug UTC di daysUntil halaman detail
+     * (fix WIB 15 Nov 00:15) membuat penanda meleset +1 hari pada
+     * 00:00-07:00 WIB; jalur alert cron memakai todayWib yang sama
+     * dan wajib tidak mengulanginya. */
+    assert.equal(todayWib(new Date("2026-11-14T17:30:00Z")), "2026-11-15");
+    assert.equal(todayWib(new Date("2026-11-14T16:30:00Z")), "2026-11-14");
+    assert.equal(todayWib(new Date("2026-11-14T16:59:59Z")), "2026-11-14");
+    assert.equal(todayWib(new Date("2026-11-14T17:00:00Z")), "2026-11-15");
+  });
+
+  it("alert deadline di 00:30 WIB hari tenggat menyebut 0 hari (bukan 1)", () => {
+    /* Skenario nyata PMSol 15 Nov 2026: cron 01:00 WIB di hari
+     * tenggat. Bila todayIso dihitung UTC (14 Nov), daysLeft jadi
+     * 1 ("1 hari lagi") padahal batasnya hari ini. */
+    const today = todayWib(new Date("2026-11-14T17:30:00Z"));
+    assert.equal(today, "2026-11-15");
+    const alerts = collectDeadlineAlerts(
+      [target({ no: 568, batas_lamar: "2026-11-15" })],
+      today,
+    );
+    assert.equal(alerts.length, 1);
+    assert.equal(alerts[0].daysLeft, 0);
+    const msg = formatTelegramMessage(alerts, today);
+    assert.match(msg, /hari ini/);
+    assert.doesNotMatch(msg, /1 hari lagi/);
+  });
+});
+
+describe("splitTelegramMessage (NOTIF-08)", () => {
+  it("teks pendek tidak dipecah", () => {
+    assert.equal(TELEGRAM_MESSAGE_LIMIT, 4096);
+    assert.deepEqual(splitTelegramMessage("halo"), ["halo"]);
+    assert.deepEqual(splitTelegramMessage(""), []);
+    assert.deepEqual(splitTelegramMessage("a".repeat(4096)), [
+      "a".repeat(4096),
+    ]);
+  });
+
+  it("pecah pada batas baris, tiap potongan <= 4096", () => {
+    const lines = Array.from(
+      { length: 200 },
+      (_, i) => `• Perusahaan ${i} — lowongan baru.`,
+    );
+    const text = lines.join("\n");
+    assert.ok(text.length > 4096);
+    const chunks = splitTelegramMessage(text);
+    assert.ok(chunks.length > 1);
+    for (const chunk of chunks) {
+      assert.ok(chunk.length <= 4096, `potongan ${chunk.length} karakter`);
+      assert.ok(chunk.length > 0);
+    }
+    assert.equal(chunks.join("\n"), text);
+  });
+
+  it("baris tunggal yang terlalu panjang dipotong keras", () => {
+    const text = `x${"y".repeat(5000)}`;
+    const chunks = splitTelegramMessage(text);
+    assert.equal(chunks.length, 2);
+    assert.equal(chunks[0].length, 4096);
+    assert.equal(chunks.join(""), text);
+  });
+});
+
+describe("sendTelegramMessage mengirim potongan berurutan (NOTIF-08)", () => {
+  it("pesan panjang dikirim dalam beberapa panggilan", async () => {
+    const seen = [];
+    const fakeFetch = async (_url, options) => {
+      seen.push(JSON.parse(options.body).text);
+      return { ok: true, json: async () => ({ ok: true }) };
+    };
+    const lines = Array.from(
+      { length: 200 },
+      (_, i) => `• Perusahaan ${i} — lowongan baru.`,
+    );
+    const res = await sendTelegramMessage({
+      token: "TOKEN-UJI",
+      text: lines.join("\n"),
+      fetchImpl: fakeFetch,
+    });
+    assert.deepEqual(res, { ok: true });
+    assert.ok(seen.length > 1);
+    for (const text of seen) assert.ok(text.length <= 4096);
+    assert.equal(seen.join("\n"), lines.join("\n"));
+  });
+
+  it("potongan kedua gagal menghentikan pengiriman", async () => {
+    let calls = 0;
+    const fakeFetch = async () => {
+      calls += 1;
+      if (calls === 2) return { ok: false, status: 429 };
+      return { ok: true, json: async () => ({ ok: true }) };
+    };
+    const res = await sendTelegramMessage({
+      token: "TOKEN-UJI",
+      text: `a${"b".repeat(9000)}`,
+      fetchImpl: fakeFetch,
+    });
+    assert.deepEqual(res, { ok: false, error: "HTTP 429" });
+    assert.equal(calls, 2);
+  });
+});
+
+describe("markAlertsSent (NOTIF-01)", () => {
+  it("menandai semua alert yang patch-nya berhasil", async () => {
+    const patched = [];
+    const res = await markAlertsSent(
+      async (alert) => {
+        patched.push(alert.id);
+        return true;
+      },
+      [
+        { id: "new-target-1-2026-11-15" },
+        { id: "deadline-2-2026-11-18" },
+      ],
+    );
+    assert.deepEqual(res.marked, [
+      "new-target-1-2026-11-15",
+      "deadline-2-2026-11-18",
+    ]);
+    assert.deepEqual(res.failed, []);
+    assert.equal(patched.length, 2);
+  });
+
+  it("kegagalan patch dilaporkan per id, tanpa melempar", async () => {
+    const res = await markAlertsSent(
+      async (alert) => {
+        if (alert.id === "gagal") throw new Error("putus");
+        return alert.id !== "tolak";
+      },
+      [{ id: "ok" }, { id: "tolak" }, { id: "gagal" }],
+    );
+    assert.deepEqual(res.marked, ["ok"]);
+    assert.deepEqual(res.failed.sort(), ["gagal", "tolak"]);
+  });
+
+  it("daftar kosong tidak memanggil patch", async () => {
+    let calls = 0;
+    const res = await markAlertsSent(
+      async () => {
+        calls += 1;
+        return true;
+      },
+      [],
+    );
+    assert.deepEqual(res, { marked: [], failed: [] });
+    assert.equal(calls, 0);
+  });
+});
+
+describe("buildCronRunRecord (OPS-01)", () => {
+  it("bentuk field Firestore lengkap untuk run sukses", () => {
+    const record = buildCronRunRecord(
+      {
+        checked: 120,
+        changed: 3,
+        updated: 117,
+        skipped: 173,
+        openSkipped: 0,
+        truncated: true,
+        alerts: 2,
+        alertsFailed: 0,
+        telegram: "sent",
+        telegramMarked: 2,
+        markerBumped: true,
+        queue: { urgent: 1, open: 237, dead: 55, total: 293 },
+        alertPhaseTruncated: false,
+        snapshotKnown: true,
+        snapshotWritten: true,
+      },
+      {
+        date: "2026-11-15",
+        startedAt: Date.parse("2026-11-14T18:00:00Z"),
+        finishedAt: Date.parse("2026-11-14T18:00:52Z"),
+      },
+    );
+    assert.equal(record.date.stringValue, "2026-11-15");
+    assert.equal(record.status.stringValue, "truncated");
+    assert.equal(record.durationMs.integerValue, "52000");
+    assert.equal(record.checked.integerValue, "120");
+    assert.equal(record.openSkipped.integerValue, "0");
+    assert.equal(record.telegram.stringValue, "sent");
+    assert.equal(record.telegramMarked.integerValue, "2");
+    assert.equal(record.markerBumped.booleanValue, true);
+    assert.equal(record.queueTotal.integerValue, "293");
+    assert.equal(record.queueUrgent.integerValue, "1");
+    assert.equal(record.snapshotWritten.booleanValue, true);
+  });
+
+  it("run tanpa pemotongan berstatus ok dan nilai hilang jadi nol", () => {
+    const record = buildCronRunRecord(
+      { truncated: false },
+      {
+        date: "2026-11-15",
+        startedAt: 1000,
+        finishedAt: 2000,
+      },
+    );
+    assert.equal(record.status.stringValue, "ok");
+    assert.equal(record.checked.integerValue, "0");
+    assert.equal(record.queueTotal.integerValue, "0");
+    assert.equal(record.durationMs.integerValue, "1000");
   });
 });

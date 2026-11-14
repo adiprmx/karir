@@ -16,6 +16,18 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.12.0",
+    date: "15 November 2026",
+    points: [
+      "Pencatatan kunjungan kini lebih aman: hanya server yang boleh menulis, dan catatan lama dihapus otomatis setelah 90 hari.",
+      "Situs lebih tahan saat koneksi bermasalah: halaman tetap tampil dari data cadangan bila server data tidak bisa dijangkau.",
+      "Umpan perubahan kini menjelaskan bila sedang tidak bisa dimuat, bukan tampil kosong.",
+      "Peta kini menandai lebih banyak perusahaan; tanggal cek di dasbor selalu mengikuti data terbaru.",
+      "Cek ulang harian kini mendahulukan lowongan yang batas lamarnya sudah dekat.",
+      "Laporan tautan mati dari pengunjung kini bisa ditindaklanjuti dari panel admin.",
+    ],
+  },
+  {
     version: "2.11.0",
     date: "15 November 2026",
     points: [

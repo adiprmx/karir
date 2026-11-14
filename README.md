@@ -45,13 +45,13 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 | Tidak dapat diverifikasi | 111 |
 | Portal tidak bisa dibuka | 55 |
 
-4 perusahaan tidak punya tautan karena situs resminya tidak ketemu. Tautannya tidak ditebak: Olive Fried Chicken (204), PT Dwi Indah (315), PT Cintas Sentul Raya (321), PT Best Logistics Service Indonesia (355, BLSI).
+76 perusahaan tidak punya tautan karir. 72 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 4 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: Olive Fried Chicken (204), PT Dwi Indah (315), PT Cintas Sentul Raya (321), PT Best Logistics Service Indonesia (355, BLSI).
 
 <h2 align="center">Contoh lowongan yang sedang buka</h2>
 
-- [Angkasa Pura Supports](https://karir-adiprmx.vercel.app/perusahaan/299): TRAIN ATTENDANT, batas 18 November 2026.
+- [Angkasa Pura Supports](https://karir-adiprmx.vercel.app/perusahaan/299): TRAIN ATTENDANT, penempatan Jakarta/Bandung. Batas lamarnya tercantum di halaman perusahaan.
 - [Roti O](https://karir-adiprmx.vercel.app/perusahaan/190): Pelaksana Gudang, Kalideres, Jakarta Barat.
-- [Fore Coffee](https://karir-adiprmx.vercel.app/perusahaan/330): Barista (Part-Time), seluruh Indonesia. SMA/SMK, lulusan baru boleh daftar.
+- [Fore Coffee](https://karir-adiprmx.vercel.app/perusahaan/330): Barista (Part-Time), seluruh Indonesia.
 
 <h2 align="center">Dari kanal ke aplikasi</h2>
 
@@ -67,15 +67,15 @@ Data mentah tersedia dalam dua format: [daftar-link-karir.csv](data/daftar-link-
 
 | Teknologi | Status | Keterangan |
 | --- | --- | --- |
-| Next.js 15 + React 19 | Dipakai | Web dan API |
+| Next.js 16 + React 19 | Dipakai | Web dan API |
 | Vercel | Dipakai | Hosting |
-| Firestore | Dipakai | 610 dokumen |
-| Firebase Auth | Dipakai | Login admin saja |
+| Firestore | Dipakai | Satu dokumen per perusahaan |
+| Firebase Auth | Dipakai | Login admin dan login opsional pengguna |
 | Leaflet | Dipakai | Peta lowongan |
 | Supabase | Tidak dipakai | Mentok 2 proyek |
-| Vercel KV | Belum terpasang | Store batas laju (rencana); Firestore aktif sementara |
+| Vercel KV | Opsional | Store batas laju pertama lewat REST Upstash bila env KV terpasang; tanpa env KV, Firestore yang dipakai |
 | Notifikasi Telegram | Dipakai | Lowongan baru + batas lamar 0-3 hari, via cron 01:00 WIB |
-| Batas laju bersama | Dipakai | Redis → Firestore → memori, satu limiter untuk semua endpoint API |
+| Batas laju bersama | Dipakai | Redis bila env KV ada, lalu Firestore, lalu memori; satu limiter untuk semua endpoint API |
 | Payment gateway | Tidak dipakai | Tanpa bayar |
 | Akun pengguna | Opsional | Login Firebase (Email/Password + Google) untuk sinkron pelacak; tamu tetap bisa pakai semua fitur |
 
@@ -85,7 +85,7 @@ Dokumen: [PRODUCT.md](docs/PRODUCT.md), [DESIGN.md](docs/DESIGN.md), [METODE.md]
 
 Datanya dari kapan?
 
-Dicek langsung di browser tanggal 4 dan 5 November 2026. 81 kanal dicek tanggal 4, 303 tanggal 5, 22 dokumen dicek ulang tanggal 7 November 2026.
+Setiap perusahaan punya tanggal cek sendiri, tercatat di halaman detailnya. Tanggal cek terbaru bisa dilihat di Dasbor. Pengecekan pertama dilakukan awal November 2026, dan data dicek ulang berkala sejak itu.
 
 Kapan dicek ulang?
 
@@ -97,6 +97,6 @@ Buka halaman perusahaan di aplikasi, lalu pakai tombol Laporkan tautan mati. Ata
 
 <h2 align="center">Lisensi</h2>
 
-Versi 2.8.2, 8 November 2026.
+Versi 2.10.0, 15 November 2026.
 
 Kode dan skrip di repo ini berlisensi MIT, dan data di folder data berlisensi CC BY 4.0.

@@ -1,11 +1,9 @@
 /* Tes unit untuk lib/index-token.js, memakai test runner bawaan Node.
  * Dijalankan dengan: node --test lib/index-token.test.js
- * (Belum masuk ke skrip `npm test` karena package.json dipegang tim
- * server; skrip itu tetap menjalankan dua file tes yang lama.)
  * Yang dites: izin diminta sekali lalu dipakai ulang, izin yang
  * hampir habis tidak dipakai, 401 memicu satu kali ambil izin baru
  * dan satu kali ulangan, dan kegagalan diteruskan sebagai error,
- * bukan daftar kosong. */
+ * bukan daftar kosong. Timeout fetch + body JSON juga dites. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -155,5 +153,29 @@ describe("createIndexFetcher", () => {
     const { fetchIndex, getIndexMeta } = createIndexFetcher(fetchImpl);
     await fetchIndex();
     assert.deepEqual(getIndexMeta(), { source: "live", seedDate: "" });
+  });
+
+  it("fetch izin yang tidak pernah kembali ditolak setelah timeout", async () => {
+    const { fetchImpl } = stubFetch(() => new Promise(() => {}));
+    const { fetchIndex } = createIndexFetcher(fetchImpl, { timeoutMs: 20 });
+    await assert.rejects(fetchIndex(), /Timeout memuat data/);
+  });
+
+  it("fetch indeks yang tidak pernah kembali ditolak setelah timeout", async () => {
+    const { fetchImpl } = stubFetch((url) => {
+      if (url === "/api/token") return okJson({ token: "t1" });
+      return new Promise(() => {});
+    });
+    const { fetchIndex } = createIndexFetcher(fetchImpl, { timeoutMs: 20 });
+    await assert.rejects(fetchIndex(), /Timeout memuat data/);
+  });
+
+  it("body JSON yang tidak pernah kembali ditolak setelah timeout", async () => {
+    const { fetchImpl } = stubFetch((url) => {
+      if (url === "/api/token") return okJson({ token: "t1" });
+      return { ok: true, status: 200, json: () => new Promise(() => {}) };
+    });
+    const { fetchIndex } = createIndexFetcher(fetchImpl, { timeoutMs: 20 });
+    await assert.rejects(fetchIndex(), /Timeout memuat data/);
   });
 });

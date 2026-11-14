@@ -2,6 +2,18 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.12.0 — 2026-11-15
+
+Fase 4 gelombang 3 hasil audit full-stack 32 tim: analitik, ketahanan baca, gerbang rute, kualitas data, dokumen, dan notifikasi.
+
+- Analitik: 9 jenis event (`pageview`, `search`, `detail`, `portal_click`, `tracker_mark`, `filter`, `onboarding`, `report`, `channel_copy`) dengan field `results` + `filter` di skema; aturan Firestore menutup penulisan event dari klien total — hanya server yang menulis lewat token service account; event lama dihapus otomatis (retensi 90 hari, maks 200 per run, cron mingguan Senin 02:00 WIB); pengunjung bisa menolak pencatatan (`karir-tanpa-analitik`); nomor perusahaan di `portal_click` kini angka; pageview `/admin` tidak dicatat. Pipa masih menunggu `ANALYTICS_SALT` di Vercel Production.
+- Ketahanan baca: semua pembacaan body JSON server kini bertimeout (`jsonWithTimeout`, 5 detik) — timeout jatuh ke seed/cache basi, bukan 503; pembacaan izin + indeks di browser bertimeout 15 detik; batas laju dan cek ulang memakai timeout yang sama untuk body JSON.
+- Gerbang rute: tiap rute baca punya ember batas laju sendiri (7 cakupan: analytics 30, changes/companies/company/stats/token 60, index 30 per menit); `/api/changes` menolak user agent otomatis + menjawab `{changes, degraded}` saat umpan tidak bisa dimuat; `/api/token` menjawab `{token, expiresIn: 60}` + batas laju 60/menit; `/api/companies/[no]` memakai limiter bersama; `/api/admin/check-link` memakai `detail` (bukan `error`) di respons 200; pesan 429 analitik diseragamkan; `/api/locale` menolak redirect ke luar situs (`safeNext`).
+- Kualitas data: 18 kota baru di peta (terpetakan 216 dari 288 perusahaan yang ada lowongan); validator data memakai pola ratchet (angka masalah hanya boleh turun dari baseline 15 November 2026); impor Firestore kini 13 field; write-back harian Firestore ke CSV (cron 03:00 WIB) + watchdog di cek konsistensi; panel admin: field `batas_lamar` + perbaikan bug simpan yang menghapus kanal (kini `merge: true`).
+- Notifikasi + cron: antrean cek ulang tiga tier (mendesak batas lamar 0–7 hari, terbuka rotasi tanggal cek tertua, mati bergilir), batch 8, fase alert jalan dulu (anggaran 15 detik); heartbeat run di `cron-runs/{tanggal-WIB}` + alarm run terlewat; alert yang terkirim ditandai `sent` + `sentAt`; pesan Telegram panjang dipecah; relay alert kuota.
+- Dokumen: angka di README/arsitektur/metode/roadmap diselaraskan data (76 tanpa tautan, 72 punya kanal lain, 4 tanpa kanal); `docs/API.md` ditulis ulang mengikuti kode (kontrak balasan, 7 ember batas laju, 10 koleksi, antrean 3 tier, route cleanup); tanggal hardcode 4–5 November dihilangkan dari dasbor/tentang (dihitung dari data); klaim privasi soal pencarian anonim diluruskan; panel admin kini memakai komponen laporan tautan mati (filter + ubah status).
+- Tes: 486 lolos, 0 gagal. Build sukses; lint 0 error.
+
 ## 2.11.0 — 2026-11-15
 
 Fase 4 gelombang 2 hasil audit full-stack 32 tim: sinkron pelacak, siklus hidup akun, dukungan, SEO, onboarding, produk, dan CI.

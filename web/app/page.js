@@ -221,6 +221,7 @@ export default async function Beranda() {
             labels={{
               empty: t(locale, "home.changesEmpty"),
               error: t(locale, "home.changesError"),
+              degraded: t(locale, "home.changesDegraded"),
               loading: t(locale, "home.changesLoading"),
             }}
           />

@@ -5,6 +5,10 @@
  * baru. Kembalikan {ok, status, finalUrl}; status null bila URL tidak
  * bisa dihubungi sama sekali (timeout, DNS, koneksi putus).
  *
+ * Modul ini juga menyusun antrean cek cron (buildCheckQueue, BE-05):
+ * perusahaan yang ada lowongan didahulukan tiap run, portal mati
+ * bergilir dengan sisa anggaran.
+ *
  * Penjaga SSRF: hanya skema http/https yang diizinkan; sebelum SETIAP
  * fetch — termasuk tiap hop redirect, di jalur HEAD maupun jalur
  * fallback GET — hostname di-resolve dan semua IP hasil resolve
@@ -25,9 +29,17 @@
  * ke koneksi lewat agent kustom, atau resolver internal yang
  * memvalidasi ulang jawaban DNS) di luar cakupan paket ini. */
 import { lookup as dnsLookup } from "node:dns/promises";
+import { daysUntil, parseBatasLamar } from "./notify.js";
 
 const USER_AGENT = "Karir-LinkCheck/1.0";
 const MAX_REDIRECTS = 5;
+
+/* Jendela batas lamar untuk tier mendesak antrean cron: perusahaan
+ * yang ada lowongannya dan batas lamarnya 0-7 hari lagi dicek
+ * pertama di tiap run (BE-05). */
+export const CHECK_QUEUE_DEADLINE_DAYS = 7;
+export const CHECK_QUEUE_OPEN_STATUSES = ["Ada lowongan"];
+export const CHECK_QUEUE_DEAD_STATUS = "Portal tidak bisa dibuka";
 
 /* Parse IPv4 dotted-quad ketat. Kembalikan [a, b, c, d] atau null
  * bila bukan literal IPv4 yang sah. */
@@ -264,4 +276,84 @@ export async function checkUrl(url, options = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/* Susun antrean cek cron (BE-05). Antrean jauh lebih besar daripada
+ * yang bisa dicek dalam anggaran 50 detik (293 URL pada 15 Nov 2026:
+ * 238 yang ada lowongan + 55 portal mati), jadi urutan menentukan
+ * mana yang sempat dicek dan mana yang menunggu besok.
+ *
+ * Tiga tier, berurutan:
+ * 1. "urgent" — ada lowongan + batas_lamar 0-7 hari lagi. Portal
+ *    perusahaan ini paling penting dicek tiap run karena owner
+ *    mungkin melamar sebelum batasnya. Diurutkan batas terdekat
+ *    dulu, lalu yang paling lama tidak dicek.
+ * 2. "open" — ada lowongan lainnya. Diurutkan dari yang paling lama
+ *    tidak dicek (tanggal_cek tertua dulu; tanpa tanggal_cek
+ *    paling dulu), supaya cek harian berputar ke seluruh daftar:
+ *    yang baru dicek (tanggal_cek diperbarui tiap run) otomatis
+ *    pindah ke belakang.
+ * 3. "dead" — portal mati, dicek untuk mendeteksi pulih. Hanya
+ *    terjangkau bila anggaran tersisa sesudah tier 1-2; urutan
+ *    yang sama (tanggal_cek tertua dulu) membuatnya bergilir antar
+ *    run, bukan selalu yang itu-itu saja.
+ *
+ * Perusahaan tanpa tautan karir tidak masuk antrean (tidak ada URL
+ * yang bisa dicek) dan status lain (tidak ada lowongan, tidak dapat
+ * diverifikasi) tidak dicek ulang oleh cron. Kembalikan
+ * {queue, counts}: queue berisi {company, tier} sesuai urutan cek,
+ * counts berisi jumlah per tier + total untuk ringkasan cron dan
+ * dokumen heartbeat. Murni fungsi tanpa efek samping; todayIso
+ * adalah tanggal WIB "YYYY-MM-DD" dari pemanggil. */
+export function buildCheckQueue(companies, options = {}) {
+  const todayIso = options.todayIso;
+  const openStatuses =
+    options.openStatuses || CHECK_QUEUE_OPEN_STATUSES;
+  const deadStatus = options.deadStatus || CHECK_QUEUE_DEAD_STATUS;
+  const deadlineDays =
+    typeof options.deadlineDays === "number"
+      ? options.deadlineDays
+      : CHECK_QUEUE_DEADLINE_DAYS;
+  /* Tanggal cek tertua dulu; tanpa tanggal_cek paling dulu; seri
+   * diputus nomor naik supaya urutan deterministik. */
+  const byOldestCheck = (a, b) =>
+    (a.tanggal_cek || "").localeCompare(b.tanggal_cek || "") ||
+    Number(a.no) - Number(b.no);
+  const urgent = [];
+  const open = [];
+  const dead = [];
+  for (const c of companies || []) {
+    if (!c || !c.link_karir) continue;
+    if (openStatuses.includes(c.status)) {
+      const batas = parseBatasLamar(c.batas_lamar);
+      const days = batas ? daysUntil(batas, todayIso) : null;
+      if (days !== null && days >= 0 && days <= deadlineDays) {
+        urgent.push({ company: c, batas });
+      } else {
+        open.push(c);
+      }
+    } else if (c.status === deadStatus) {
+      dead.push(c);
+    }
+  }
+  urgent.sort(
+    (a, b) =>
+      a.batas.localeCompare(b.batas) || byOldestCheck(a.company, b.company),
+  );
+  open.sort(byOldestCheck);
+  dead.sort(byOldestCheck);
+  const queue = [
+    ...urgent.map(({ company }) => ({ company, tier: "urgent" })),
+    ...open.map((company) => ({ company, tier: "open" })),
+    ...dead.map((company) => ({ company, tier: "dead" })),
+  ];
+  return {
+    queue,
+    counts: {
+      urgent: urgent.length,
+      open: open.length,
+      dead: dead.length,
+      total: queue.length,
+    },
+  };
 }

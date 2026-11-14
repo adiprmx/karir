@@ -2,7 +2,7 @@
 
 ## Alur data
 
-Sumber data adalah `data/daftar-link-karir.csv`: 610 perusahaan, 13 kolom,
+Sumber data adalah `data/daftar-link-karir.csv`: satu baris per perusahaan, 13 kolom,
 masing-masing kanal karirnya dibuka dan diperiksa langsung; tanggal cek per
 baris tercatat di kolom `tanggal_cek`. File itu sumber kebenaran untuk isi
 data. Aplikasi live tidak membaca CSV; aplikasi membaca Firestore.
@@ -29,18 +29,18 @@ flowchart LR
 
 Impor kanonis memakai `import_canonical.py` (di luar repo, di samping
 skrip-skrip operasional lain): membaca CSV langsung, menulis ke-13 field
-per dokumen dengan `updateMask` lengkap — PATCH tanpa `updateMask` dilarang
+per dokumen dengan `updateMask` lengkap. PATCH tanpa `updateMask` dilarang
 karena bisa menghapus field. Dokumen baru dibuat lewat POST create dengan
 ID dokumen sama dengan nomor baris. Skrip impor lama
 (`import_firestore.py`, 9 field) sudah tidak dipakai lagi. Skrip impor di
 repo (`web/scripts/import-firestore.mjs`) masih menulis 9 field dan belum
-diperbarui — jangan dipakai sampai diperbaiki atau dihapus.
+diperbarui. Jangan dipakai sampai diperbaiki atau dihapus.
 
 ## Sumber kebenaran data (keputusan S1, 14 Nov 2026)
 
 CSV adalah sumber kebenaran abadi untuk SEMUA field; Firestore adalah
 cermin live. Seed (`web/data/companies.json`) adalah salinan CSV untuk
-cadangan saat Firestore tidak bisa dijangkau — isinya harus selalu sama
+cadangan saat Firestore tidak bisa dijangkau. Isinya harus selalu sama
 persis dengan CSV (dijaga `scripts/check-consistency.py` di CI).
 
 Sinkron berjalan dua jalur, karena cron cek ulang menulis ke Firestore
@@ -59,15 +59,15 @@ langsung (ia tidak punya akses tulis ke CSV):
 Aturan jendela: data live boleh lebih baru dari CSV maksimal 24 jam
 (jeda sampai write-back berikutnya). Bila live lebih tua dari CSV, atau
 lebih baru lebih dari 24 jam, `scripts/check-consistency.py --live`
-gagal — itu tanda write-back macet dan harus diperiksa.
+gagal. Itu tanda write-back macet dan harus diperiksa.
 
 ## Arsitektur seed-first (keputusan S3, 15 Nov 2026)
 
 Latar: 15 Nov 2026 sekitar 00:15 WIB, kuota baca harian Firestore paket
-Spark (50.000 baca/hari, reset 15:00 WIB) habis — semua baca
+Spark (50.000 baca/hari, reset 15:00 WIB) habis. Semua baca
 mengembalikan 429 RESOURCE_EXHAUSTED dan `/api/stats`, `/api/companies`,
 `/api/index` menjawab 503. Akarnya: lapisan baca lama memuat daftar
-penuh (610 baca) tiap cache 5 menit habis di tiap instance serverless,
+penuh (satu baca per dokumen) tiap cache 5 menit habis di tiap instance serverless,
 jadi baca dokumen menumpuk sepanjang hari.
 
 Perbaikan (T15): seed menjadi DEFAULT, Firestore hanya di-refill bila
@@ -80,7 +80,7 @@ ada bukti data berubah.
 - **Marker kecil.** Satu dokumen `meta/lastChange`
   `{rev, updatedAt, counterDay, refillsToday, readsEstimate}` dibaca
   1 baca per jendela TTL 5 menit (cache memori + dedup inflight).
-  Refill penuh dari Firestore (610 baca) HANYA bila `rev` berubah
+  Refill penuh dari Firestore (satu baca per dokumen) HANYA bila `rev` berubah
   sejak refill terakhir, atau saat instance dingin pertama kali.
 - **Yang menaikkan rev:** cron cek ulang (bila ada status berubah atau
   tanggal_cek diperbarui), impor kanonis (bila ada dokumen tertulis),
@@ -108,8 +108,8 @@ ada bukti data berubah.
   data basi.
 
 Perkiraan pemakaian setelah perbaikan: instance hangat memakai ~1 baca
-marker per 5 menit (~288/hari/instance) + 1 refill (~610 baca) per
-perubahan data — dua orde di bawah pola lama.
+marker per 5 menit (~288/hari/instance) + 1 refill (~1 baca per dokumen) per
+perubahan data, dua orde di bawah pola lama.
 
 ## Koleksi Firestore
 
@@ -117,12 +117,16 @@ Proyek `karir-9d53a`, region asia-southeast1, paket Spark.
 
 | Koleksi | Isi | Baca | Tulis |
 | --- | --- | --- | --- |
-| `companies` | 610 dokumen, satu per perusahaan | Terbuka | Admin login, dokumen harus lolos validasi (9 kolom wajib, `no` angka, status salah satu dari 4 nilai; `batas_lamar` opsional, bila ada harus string) |
+| `companies` | Satu dokumen per perusahaan | Terbuka | Admin login, dokumen harus lolos validasi (9 kolom wajib, `no` angka, status salah satu dari 4 nilai; `batas_lamar` opsional, bila ada harus string) |
 | `changes` | Perubahan status dari cek ulang harian | Terbuka | Admin login, 6 kolom wajib, `from` dan `to` salah satu dari 4 status; tidak bisa diubah atau dihapus |
 | `audit_logs` | Jejak perubahan data oleh admin | Admin login | Admin login; tidak bisa diubah atau dihapus |
 | `reports` | Laporan tautan mati dari pengunjung | Admin login | Siapa pun, bentuk divalidasi (`no` angka, `alasan` 1 sampai 499 karakter); tidak bisa diubah atau dihapus |
 | `alerts` | Alert notifikasi (`new-target`, `deadline`, `quota`) | Terbuka | Admin login; alert `quota` boleh dibuat server lewat API key publik dengan bentuk terkekang; tidak bisa diubah atau dihapus |
 | `meta` | `targets` (snapshot cron) dan `lastChange` (marker kesegaran seed-first) | `lastChange` terbuka; sisanya tertutup | `lastChange`: rev hanya admin/service account, pencacah refill hanya naik 1 per tulis; `targets` hanya service account |
+| `rate_limits` | Satu dokumen per hash pengunjung harian: larik waktu hit (maks 60 angka) dan cap waktu tulis balik; isinya hanya angka waktu, tanpa IP mentah | Terbuka | Siapa pun lewat API key publik, bentuk dibatasi ketat; tidak bisa dihapus |
+| `user_trackers` | Subkoleksi `user_trackers/{uid}/items`: satu dokumen per perusahaan yang ditandai pengunjung yang masuk | Hanya pemilik akun | Hanya pemilik akun; bentuk divalidasi (status salah satu dari 4 nilai pelacak, tanggal, catatan maks 200 karakter) |
+| `user_profiles` | Profil akun: email dan nama tampilan | Hanya pemilik akun atau admin | Hanya pemilik akun; tidak bisa dihapus |
+| `analytics_events` | Event analitik pengunjung anonim (pageview, pencarian, klik portal, dan sejenisnya) | Admin login | Server saja yang menulis, lewat token service account; penulisan dari klien ditutup total; ubah dan hapus hanya admin |
 
 Aturannya ada di `web/firestore.rules`.
 
@@ -130,7 +134,7 @@ Aturannya ada di `web/firestore.rules`.
 
 Aplikasi membaca Firestore lewat REST API (`fetch` biasa) di `lib/companies.js` dan `lib/changes.js`, dengan timeout 10 detik untuk daftar perusahaan dan 5 detik untuk umpan perubahan dan marker. Polanya seed-first (keputusan S3, lihat bagian di atas): seed adalah default, marker `meta/lastChange` dicek 1 baca per 5 menit, dan refill daftar penuh (per halaman 300 dokumen dengan `pageToken` sampai habis) hanya bila rev marker berubah. Umpan perubahan di-cache memori 1 jam. Marker adalah mekanisme invalidasi lintas-instance untuk serverless; `revalidateCompanies()` hanya membersihkan cache instance ini.
 
-SDK JS Firestore (gRPC) tidak dipakai untuk baca server karena tidak menembus proxy egress di lingkungan build: request-nya timeout lalu mengembalikan 0 baris tanpa error yang jelas. REST terbukti andal di jalur yang sama, termasuk saat impor 406 dokumen.
+SDK JS Firestore (gRPC) tidak dipakai untuk baca server karena tidak menembus proxy egress di lingkungan build: request-nya timeout lalu mengembalikan 0 baris tanpa error yang jelas. REST terbukti andal di jalur yang sama, termasuk saat impor awal 406 dokumen.
 
 Pencarian dan skor tinggal di `lib/search.js`, fungsi murni tanpa DOM: posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, portal mati -20, tidak dapat diverifikasi -10. Sinonim peran diperluas sebelum dicocokkan (cleaner menemukan Cleaning Service, warehouse menemukan Staff Gudang), dan kalimat penyangkalan dalam radius 60 karakter tidak dihitung sebagai kecocokan.
 
@@ -146,21 +150,32 @@ Cron harian (`GET /api/cron/recheck`, dijadwalkan Vercel Cron tiap 18:00 UTC, 01
 
 Cek tautan hanya membuktikan portal bisa dibuka, bukan lowongannya masih ada. Karena itu pemetaan statusnya hati-hati: perusahaan yang ada lowongannya dan portanya mati jadi `Portal tidak bisa dibuka` dan tercatat di `changes`; perusahaan yang ada lowongannya dan portalnya hidup hanya diperbarui tanggal ceknya; portal mati yang hidup lagi jadi `Tidak dapat diverifikasi` sampai dicek ulang manusia.
 
-## Yang tidak menyentuh server (untuk tamu)
+## Apa yang tersimpan di browser, apa yang dikirim ke server
 
-Pengunjung yang tidak masuk (tamu) memakai aplikasi tanpa akun: tracker
-lamaran, pilihan onboarding, dan pencarian terakhir hanya tersimpan di
-`localStorage` browser mereka, dan tidak ada yang dikirim ke server.
+Tamu (pengunjung yang tidak masuk) memakai aplikasi tanpa akun. Tiga
+hal hanya tersimpan di `localStorage` browser mereka dan tidak pernah
+dikirim ke server: tandaan pelacak lamaran, pilihan onboarding, dan
+daftar pencarian terakhir yang ditampilkan kembali ke mereka.
 Halaman `/pengaturan` menunjukkan apa yang tersimpan dan bisa
 menghapusnya.
+
+Kata kunci pencarian adalah pengecualian: setiap pencarian dicatat
+sebagai event analitik anonim (field `q` di koleksi
+`analytics_events`), bersama pageview, klik portal, dan event
+sejenisnya, lewat `/api/analytics`. Ini berlaku untuk semua
+pengunjung, termasuk tamu. Event itu membawa ID pengunjung acak yang
+dibuat sekali di browser (kunci `karir-visitor` di `localStorage`)
+dan hash IP (SHA-256 dari alamat IP ditambah garam server) untuk
+menghitung pengunjung unik per hari. IP mentah, nama, dan alamat
+email tidak pernah disimpan. Aturan Firestore menutup penulisan dari
+klien untuk koleksi itu; hanya server yang menulis, lewat token
+service account. Rincinya ada di halaman
+Kebijakan Privasi (`/privasi`).
 
 Pengunjung yang masuk dengan akun (Firebase Auth, opsional) mendapat
 sinkronisasi tracker: data pelacak lamaran mereka tersimpan di akun
 (subkoleksi `user_trackers/{uid}/items`) supaya tetap ada di perangkat
-lain. Analitik pengunjung berjalan untuk semua pengunjung: event anonim
-(pageview, pencarian, klik portal, dan sejenisnya) dikirim ke
-`/api/analytics` dengan ID pengunjung acak yang dibuat sekali di
-`localStorage` — tanpa nama, tanpa alamat email, tanpa data pribadi.
+lain.
 
 ## Keputusan arsitektur
 
@@ -172,6 +187,8 @@ lain. Analitik pengunjung berjalan untuk semua pengunjung: event anonim
   Akun admin terpisah dan dipakai untuk mengelola data.
 - Tanpa payment gateway. Aplikasi tidak memungut pembayaran apa pun.
 - Hosting di Vercel, proyek `karir`, rootDirectory `web`. Setiap push ke `main` men-deploy otomatis. Deployment Protection dimatikan.
-- Analitik berjalan (event anonim pengunjung, tanpa data pribadi — lihat
-  "Yang tidak menyentuh server (untuk tamu)" di atas); tidak ada font
-  eksternal. Angka di semua halaman dihitung dari data, bukan ditulis tangan.
+- Analitik berjalan untuk semua pengunjung (event anonim, tanpa nama,
+  tanpa alamat email, dan tanpa alamat IP mentah; rinciannya di bagian
+  "Apa yang tersimpan di browser, apa yang dikirim ke server" di atas).
+  Tidak ada font eksternal. Angka di semua halaman dihitung dari data,
+  bukan ditulis tangan.

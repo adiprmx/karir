@@ -20,7 +20,7 @@ const DICT = {
     "footer.note":
       "Data dicek berkala langsung di browser; tiap perusahaan mencatat tanggal cek terbarunya. Lowongan bisa berubah setelah tanggal cek, selalu periksa portal resminya.",
     "footer.privacy":
-      "Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai. Kalau masuk, yang tersimpan hanya email, kata pencarian, dan tanda lamaran, dan hanya pemilik akun dan admin yang bisa melihatnya. Tanpa masuk, tidak ada nama atau identitas yang tersimpan.",
+      "Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai. Kalau masuk, yang tersimpan di akun hanya email, kata pencarian, dan tanda lamaran, dan hanya pemilik akun dan admin yang bisa melihatnya. Tanpa masuk, tidak ada nama atau identitas yang tersimpan; kata pencarian hanya dicatat tanpa nama untuk statistik kunjungan.",
     "footer.repo": "Repo GitHub",
     "footer.method": "Metode pengecekan",
     "footer.about": "Tentang Karir",
@@ -116,7 +116,7 @@ const DICT = {
     "home.checked": "perusahaan dicek",
     "home.hasTarget": "ada lowongan",
     "home.freshNote":
-      "{a} perusahaan dicek 4 November 2026, {b} perusahaan dicek 5 November 2026. Lowongan bisa berubah setelah tanggal cek.",
+      "{count} perusahaan dicek dalam 7 hari terakhir, terakhir {date}. Lowongan bisa berubah setelah tanggal cek.",
     "home.viewDashboard": "Lihat dasbor",
     "search.title": "Cari kanal karir",
     "search.category": "Kategori",
@@ -195,6 +195,8 @@ const DICT = {
     "home.proof3": "Tiap baris mencatat tanggal cek, jadi kamu tahu seberapa segar datanya.",
     "home.changesEmpty": "Belum ada perubahan tercatat. Pengecekan ulang berjalan tiap hari pukul 01.00 WIB.",
     "home.changesError": "Umpan perubahan belum bisa dimuat.",
+    "home.changesDegraded":
+      "Umpan perubahan sedang tidak bisa dimuat. Coba lagi nanti.",
     "home.changesLoading": "Memuat perubahan…",
     "home.shareTargets": "Bagikan daftar lowongan",
     "home.printTargets": "Cetak daftar lowongan",
@@ -241,7 +243,7 @@ const DICT = {
     "footer.note":
       "Data is checked regularly, directly in the browser; each company records its latest check date. Openings can change after the check date, always verify on the official portal.",
     "footer.privacy":
-      "Signing in is a choice, not a requirement. Without signing in, every feature still works. If you sign in, only your email, your searches, and your application marks are saved, and only you and the admin can see them. Without signing in, no name or identity is saved.",
+      "Signing in is a choice, not a requirement. Without signing in, every feature still works. If you sign in, only your email, your searches, and your application marks are saved to your account, and only you and the admin can see them. Without signing in, no name or identity is saved; searches are only recorded anonymously for visit statistics.",
     "footer.repo": "GitHub repo",
     "footer.method": "Checking method",
     "footer.about": "About Karir",
@@ -337,7 +339,7 @@ const DICT = {
     "home.checked": "companies checked",
     "home.hasTarget": "have an opening",
     "home.freshNote":
-      "{a} companies checked on 4 November 2026, {b} companies checked on 5 November 2026. Openings can change after the check date.",
+      "{count} companies checked in the last 7 days, most recently on {date}. Openings can change after the check date.",
     "home.viewDashboard": "View dashboard",
     "search.title": "Search career channels",
     "search.category": "Category",
@@ -416,6 +418,8 @@ const DICT = {
     "home.proof3": "Every row records its check date, so you know how fresh the data is.",
     "home.changesEmpty": "No changes recorded yet. Rechecking runs every day at 01:00 WIB.",
     "home.changesError": "The changes feed could not be loaded.",
+    "home.changesDegraded":
+      "The changes feed is temporarily unavailable. Please try again later.",
     "home.changesLoading": "Loading changes…",
     "home.shareTargets": "Share the openings list",
     "home.printTargets": "Print the openings list",

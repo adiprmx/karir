@@ -19,6 +19,18 @@ Mode --live: tambah perbandingan CSV vs situs live:
     GAGAL bila live LEBIH TUA dari CSV, atau lebih baru > 24 jam.
   - Sampel dokumen lewat /api/companies/[no]: rute detail harus
     mengembalikan data yang sama dengan daftar.
+  - Watchdog write-back: 10 entri terbaru /api/changes harus sudah
+    tercermin di CSV (status CSV == `to`, atau tanggal_cek CSV lebih
+    baru dari `checkedAt` entri). Bila ada entri yang belum tercermin,
+    write-back harian tertinggal atau macet — GAGAL dengan pesan
+    yang menyebut nomornya.
+  - Sumber data: respons API membawa `source` ("live" | "seed").
+    Bila sumbernya "seed" (Firestore tidak bisa dibaca saat cek),
+    perbandingan live vs CSV tidak membuktikan apa-apa tentang
+    Firestore — skrip mencetak PERINGATAN jelas dan tetap keluar 0
+    (bukan gagal), supaya insiden kuota tidak membuat CI merah
+    karena alasan yang salah; watchdog write-back tetap jalan
+    karena /api/changes membaca koleksi changes langsung.
 Mode --live hanya jalan di CI pada branch main (butuh situs live);
 lokal, jalankan manual saat situs bisa dijangkau.
 
@@ -170,6 +182,51 @@ def live_row_ok(no, csv_row, live_row, today, errors):
     return ok
 
 
+def check_writeback(csv_rows, base_url, errors):
+    """Watchdog write-back (T8): 10 entri terbaru /api/changes harus
+    sudah tercermin di CSV. Entri tercatat bila status berubah (cron
+    atau panel admin); write-back harian menyalinnya ke CSV + seed
+    dalam 24 jam. Entri yang belum tercermin berarti write-back
+    tertinggal/macet — laporkan sebagai kesalahan dengan nomornya.
+
+    Aturan tercermin: status CSV == entri `to`, ATAU tanggal_cek CSV
+    lebih baru dari `checkedAt` entri (hunting mengecek ulang sesudah
+    perubahan itu, jadi CSV sudah melampauinya). Entri untuk nomor
+    yang tidak ada di CSV juga kesalahan (perusahaan baru dari panel
+    admin yang belum masuk repo).
+    """
+    body = fetch_json(f"{base_url}/api/changes")
+    if body is None:
+        print("watchdog write-back: /api/changes tidak bisa dibaca — dilewati")
+        return
+    entries = body.get("changes") or []
+    stale = 0
+    for e in entries:
+        no = e.get("companyNo")
+        to = e.get("to") or ""
+        checked = parse_date(e.get("checkedAt") or "")
+        if not isinstance(no, int) or no not in csv_rows:
+            errors.append(
+                f"write-back: entri changes untuk no {no} tidak ada di CSV "
+                f"(perusahaan baru dari panel admin?)"
+            )
+            stale += 1
+            continue
+        row = csv_rows[no]
+        csv_date = parse_date(row["tanggal_cek"])
+        reflected = row["status"] == to or (
+            checked is not None and csv_date is not None and csv_date > checked
+        )
+        if not reflected:
+            errors.append(
+                f"write-back tertinggal: no {no} {row['perusahaan'][:40]!r} "
+                f"berubah ke {to!r} pada {e.get('checkedAt')} tapi CSV "
+                f"masih {row['status']!r} (cek {row['tanggal_cek']})"
+            )
+            stale += 1
+    print(f"watchdog write-back: {len(entries)} entri changes dicek, {stale} belum tercermin")
+
+
 def check_live(csv_rows, base_url, errors):
     base = base_url.rstrip("/")
     stats = fetch_json(f"{base}/api/stats")
@@ -178,20 +235,34 @@ def check_live(csv_rows, base_url, errors):
         return None
     total = stats.get("total")
     print(f"live /api/stats: total={total}, CSV={len(csv_rows)}")
+    if stats.get("source") == "seed":
+        print(
+            "PERINGATAN: /api/stats menyajikan data SEED (Firestore tidak "
+            "bisa dibaca) — cek live ini tidak membuktikan sinkronisasi "
+            "Firestore, hanya membuktikan seed cocok dengan CSV."
+        )
     if total != len(csv_rows):
         errors.append(f"/api/stats total {total} != jumlah baris CSV {len(csv_rows)}")
 
     live_rows = {}
+    list_source = None
     for offset in (0, 400):
         body = fetch_json(f"{base}/api/companies?limit=400&offset={offset}")
         if body is None:
             print(f"LIVE TIDAK BISA DIJANGKAU: /api/companies offset={offset} gagal")
             return None
+        list_source = body.get("source") or list_source
         for e in body.get("results", []):
             c = e.get("company") or {}
             if c.get("no") is not None:
                 live_rows[int(c["no"])] = c
     print(f"live /api/companies: {len(live_rows)} dokumen")
+    if list_source == "seed":
+        print(
+            "PERINGATAN: /api/companies menyajikan data SEED (Firestore "
+            "tidak bisa dibaca) — perbandingan field di bawah ini memakai "
+            "seed, bukan data live."
+        )
     if set(live_rows) != set(csv_rows):
         missing = sorted(set(csv_rows) - set(live_rows))
         extra = sorted(set(live_rows) - set(csv_rows))
@@ -221,6 +292,8 @@ def check_live(csv_rows, base_url, errors):
                 f"{doc.get('batas_lamar')!r} != CSV {csv_rows[no]['batas_lamar']!r}"
             )
     print(f"sampel rute detail: {len(SAMPLE_NOS)} dokumen dicek")
+
+    check_writeback(csv_rows, base, errors)
     return True
 
 

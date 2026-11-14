@@ -15,6 +15,7 @@ import {
   buildRateLimitFields,
   parseRateLimitDoc,
   firestoreDocId,
+  scopedKey,
   FIRESTORE_SYNC_EVERY,
 } from "./rate-limit.js";
 import { getClientIp } from "./api-guard.js";
@@ -54,6 +55,44 @@ describe("getClientIp", () => {
 
   it("tanpa header apa pun kembalikan unknown", () => {
     assert.equal(getClientIp(fakeRequest({})), "unknown");
+  });
+});
+
+describe("scopedKey", () => {
+  it("menggabungkan cakupan dan hash dengan pemisah titik dua", () => {
+    assert.equal(scopedKey("companies", "abc123"), "companies:abc123");
+    assert.equal(scopedKey("company", "abc123"), "company:abc123");
+  });
+
+  it("cakupan berbeda menghasilkan kunci berbeda untuk hash yang sama (BE-03)", () => {
+    assert.notEqual(
+      scopedKey("companies", "abc123"),
+      scopedKey("index", "abc123"),
+    );
+    assert.notEqual(
+      scopedKey("stats", "abc123"),
+      scopedKey("analytics", "abc123"),
+    );
+  });
+
+  it("menolak cakupan kosong atau berkarakter tidak aman", () => {
+    assert.throws(() => scopedKey("", "abc123"), /cakupan/);
+    assert.throws(() => scopedKey("a:b", "abc123"), /cakupan/);
+    assert.throws(() => scopedKey("a b", "abc123"), /cakupan/);
+    assert.throws(() => scopedKey(null, "abc123"), /cakupan/);
+  });
+
+  it("ember ber-cakupan tidak saling mengunci (BE-03)", async () => {
+    const store = createMemoryStore();
+    const hash = "hash-pengunjung-sama";
+    for (let i = 0; i < 30; i++) {
+      await store.check(scopedKey("companies", hash), 30, 60_000, NOW + i);
+    }
+    /* Ember companies penuh, tetapi ember index untuk pengunjung
+     * yang sama masih kosong. */
+    assert.equal(await store.check(scopedKey("companies", hash), 30, 60_000, NOW + 30), false);
+    assert.equal(await store.check(scopedKey("index", hash), 30, 60_000, NOW + 30), true);
+    assert.equal(await store.check(scopedKey("analytics", hash), 30, 60_000, NOW + 30), true);
   });
 });
 

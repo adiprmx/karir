@@ -1,6 +1,8 @@
 # API
 
-Semua rute mengembalikan JSON, kecuali `/api/locale` yang mengembalikan redirect. Basis URL aplikasi live adalah `https://karir-adiprmx.vercel.app`. Tidak ada kunci API dan tidak ada autentikasi untuk rute baca.
+Semua rute mengembalikan JSON, kecuali `/api/locale` yang mengembalikan redirect. Basis URL aplikasi live adalah `https://karir-adiprmx.vercel.app`. Rute baca umumnya tidak butuh autentikasi, dengan dua pengecualian: `/api/index` wajib membawa token dari `/api/token`, dan rute `/api/admin/*` wajib membawa token login admin. Rute cron wajib membawa `CRON_SECRET`.
+
+Kontrak balasan: respons sukses berbentuk per rute (lihat tiap bagian di bawah); respons error berbentuk `{ "error": "..." }` dengan status HTTP yang sesuai. Field `error` tidak pernah muncul di respons 2xx — penjelasan kegagalan operasi di dalam respons sukses memakai field `detail` (lihat `/api/admin/check-link`).
 
 ## GET /api/companies
 
@@ -14,7 +16,7 @@ Parameter query:
 | `posisi` | Posisi atau nama perusahaan | kosong |
 | `q` | Pencarian bebas; bila diisi, `posisi` memakai nilai ini dan hasil disaring ke baris yang menyebut kata kunci di nama, posisi, lokasi, atau catatan | kosong |
 | `kategori` | Saring kategori persis, mis. Manufaktur | kosong |
-| `status` | Saring satu dari 6 status | kosong |
+| `status` | Saring satu dari 4 status | kosong |
 | `urutan` | `relevansi` atau `nama` | `relevansi` |
 | `limit` | Jumlah hasil per halaman, 1 sampai 400 | 20 |
 | `offset` | Lewati N hasil pertama | 0 |
@@ -79,7 +81,7 @@ Satu perusahaan berdasarkan nomor baris. Contoh: `GET /api/companies/212`
 }
 ```
 
-Perusahaan tidak ada: `{ "error": "Perusahaan tidak ditemukan." }`, status 404. Respons sukses juga membawa `source` (`live` | `seed`) dan `seedDate`: saat Firestore tidak bisa dijangkau, perusahaan diambil dari seed cadangan (`source: "seed"`), bukan 503 — sama seperti rute daftar (arsitektur seed-first S3).
+Perusahaan tidak ada: `{ "error": "Perusahaan tidak ditemukan." }`, status 404. Respons sukses juga membawa `source` (`live` | `seed`) dan `seedDate`: saat Firestore tidak bisa dijangkau, perusahaan diambil dari seed cadangan (`source: "seed"`), bukan 503 — sama seperti rute daftar (arsitektur seed-first S3). Rute ini memakai limiter bersama yang sama dengan rute baca lain (cakupan `company`, 60 permintaan per menit per hash IP).
 
 ## GET /api/stats
 
@@ -97,61 +99,73 @@ Angka ringkas data. Contoh: `GET /api/stats`
     "Portal tidak bisa dibuka": 55
   },
   "byCategory": [
+    { "label": "Mining", "count": 71 },
     { "label": "Manufaktur", "count": 67 },
-    { "label": "Mining", "count": 30 },
     { "label": "Tech", "count": 30 },
+    { "label": "Retail", "count": 27 },
+    { "label": "Maritim", "count": 24 },
     { "label": "Fintech", "count": 23 },
-    { "label": "BUMN", "count": 21 },
-    { "label": "BANK", "count": 18 },
-    { "label": "FMCG", "count": 18 },
-    { "label": "Retail", "count": 16 }
+    { "label": "Minuman", "count": 22 },
+    { "label": "Makanan", "count": 22 }
   ],
-  "byDate": { "2026-11-04": 81, "2026-11-05": 303, "2026-11-07": 22 },
+  "byDate": { "2026-11-04": 39, "2026-11-05": 176, "2026-11-07": 19, "2026-11-13": 96, "2026-11-14": 280 },
   "targets": 288,
   "stale": 0
 }
 ```
 
-`byCategory` berisi 8 kategori terbanyak. `stale` adalah jumlah baris yang tanggal ceknya sudah lebih dari 30 hari; nilainya 0 saat dokumen ini ditulis karena semua baris dicek 4, 5, dan 7 November 2026. `source` dan `seedDate` sama seperti di `/api/companies`: saat Firestore tidak bisa dijangkau, rute ini menjawab 200 dengan angka dari seed cadangan (`source: "seed"`), bukan 503.
+`byCategory` berisi 8 kategori terbanyak. `stale` adalah jumlah baris yang tanggal ceknya sudah lebih dari 30 hari; nilainya 0 saat dokumen ini ditulis karena semua baris dicek pada 4–14 November 2026, kurang dari 30 hari sebelum dokumen ini ditulis. `source` dan `seedDate` sama seperti di `/api/companies`: saat Firestore tidak bisa dijangkau, rute ini menjawab 200 dengan angka dari seed cadangan (`source: "seed"`), bukan 503.
 
 ## GET /api/changes
 
-Umpan perubahan status, 10 terbaru, terbaru dulu. Aturan Firestore untuk koleksi `changes` diterbitkan 7 November 2026, jadi perubahan dari cron harian dan cek massal admin tercatat di sini. Perubahan dalam 48 jam terakhir ditandai chip "Baru" di umpan Yang berubah, daftar perusahaan yang ada lowongannya, dan kartu perusahaan. Contoh: `GET /api/changes`
+Umpan perubahan status, 10 terbaru, terbaru dulu. Perubahan dalam 48 jam terakhir ditandai chip "Baru" di umpan Yang berubah, daftar perusahaan yang ada lowongannya, dan kartu perusahaan. Contoh: `GET /api/changes`
 
 ```json
-{ "changes": [] }
+{ "changes": [], "degraded": false }
 ```
 
-Umpan masih kosong saat dokumen ini ditulis, karena aturan Firestore untuk koleksi `changes` belum diterbitkan, jadi belum ada perubahan yang tercatat. Satu entri perubahan berbentuk:
+Rute ini menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 60 permintaan per menit per hash IP (cakupan `changes`). Bila Firestore tidak bisa dijangkau dan tidak ada cache, rute ini mengembalikan 200 `{ "changes": [], "degraded": true }` — bukan daftar kosong polos — supaya umpan bisa membedakan "belum ada perubahan" dari "umpan sedang tidak bisa dimuat". Respons sehat membawa `degraded: false` secara eksplisit. Satu entri perubahan berbentuk:
 
 | Kolom | Isi |
 | --- | --- |
 | `companyNo` | Nomor baris perusahaan, angka |
 | `perusahaan` | Nama perusahaan |
-| `from` | Status sebelum, salah satu dari 6 nilai |
-| `to` | Status sesudah, salah satu dari 6 nilai |
+| `from` | Status sebelum, salah satu dari 4 status |
+| `to` | Status sesudah, salah satu dari 4 status |
 | `checkedAt` | Tanggal cek, `YYYY-MM-DD` |
 | `createdAt` | Waktu tercatat, ISO 8601 |
 
-Bila Firestore tidak bisa dijangkau, rute ini mengembalikan `{ "changes": [] }` dengan status 200, bukan error, supaya halaman tetap tampil.
-
 ## GET /api/index
 
-Indeks pencarian untuk halaman Cari. Wajib token valid di header `Authorization: Bearer <token>` (lihat `/api/token` di bawah). Menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 30 permintaan per menit per hash IP. Respons memakai `Cache-Control: private, no-store`. Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503.
+Indeks pencarian untuk halaman Cari. Wajib token valid di header `Authorization: Bearer <token>` (lihat `/api/token` di bawah). Menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 30 permintaan per menit per hash IP (cakupan `index`). Respons memakai `Cache-Control: private, no-store`. Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503.
 
 Respons berbentuk `{ "companies": [...], "source": "live", "seedDate": "2026-11-14" }`. `source` dan `seedDate` sama seperti di `/api/companies`: saat Firestore tidak bisa dijangkau, rute ini menjawab 200 dengan daftar dari seed cadangan (`source: "seed"`), dan klien menampilkan catatan "data cadangan" di halaman Cari dan Beranda.
 
 ## GET /api/token
 
-Memberi token berumur 60 detik untuk `/api/index`. Token hanya diberikan bila `Referer` atau `Origin` request sama dengan origin situs; selain itu jawabannya 403. Tanpa batas laju. Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503 dan tidak ada token yang dikeluarkan.
+Memberi token berumur 60 detik untuk `/api/index`. Responsnya `{ "token": "...", "expiresIn": 60 }`. Token hanya diberikan bila `Referer` atau `Origin` request sama dengan origin situs; selain itu jawabannya 403. Rute ini menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 60 permintaan per menit per hash IP (cakupan `token`). Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503 dan tidak ada token yang dikeluarkan.
 
 ## POST /api/analytics
 
-Satu event analitik pengunjung anonim (pageview, search, detail, portal_click, tracker_mark, filter). IP mentah hanya dipakai untuk hash dan batas laju, lalu dibuang; yang disimpan hanya hash IP 64 heksa. Batas 30 permintaan per menit per hash IP; jawaban 202 walau tulis ke Firestore gagal. Endpoint ini tidak menolak user agent otomatis karena ia alat ukur; request dengan user agent kosong atau berpola bot ditandai field `uaFlag` pada dokumen. Bila env `ANALYTICS_SALT` belum dipasang, event tidak disimpan dan jawabannya 200 `{ "skipped": true }`.
+Satu event analitik pengunjung anonim (pageview, search, detail, portal_click, tracker_mark, filter, onboarding, report, channel_copy). IP mentah hanya dipakai untuk hash dan batas laju, lalu dibuang; yang disimpan hanya hash IP 64 heksa. Batas 30 permintaan per menit per hash IP (cakupan `analytics`); jawaban 429 berbentuk `{ "error": "Terlalu banyak permintaan. Coba lagi sebentar." }`. Jawaban 202 walau tulis ke Firestore gagal. Endpoint ini tidak menolak user agent otomatis karena ia alat ukur; request dengan user agent kosong atau berpola bot ditandai field `uaFlag` pada dokumen. Bila env `ANALYTICS_SALT` belum dipasang, event tidak disimpan dan jawabannya 200 `{ "skipped": true }`.
 
 ## Batas laju
 
-Satu limiter dipakai `/api/index`, `/api/companies`, `/api/stats`, dan `/api/analytics` (`web/lib/rate-limit.js`). Urutan store: Redis lewat REST Upstash bila env KV terpasang, lalu Firestore (koleksi `rate_limits`, tulis balik tiap 10 hit per kunci), lalu memori bila keduanya tidak ada. Store hanya menyimpan hash IP harian dan waktu hit, bukan IP mentah. Bila store tidak bisa dijangkau, pintu dibuka (fail-open) supaya situs tetap tampil. IP klien dibaca dari header `x-real-ip` dulu, lalu elemen terakhir `x-forwarded-for`; elemen pertama tidak dipakai karena bisa ditulis pengirim.
+Tiap rute baca punya ember batas lajunya sendiri lewat `scopedKey()` (`web/lib/rate-limit.js`, BE-03), semuanya memakai satu limiter bersama (`getSharedLimiter()`). Batas dihitung per hash IP harian, per menit:
+
+| Cakupan | Rute | Batas per menit |
+| --- | --- | --- |
+| `analytics` | POST /api/analytics | 30 |
+| `changes` | GET /api/changes | 60 |
+| `companies` | GET /api/companies | 60 |
+| `company` | GET /api/companies/[no] | 60 |
+| `index` | GET /api/index | 30 |
+| `stats` | GET /api/stats | 60 |
+| `token` | GET /api/token | 60 |
+
+Rute admin check-link memakai limiter sendiri (10 per menit, lihat bagiannya).
+
+Urutan store: Redis lewat REST Upstash bila env KV terpasang, lalu Firestore (koleksi `rate_limits`, tulis balik tiap 10 hit per kunci), lalu memori bila keduanya tidak ada. Store hanya menyimpan hash IP harian dan waktu hit, bukan IP mentah. Bila store tidak bisa dijangkau, pintu dibuka (fail-open) supaya situs tetap tampil. IP klien dibaca dari header `x-real-ip` dulu, lalu elemen terakhir `x-forwarded-for`; elemen pertama tidak dipakai karena bisa ditulis pengirim.
 
 ## POST /api/admin/check-link
 
@@ -170,22 +184,24 @@ Contoh: `POST /api/admin/check-link` dengan body `{ "no": 212 }`
 }
 ```
 
-`ok` false bila portal tidak bisa dihubungi atau mengembalikan status 400 ke atas; saat itu balasan menambah `"error": "Tidak bisa dihubungi."` dan `status` menjadi 0 bila URL tidak bisa dihubungi sama sekali (timeout, DNS, koneksi putus). Nilai `ok`, `status`, dan `finalUrl` mengikuti keadaan portal saat dipanggil; angka di contoh di atas mengikuti satu kali panggilan. Timeout 10 detik, maksimal 5 redirect. Rute ini tidak memeriksa login; yang membatasi hanya batas laju di bawah.
+`ok` false bila portal tidak bisa dihubungi atau mengembalikan status 400 ke atas; saat itu balasan menambah `"detail": "Tidak bisa dihubungi."` dan `status` menjadi 0 bila URL tidak bisa dihubungi sama sekali (timeout, DNS, koneksi putus). Field `error` tidak pernah muncul di respons 200; `error` hanya untuk respons error (4xx/5xx). Nilai `ok`, `status`, dan `finalUrl` mengikuti keadaan portal saat dipanggil; angka di contoh di atas mengikuti satu kali panggilan. Timeout 10 detik, maksimal 5 redirect. Rute ini memeriksa login admin: request wajib membawa token ID Firebase akun admin di header `Authorization: Bearer <idToken>`; tanpa token atau token tidak valid jawabannya 401, token valid tanpa klaim admin jawabannya 403. Selain itu batas laju 10 permintaan per menit per IP tetap berlaku.
 
 | Status | Arti |
 | --- | --- |
 | 400 | Body tidak valid, atau nomor perusahaan tidak diisi |
+| 401 | Token admin tidak ada atau tidak valid |
+| 403 | Token valid, tapi akun bukan admin |
 | 404 | Perusahaan tidak ditemukan, atau perusahaan tidak punya tautan karir |
 | 429 | Lebih dari 10 permintaan dalam 60 detik dari IP yang sama |
 | 503 | Data perusahaan tidak bisa dimuat dari Firestore |
 
 ## GET /api/cron/recheck
 
-Cek ulang harian portal perusahaan yang ada lowongannya. Dijalankan Vercel Cron tiap 18:00 UTC (01:00 WIB). Antrean diurutkan dari tanggal cek terlama dulu (rotasi), lalu portal yang sedang berstatus mati supaya ada jalan pulih; perusahaan tanpa tautan karir tidak masuk antrean. Anggaran waktu 50 detik; bila habis, sisanya dicatat terpotong.
+Cek ulang harian portal perusahaan yang ada lowongannya. Dijalankan Vercel Cron tiap 18:00 UTC (01:00 WIB). Antrean disusun tiga tier (BE-05): (1) mendesak — perusahaan yang ada lowongan dan batas lamarnya tinggal 0–7 hari, dicek pertama tiap run; (2) terbuka — perusahaan yang ada lowongan lainnya, dari yang paling lama tidak dicek; (3) mati — portal yang sedang berstatus mati, dicek bergilir dengan sisa anggaran. Dalam tiap tier, tanggal cek tertua dulu supaya cek harian berputar ke seluruh daftar. Perusahaan tanpa tautan karir tidak masuk antrean. Portal dicek paralel batch 8. Anggaran waktu 50 detik (fungsi dibatasi 60 detik); bila habis, sisanya dicatat terpotong.
 
 Request wajib membawa header `Authorization: Bearer <CRON_SECRET>`; tanpa header yang cocok jawabannya 401 `{ "error": "Tidak diizinkan." }`. Bila `CRON_SECRET` belum dipasang di env, jawabannya 503 dan cron tidak berjalan sama sekali.
 
-Bila service account belum dipasang, jawabannya 503. Itu keadaan saat dokumen ini ditulis:
+Bila service account belum dipasang, jawabannya 503:
 
 ```json
 { "error": "cron belum diaktifkan", "detail": "service account belum dipasang" }
@@ -198,14 +214,28 @@ Cron adalah penulis, jadi ia tidak boleh berjalan dari seed: bila Firestore tida
 Bila cron berjalan, jawabannya 200 dengan bentuk:
 
 ```json
-{ "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "truncated": false, "alerts": 0, "telegram": "none", "markerBumped": true }
+{ "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "openSkipped": 0, "truncated": false, "alerts": 0, "alertsFailed": 0, "telegram": "none", "telegramMarked": 0, "alertPhaseTruncated": false, "snapshotKnown": true, "snapshotWritten": true, "queue": { "urgent": 1, "open": 237, "dead": 55, "total": 293 }, "markerBumped": true, "heartbeatWritten": true }
 ```
 
-`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, `telegram` bernilai `sent`, `failed`, `skipped-no-token`, `skipped-timeout`, atau `none` (tidak ada alert baru), dan `markerBumped` menandakan marker kesegaran `meta/lastChange` dinaikkan di run ini (true bila ada status perusahaan yang berubah). Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
+`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `openSkipped` adalah perusahaan tier mendesak/terbuka yang tidak sempat dicek karena terpotong, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, `alertsFailed` adalah alert yang gagal ditulis, `telegram` bernilai `sent`, `failed`, `skipped-no-token`, `skipped-timeout`, atau `none` (tidak ada alert baru), `telegramMarked` adalah alert yang berhasil ditandai terkirim sesudah kirim langsung, `alertPhaseTruncated` menandakan fase alert kehabisan anggarannya sendiri (15 detik), `snapshotKnown`/`snapshotWritten` menandakan snapshot target run sebelumnya dibaca/ditulis, `queue` adalah ukuran antrean per tier (`urgent` + `open` + `dead` = `total`), `markerBumped` menandakan marker kesegaran `meta/lastChange` dinaikkan di run ini (true bila ada status perusahaan yang berubah), dan `heartbeatWritten` menandakan ringkasan run tercatat di `cron-runs/{tanggal-WIB}`. Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
 
 ### Notifikasi
 
-Setelah cek selesai, cron membandingkan daftar target sekarang dengan snapshot run sebelumnya di dokumen `meta/targets`: nomor yang baru muncul jadi alert `new-target`, dan perusahaan target yang batas lamarnya tinggal 0-3 hari jadi alert `deadline`. Alert tercatat di koleksi `alerts` dengan id deterministik (`new-target-{no}-{tanggal}` atau `deadline-{no}-{batas_lamar}`), supaya satu kejadian tidak tercatat dua kali. Bila ada alert baru, cron mengirim satu pesan Telegram gabungan ke pemilik. Kegagalan kirim tidak menggagalkan cron. Bila token Telegram belum dipasang di env (`TELEGRAM_BOT_TOKEN`), pengiriman dilewati dan alert tetap tercatat untuk dibaca watcher agent-side.
+Fase alert jalan DULU, sebelum loop cek portal (anggaran 15 detik, tulis paralel batch 5), supaya alert tidak pernah terlewat bila loop cek menghabiskan anggaran. Fase ini membandingkan daftar target sekarang dengan snapshot run sebelumnya di dokumen `meta/targets`: nomor yang baru muncul jadi alert `new-target`, dan perusahaan target yang batas lamarnya tinggal 0-3 hari jadi alert `deadline`. Alert tercatat di koleksi `alerts` dengan id deterministik (`new-target-{no}-{tanggal}` atau `deadline-{no}-{batas_lamar}`), supaya satu kejadian tidak tercatat dua kali. Bila ada alert baru, cron mengirim satu pesan Telegram gabungan ke pemilik. Kegagalan kirim tidak menggagalkan cron. Alert yang berhasil dikirim ditandai `sent: true` + `sentAt`. Bila token Telegram belum dipasang di env (`TELEGRAM_BOT_TOKEN`), pengiriman dilewati dan alert tetap tercatat untuk dibaca watcher agent-side. Di akhir run, ringkasan ditulis sebagai heartbeat ke dokumen `cron-runs/{tanggal-WIB}` supaya watcher bisa mendeteksi run yang terlewat.
+
+## GET /api/cron/cleanup
+
+Hapus event analitik mentah yang lebih tua dari 90 hari (retensi analitik S8), maksimal 200 event per run. Dijalankan Vercel Cron tiap Senin 02:00 WIB (`0 19 * * 0` UTC).
+
+Request wajib membawa header `Authorization: Bearer <CRON_SECRET>`; tanpa header yang cocok jawabannya 401 `{ "error": "Tidak diizinkan." }`. Bila `CRON_SECRET` atau service account belum dipasang di env, jawabannya 503 dan rute tidak berjalan. Penghapusan hanya bisa lewat token service account, karena aturan Firestore menutup hapus event dari klien.
+
+Bila berjalan, jawabannya 200 dengan bentuk:
+
+```json
+{ "deleted": 12, "cutoff": "2026-08-17T00:00:00.000Z", "hasMore": false }
+```
+
+`deleted` adalah event yang dihapus di run ini, `cutoff` adalah batas umur (90 hari sebelum run), `hasMore` menandakan masih ada event lama yang tersisa (batas 200 per run tercapai). Bila penghapusan gagal, jawabannya 500 `{ "error": "Pembersihan event gagal." }`.
 
 ## Marker kesegaran `meta/lastChange`
 
@@ -235,16 +265,19 @@ Alert kuota: begitu `readsEstimate` mencapai 70% kuota harian (35.000 dari 50.00
 
 | Koleksi | Isi | Aturan tulis |
 | --- | --- | --- |
-| `companies` | 610 dokumen perusahaan; kolom `batas_lamar` ("YYYY-MM-DD", opsional) menyimpan tanggal batas lamar yang diparse dari catatan yang sudah ada | Admin login, 9 kolom wajib, `batas_lamar` harus string bila ada |
+| `companies` | 610 dokumen perusahaan; kolom terstruktur `batas_lamar` ("YYYY-MM-DD", opsional) menyimpan tanggal batas lamar (17 nilai di-backfill dari catatan saat migrasi 14 November 2026) | Admin login, 9 kolom wajib, `batas_lamar` harus string bila ada |
 | `changes` | Umpan perubahan status | Admin login; entri tidak bisa diubah atau dihapus |
+| `audit_logs` | Jejak perubahan data oleh admin | Admin login; entri tidak bisa diubah atau dihapus |
+| `reports` | Laporan tautan mati dari pengunjung | Siapa pun boleh membuat satu laporan berbentuk benar; tidak bisa dibaca publik |
 | `alerts` | Alert notifikasi (`new-target`, `deadline`, atau `quota`) dengan field `type`, `companyNo`, `perusahaan`, `sent`, `createdAt`; alert `quota` menambah `readsEstimate` dan `percent` | Admin login; entri tidak bisa diubah atau dihapus; alert `quota` boleh dibuat server lewat API key publik dengan bentuk terkekang |
 | `meta` | Snapshot internal cron (`meta/targets`: daftar nomor perusahaan yang ada lowongannya run sebelumnya) dan marker kesegaran (`meta/lastChange`, baca terbuka, lihat bagian Marker di atas) | `meta/targets`: tidak ada akses klien, hanya service account; `meta/lastChange`: rev hanya admin/service account, pencacah hanya naik 1 per tulis |
 | `rate_limits` | Satu dokumen per hash pengunjung harian: larik waktu hit (maks 60 angka) dan `updatedAt` | Bentuk dibatasi ketat oleh aturan; tidak bisa dihapus |
-| `audit_logs` | Jejak perubahan data oleh admin | Admin login; entri tidak bisa diubah atau dihapus |
-| `reports` | Laporan tautan mati dari pengunjung | Siapa pun boleh membuat satu laporan berbentuk benar; tidak bisa dibaca publik |
+| `user_trackers` | Subkoleksi `user_trackers/{uid}/items`: satu dokumen per perusahaan yang ditandai pengunjung yang masuk | Hanya pemilik akun; bentuk divalidasi |
+| `user_profiles` | Profil akun: email dan nama tampilan | Hanya pemilik akun; tidak bisa dihapus |
+| `analytics_events` | Event analitik pengunjung anonim (pageview, pencarian, klik portal, dan sejenisnya) | Server saja yang menulis, lewat token service account; penulisan dari klien ditutup total; ubah dan hapus hanya admin |
 
 ## GET /api/locale
 
 Atur bahasa antarmuka lalu kembali ke halaman asal. Contoh: `GET /api/locale?lang=en&next=/cari`
 
-Balasannya redirect 302 ke `next` dan cookie `karir-locale` dengan nilai `en` atau `id`, masa berlaku satu tahun, `sameSite: lax`. Nilai `lang` selain `en` dianggap `id`. Nilai `next` yang tidak diawali `/`, atau diawali `//`, diganti `/`.
+Balasannya redirect 302 ke `next` dan cookie `karir-locale` dengan nilai `en` atau `id`, masa berlaku satu tahun, `sameSite: lax`. Nilai `lang` selain `en` dianggap `id`. Nilai `next` divalidasi `safeNext()`: harus path relatif di situs ini — nilai yang mengandung backslash, diawali `//`, atau mengarah ke origin lain diganti `/`.

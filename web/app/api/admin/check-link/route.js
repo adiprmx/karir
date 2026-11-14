@@ -87,6 +87,11 @@ export async function POST(request) {
   }
   const url = company.link_karir;
   const result = await checkUrl(url, { timeoutMs: 10_000 });
+  /* Respons 200 tidak pernah membawa field `error` (BE-13): `error`
+   * hanya untuk respons gagal (4xx/5xx). Bila portal tidak bisa
+   * dibuka, penjelasannya ada di `detail` dan `ok: false` — klien
+   * membedakan "pemeriksaan gagal" (status bukan 2xx + `error`)
+   * dari "portal mati" (200 + `ok: false` + `detail`). */
   return NextResponse.json({
     no,
     url,
@@ -94,6 +99,6 @@ export async function POST(request) {
     status: result.status ?? 0,
     finalUrl: result.finalUrl,
     checkedAt: new Date().toISOString(),
-    ...(result.ok ? {} : { error: "Tidak bisa dihubungi." }),
+    ...(result.ok ? {} : { detail: "Tidak bisa dihubungi." }),
   });
 }

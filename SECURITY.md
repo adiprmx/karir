@@ -20,6 +20,6 @@ Enam variabel `NEXT_PUBLIC_FIREBASE_*` adalah konfigurasi klien publik. Kunci AP
 
 - Data lowongan yang sudah usang. Status tiap baris terikat tanggal cek; data lama adalah data yang perlu dicek ulang, dan itu dicatat di `ROADMAP.md`.
 - Portal perusahaan yang tidak bisa dibuka atau mengembalikan 404. Itu status data, tercatat sebagai `Portal tidak bisa dibuka`.
-- Empat baris tanpa tautan karir (Olive Fried Chicken No. 204, PT Dwi Indah No. 315, PT Cintas Sentul Raya No. 321, PT Best Logistics Service Indonesia No. 355). Tidak ditemukan situs resmi perusahaan itu, jadi tautannya tidak ditebak.
+- 76 baris tanpa tautan karir. 72 di antaranya punya kanal lain (email, WhatsApp, atau formulir); 4 tanpa kanal apa pun (Olive Fried Chicken No. 204, PT Dwi Indah No. 315, PT Cintas Sentul Raya No. 321, PT Best Logistics Service Indonesia No. 355). Tidak ditemukan situs resmi perusahaan itu, jadi tautannya tidak ditebak.
 - Logo perusahaan yang gagal dimuat atau foto yang tidak tampil. Aplikasi memang menyembunyikan keduanya bila sumbernya gagal.
 - Balasan 429 dari `POST /api/admin/check-link`. Itu batas laju yang bekerja: 10 permintaan per menit per IP.

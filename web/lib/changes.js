@@ -43,6 +43,33 @@ async function fetchJson(url, timeoutMs = 5_000) {
   }
 }
 
+/* Baca body JSON dengan timeout sendiri (BE-09): pola yang sama
+ * dengan jsonWithTimeout di lib/companies.js — fetch() resolve saat
+ * header tiba dan timer AbortController di atas dimatikan saat itu,
+ * jadi body yang stall bisa menggantung selamanya tanpa batas ini.
+ * Bila timeout, getChanges memperlakukannya sama seperti kegagalan
+ * baca: cache basi dipakai, atau lempar bila tidak ada cache. */
+async function jsonWithTimeout(res, timeoutMs = 5_000) {
+  let timer;
+  try {
+    return await Promise.race([
+      res.json(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          try {
+            res.body?.cancel?.();
+          } catch {
+            /* Pembatalan body bersifat best-effort. */
+          }
+          reject(new Error("Timeout membaca body respons"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function docToChange(d) {
   const f = d.fields || {};
   const s = (k) => (f[k] && f[k].stringValue != null ? f[k].stringValue : "");
@@ -81,7 +108,7 @@ export async function getChanges(limit = 10) {
       if (!res.ok) {
         throw new Error(`Firestore list changes gagal: HTTP ${res.status}`);
       }
-      const body = await res.json();
+      const body = await jsonWithTimeout(res);
       const list = (body.documents || []).map(docToChange);
       /* Urutan cadangan di sisi server bila orderBy tidak diterapkan. */
       list.sort((a, b) =>

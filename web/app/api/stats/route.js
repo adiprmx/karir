@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
 import { getCompaniesWithSource, getStats, getStaleCount } from "@/lib/companies";
 import { countBy, topEntries } from "@/lib/search";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
-import { getSharedLimiter } from "@/lib/rate-limit";
+import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
 
 const WINDOW_MS = 60_000;
@@ -26,7 +26,10 @@ export async function GET(request) {
    * lemah dan tidak ada IP mentah yang disimpan. */
   let limited = false;
   try {
-    const key = hashVisitor(getClientIp(request), todayJakarta());
+    const key = scopedKey(
+      "stats",
+      hashVisitor(getClientIp(request), todayJakarta()),
+    );
     limited = !(await getSharedLimiter().check(key, LIMIT_PER_MINUTE, WINDOW_MS));
   } catch {
     console.warn("Batas laju /api/stats dilewati: env ANALYTICS_SALT belum dipasang.");

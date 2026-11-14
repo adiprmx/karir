@@ -1,0 +1,208 @@
+# Write-back harian Firestore -> CSV + seed (keputusan S1, T8).
+#
+# Cron cek ulang menulis status + tanggal_cek langsung ke Firestore;
+# workflow ini menyalin perubahan itu kembali ke repo (CSV + seed)
+# supaya CSV tetap sumber kebenaran abadi (DATA-01). Berjalan tiap
+# hari 03:00 WIB (20:00 UTC), setelah cron cek ulang 01:00 WIB.
+#
+# CARA KERJA: membaca situs produksi lewat API PUBLIK (/api/stats,
+# /api/companies, /api/changes) — tanpa rahasia apa pun. Hanya
+# status + tanggal_cek yang disalin, dan hanya bila data live LEBIH
+# BARU dari CSV (aturan kesegaran yang sama dengan skrip agent-side
+# ~/.claude-v280/write_back.py). Field statis, dokumen baru, dan
+# dokumen hilang hanya dilaporkan di log, tidak diterapkan otomatis.
+#
+# Skrip Python di bawah ini adalah KEMBAR RINGAN dari write_back.py
+# (transport berbeda: API publik vs service account; runtime
+# berbeda: runner GitHub vs VM). Bila aturan penerapannya berubah,
+# ubah KEDUANYA. write_back.py tetap implementasi utama (punya mode
+# --include-static, --allow-new, dan --mock untuk pengujian).
+#
+# DEGRADASI: bila API menyajikan data SEED (Firestore tidak bisa
+# dibaca, mis. kuota habis) atau tidak bisa dijangkau, workflow
+# berhenti dengan sukses tanpa menulis apa pun (menulis dari seed
+# sama dengan menulis CSV ke dirinya sendiri, dan menandainya gagal
+# hanya membuat notifikasi palsu tiap hari selama insiden). Penjaga
+# yang memberi tahu bila write-back tertinggal adalah watchdog
+# write-back di scripts/check-consistency.py --live (jalan di CI
+# validate.yml pada tiap push ke main).
+name: Write-back harian
+
+on:
+  schedule:
+    # 20:00 UTC = 03:00 WIB, setelah cron cek ulang 01:00 WIB.
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+
+# Satu run write-back dalam satu waktu; run yang tumpang tindih
+# mengantre (bukan dibatalkan) supaya tidak ada hari yang terlewat.
+concurrency:
+  group: write-back
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  write-back:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Salin perubahan live ke CSV + seed
+        id: sync
+        run: |
+          python3 - <<'PY'
+          """Write-back via API publik (kembar ringan write_back.py).
+
+          Membaca /api/stats + /api/companies (2 halaman) + /api/changes
+          dari situs produksi, menerapkan selisih status/tanggal_cek
+          yang live-nya lebih baru ke CSV + seed, lalu memvalidasi.
+          Keluar 0 tanpa menulis bila sumbernya seed atau API tidak
+          bisa dijangkau (lihat catatan di kepala workflow ini).
+          """
+          import csv
+          import json
+          import os
+          import sys
+          import time
+          import urllib.request
+          from datetime import date
+
+          BASE = "https://karir-adiprmx.vercel.app"
+          UA = "Mozilla/5.0 (X11; Linux x86_64) Karir-write-back/1.0"
+          FIELDS = [
+              "no", "perusahaan", "kategori", "link_karir", "status",
+              "tanggal_cek", "catatan", "lokasi", "posisi", "email_hrd",
+              "wa_hrd", "kontak_lain", "batas_lamar",
+          ]
+          VALID_STATUSES = {
+              "Ada lowongan", "Tidak ada lowongan",
+              "Tidak dapat diverifikasi", "Portal tidak bisa dibuka",
+          }
+
+          def fetch(path):
+              url = BASE + path
+              for attempt in range(1, 4):
+                  req = urllib.request.Request(url, headers={"User-Agent": UA})
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as res:
+                          if res.status == 200:
+                              return json.loads(res.read())
+                  except Exception as e:  # noqa: BLE001 - coba lagi
+                      print(f"  {path} percobaan {attempt} gagal: {e}")
+                  if attempt < 3:
+                      time.sleep(5)
+              return None
+
+          def parse_date(s):
+              try:
+                  y, m, d = map(int, s.split("-"))
+                  return date(y, m, d)
+              except (ValueError, AttributeError):
+                  return None
+
+          def finish(changed, count, summary):
+              out = os.environ.get("GITHUB_OUTPUT", "")
+              if out:
+                  with open(out, "a", encoding="utf-8") as fh:
+                      fh.write(f"changed={'true' if changed else 'false'}\n")
+                      fh.write(f"count={count}\n")
+              with open("write-back-summary.txt", "w", encoding="utf-8") as fh:
+                  fh.write(summary)
+              sys.exit(0)
+
+          stats = fetch("/api/stats")
+          if stats is None:
+              print("API tidak bisa dijangkau — write-back dilewati hari ini.")
+              finish(False, 0, "write-back dilewati: API tidak bisa dijangkau.\n")
+          if stats.get("source") != "live":
+              print("Sumber data SEED (Firestore tidak bisa dibaca) — "
+                    "write-back dilewati hari ini.")
+              finish(False, 0, "write-back dilewati: situs menyajikan seed.\n")
+
+          live = {}
+          for offset in (0, 400):
+              body = fetch(f"/api/companies?limit=400&offset={offset}")
+              if body is None or body.get("source") != "live":
+                  print("Daftar /api/companies tidak live — write-back dilewati.")
+                  finish(False, 0, "write-back dilewati: daftar tidak live.\n")
+              for e in body.get("results", []):
+                  c = e.get("company") or {}
+                  if c.get("no") is not None:
+                      live[int(c["no"])] = c
+          print(f"dokumen live: {len(live)}")
+
+          changes = fetch("/api/changes") or {}
+          entries = changes.get("changes") or []
+          print(f"entri changes terbaru: {len(entries)}")
+
+          with open("data/daftar-link-karir.csv", newline="", encoding="utf-8") as fh:
+              rows = list(csv.DictReader(fh))
+          by_no = {int(r["no"]): r for r in rows}
+
+          applied = []
+          for no in sorted(set(live) & set(by_no)):
+              live_row = live[no]
+              row = by_no[no]
+              live_date = parse_date(live_row.get("tanggal_cek") or "")
+              csv_date = parse_date(row["tanggal_cek"])
+              if live_date is None or live_row.get("status") not in VALID_STATUSES:
+                  print(f"  no {no}: data live tidak valid — dilewati")
+                  continue
+              if csv_date is not None and live_date < csv_date:
+                  continue
+              if (live_row.get("status") != row["status"]
+                      or live_row.get("tanggal_cek") != row["tanggal_cek"]):
+                  applied.append(
+                      (no, row["perusahaan"],
+                       f"{row['status']} -> {live_row['status']}, "
+                       f"cek {row['tanggal_cek']} -> {live_row['tanggal_cek']}"))
+                  row["status"] = live_row["status"]
+                  row["tanggal_cek"] = live_row["tanggal_cek"]
+          for no in sorted(set(live) - set(by_no)):
+              print(f"  no {no}: ada di live tapi tidak ada di CSV — tidak ditambahkan")
+          for no in sorted(set(by_no) - set(live)):
+              print(f"  no {no}: ada di CSV tapi hilang di live — tidak dihapus")
+
+          print(f"perubahan: {len(applied)}")
+          for no, name, desc in applied:
+              print(f"  no {no} {name[:40]}: {desc}")
+          if not applied:
+              finish(False, 0, "write-back: tidak ada perubahan live.\n")
+
+          with open("data/daftar-link-karir.csv", "w", newline="", encoding="utf-8") as fh:
+              w = csv.DictWriter(fh, fieldnames=FIELDS, lineterminator="\r\n")
+              w.writeheader()
+              for r in rows:
+                  w.writerow({k: r.get(k, "") for k in FIELDS})
+          seed = [{k: (r.get(k, "") if k != "no" else int(r["no"]))
+                   for k in FIELDS} for r in rows]
+          with open("web/data/companies.json", "w", encoding="utf-8") as fh:
+              fh.write(json.dumps(seed, indent=1, ensure_ascii=False))
+
+          summary = ("write-back harian: "
+                     f"{len(applied)} perusahaan diperbarui dari Firestore\n\n")
+          for no, name, desc in applied:
+              summary += f"- no {no} {name}: {desc}\n"
+          finish(True, len(applied), summary)
+          PY
+      - name: Validasi hasil write-back
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          python3 scripts/validate.py
+          python3 scripts/check-consistency.py
+      - name: Commit dan push bila ada perubahan
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          git config user.name "karir-write-back[bot]"
+          git config user.email "karir-write-back[bot]@users.noreply.github.com"
+          git pull --rebase origin main || git pull --rebase origin HEAD
+          git add data/daftar-link-karir.csv web/data/companies.json
+          git commit -F write-back-summary.txt
+          git push origin HEAD:main
+          rm -f write-back-summary.txt

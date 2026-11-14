@@ -167,7 +167,15 @@ service cloud.firestore {
         && request.resource.data.alasan is string
         && request.resource.data.alasan.size() > 0
         && request.resource.data.alasan.size() < 500;
-      allow update, delete: if false;
+      // Status tindak lanjut hanya boleh diubah admin, dan hanya
+      // field status + ditanganiPada (DUKUNG-02, komponen
+      // support-reports.js). Publik tidak bisa mengubah laporan;
+      // hapus tetap dilarang.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'ditanganiPada'])
+        && request.resource.data.status in ['baru', 'ditangani'];
+      allow delete: if false;
     }
     // Umpan perubahan status (ditulis cron cek ulang harian): siapa pun
     // boleh membaca, hanya admin yang boleh mencatat, dan entri
@@ -231,46 +239,18 @@ service cloud.firestore {
         && request.resource.data.updatedAt is string;
       allow delete: if false;
     }
-    // Event analitik pengunjung anonim: siapa pun boleh mencatat satu
-    // event berbentuk benar, tanpa field IP apa pun. Hash IP (64 heksa)
-    // dipakai untuk hitung pengunjung unik per hari, bukan IP mentah.
-    // Baca, ubah, dan hapus hanya untuk admin.
+    // Event analitik pengunjung anonim: HANYA ditulis server lewat
+    // POST /api/analytics memakai token service account, yang
+    // melewati rules (SEC-06). Create langsung dari klien ditutup
+    // total: API key Firebase ada di bundle publik, jadi aturan
+    // create berbentuk benar pun bisa dibanjiri siapa pun tanpa
+    // melewati rate limit route. Validasi bentuk event tinggal di
+    // server (lib/analytics-server.js validateEvent); server
+    // menulis ts sebagai timestamp (BE-02). Baca, ubah, dan hapus
+    // hanya untuk admin.
     match /analytics_events/{doc} {
       allow read, update, delete: if isAdmin();
-      allow create: if request.resource.data.keys().hasAll([
-          'type', 'path', 'visitorHash', 'ts', 'day'
-        ])
-        && request.resource.data.type in [
-          'pageview', 'search', 'detail', 'portal_click', 'tracker_mark', 'filter'
-        ]
-        && request.resource.data.path is string
-        && request.resource.data.path.size() > 0
-        && request.resource.data.path.size() <= 200
-        && request.resource.data.visitorHash is string
-        && request.resource.data.visitorHash.matches('^[0-9a-f]{64}$')
-        && request.resource.data.ts is string
-        && request.resource.data.day is string
-        && (!('q' in request.resource.data)
-          || (request.resource.data.q is string
-            && request.resource.data.q.size() <= 200))
-        && (!('companyNo' in request.resource.data)
-          || request.resource.data.companyNo is int)
-        && (!('action' in request.resource.data)
-          || (request.resource.data.action is string
-            && request.resource.data.action.size() <= 50))
-        && (!('visitor' in request.resource.data)
-          || (request.resource.data.visitor is string
-            && request.resource.data.visitor.size() <= 64))
-        && (!('uid' in request.resource.data)
-          || (request.resource.data.uid is string
-            && request.resource.data.uid.size() > 0
-            && request.resource.data.uid.size() <= 128))
-        && (!('uaFlag' in request.resource.data)
-          || request.resource.data.uaFlag is bool)
-        && !('email' in request.resource.data)
-        && !('ip' in request.resource.data)
-        && !('x-forwarded-for' in request.resource.data)
-        && !('userAgent' in request.resource.data);
+      allow create: if false;
     }
   }
 }

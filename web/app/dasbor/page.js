@@ -3,6 +3,7 @@ import { getCompaniesOrSeed, getStatsOrSeed, getTargetsOrSeed, STATUS_ORDER } fr
 import { countBy, topEntries } from "@/lib/search";
 import { getLocale, t } from "@/lib/i18n";
 import { CountUp, Icon, Reveal, StatusStamp } from "@/app/visual";
+import { formatDate } from "@/app/components";
 import { CompanyLogo } from "@/lib/logos";
 import DashboardPersonal from "@/app/dashboard-personal";
 
@@ -82,8 +83,21 @@ export default async function Dasbor() {
   const unverified = companies
     .filter((c) => c.status === "Tidak dapat diverifikasi")
     .sort(byName);
-  const d4 = stats.byDate["2026-11-04"] || 0;
-  const d5 = stats.byDate["2026-11-05"] || 0;
+  /* Kesegaran data dihitung dari data, bukan tanggal hardcode (S6):
+   * tanggal cek terbaru + jumlah yang dicek dalam 7 hari terakhir
+   * (jendela 7 hari yang berakhir di tanggal cek terbaru). */
+  const dateKeys = Object.keys(stats.byDate).sort();
+  const latestDate = dateKeys.length ? dateKeys[dateKeys.length - 1] : null;
+  const latestMs = latestDate ? Date.parse(`${latestDate}T00:00:00Z`) : 0;
+  const weekStartMs = latestMs - 6 * 24 * 60 * 60 * 1000;
+  const checkedWeek = dateKeys.reduce(
+    (sum, d) =>
+      Date.parse(`${d}T00:00:00Z`) >= weekStartMs
+        ? sum + (stats.byDate[d] || 0)
+        : sum,
+    0,
+  );
+  const latestLabel = latestDate ? formatDate(latestDate, locale) : null;
 
   return (
     <div className="wrap">
@@ -189,9 +203,14 @@ export default async function Dasbor() {
             list={unverified}
             locale={locale}
           />
-          <p className="hint" style={{ marginTop: 16 }}>
-            {t(locale, "home.freshNote", { a: d4, b: d5 })}
-          </p>
+          {latestDate && (
+            <p className="hint" style={{ marginTop: 16 }}>
+              {t(locale, "home.freshNote", {
+                count: checkedWeek,
+                date: latestLabel,
+              })}
+            </p>
+          )}
         </Reveal>
       </section>
     </div>

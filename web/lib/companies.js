@@ -97,7 +97,9 @@ let quotaAlertDay = "";
 
 /* Semua fetch ke Firestore WAJIB punya timeout: kalau rute egress mati,
  * request tidak boleh menggantung selamanya — gagal cepat supaya
- * pemanggil bisa jatuh ke seed, bukan hang. */
+ * pemanggil bisa jatuh ke seed, bukan hang. Timer di sini hanya
+ * menutupi fetch sampai header tiba; parsing body punya timeout
+ * sendiri di jsonWithTimeout di bawah (BE-09). */
 async function fetchJson(url, { timeoutMs = 10_000, ...options } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -111,6 +113,37 @@ async function fetchJson(url, { timeoutMs = 10_000, ...options } = {}) {
       ...(isGet ? { next: { revalidate: 300 } } : {}),
     });
     return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Baca body JSON dengan timeout sendiri (BE-09). fetch() resolve saat
+ * header tiba dan timer AbortController fetchJson dimatikan saat itu —
+ * tanpa batas di sini, body yang stall (jaringan flaky) bisa
+ * menggantung sampai batas fungsi Vercel walau fetch-nya sudah
+ * bertimeout. Promise.race ini membatasi parsing body; bila timeout,
+ * pemanggil memperlakukannya sama seperti kegagalan baca (jatuh ke
+ * seed/cache). Stream body dibatalkan supaya koneksi tidak tertahan
+ * di belakang layar setelah pemanggil menyerah. Diekspor supaya
+ * pola yang sama bisa dipakai di titik res.json() lain (rate-limit,
+ * recheck) tanpa menduplikasi logika. */
+export async function jsonWithTimeout(res, timeoutMs = 5_000) {
+  let timer;
+  try {
+    return await Promise.race([
+      res.json(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          try {
+            res.body?.cancel?.();
+          } catch {
+            /* Pembatalan body bersifat best-effort. */
+          }
+          reject(new Error("Timeout membaca body respons"));
+        }, timeoutMs);
+      }),
+    ]);
   } finally {
     clearTimeout(timer);
   }
@@ -187,9 +220,18 @@ async function loadSeed() {
 }
 
 /* Tanggal seed = tanggal cek terbaru di seed. Dipakai respons API
- * supaya klien dan admin tahu seberapa segar data cadangannya. */
+ * supaya klien dan admin tahu seberapa segar data cadangannya.
+ * Fail-open: tanggal seed hanya metadata — bila seed tidak bisa
+ * dimuat sementara daftarnya sendiri berhasil (mis. dari cache live),
+ * kembalikan "" supaya respons API tidak ikut 503; klien sudah
+ * memperlakukan "" sebagai "tanggal tidak diketahui". */
 export async function getSeedDate() {
-  const seed = await loadSeed();
+  let seed;
+  try {
+    seed = await loadSeed();
+  } catch {
+    return "";
+  }
   let latest = "";
   for (const c of seed) {
     if (c.tanggal_cek && c.tanggal_cek > latest) latest = c.tanggal_cek;
@@ -244,7 +286,7 @@ async function readMarker() {
         markerFailAt = now;
         return { ok: false };
       }
-      const marker = parseMarker(await res.json());
+      const marker = parseMarker(await jsonWithTimeout(res));
       markerCache = marker;
       markerAt = now;
       markerLoaded = true;
@@ -274,7 +316,7 @@ async function refillFromFirestore() {
     if (!res.ok) {
       throw new Error(`Firestore list gagal: HTTP ${res.status}`);
     }
-    const body = await res.json();
+    const body = await jsonWithTimeout(res);
     docs = docs.concat(body.documents || []);
     token = body.nextPageToken || "";
   } while (token);
@@ -448,7 +490,7 @@ export async function getCompanyById(no) {
       if (!res.ok) {
         throw new Error(`Firestore get gagal: HTTP ${res.status}`);
       }
-      const company = docToCompany(await res.json());
+      const company = docToCompany(await jsonWithTimeout(res));
       byIdCache.set(id, { company, at: Date.now() });
       return company;
     } catch (err) {

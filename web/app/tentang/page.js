@@ -1,6 +1,7 @@
 import { getStatsOrSeed } from "@/lib/companies";
 import { getLocale } from "@/lib/i18n";
 import { CountUp } from "@/app/visual";
+import { formatDate } from "@/app/components";
 
 /* Data di-render saat request, bukan saat build. */
 export const dynamic = "force-dynamic";
@@ -24,8 +25,20 @@ export default async function Tentang() {
   const stats = await getStatsOrSeed();
   const total = stats.total;
   const targets = stats.byStatus["Ada lowongan"] || 0;
-  const d4 = stats.byDate["2026-11-04"] || 0;
-  const d5 = stats.byDate["2026-11-05"] || 0;
+  /* Kesegaran data dihitung dari data, bukan tanggal hardcode (S6):
+   * tanggal cek terbaru + jumlah yang dicek dalam 7 hari terakhir. */
+  const dateKeys = Object.keys(stats.byDate).sort();
+  const latestDate = dateKeys.length ? dateKeys[dateKeys.length - 1] : null;
+  const latestMs = latestDate ? Date.parse(`${latestDate}T00:00:00Z`) : 0;
+  const weekStartMs = latestMs - 6 * 24 * 60 * 60 * 1000;
+  const checkedWeek = dateKeys.reduce(
+    (sum, d) =>
+      Date.parse(`${d}T00:00:00Z`) >= weekStartMs
+        ? sum + (stats.byDate[d] || 0)
+        : sum,
+    0,
+  );
+  const latestLabel = latestDate ? formatDate(latestDate, locale) : null;
 
   return (
     <div className="wrap">
@@ -50,11 +63,13 @@ export default async function Tentang() {
             <span className="stat-label">perusahaan ada lowongan</span>
           </div>
         </div>
-        <p className="fresh-note">
-          {d4} perusahaan dicek 4 November 2026 dan {d5} perusahaan dicek 5
-          November 2026. Semua angka dihitung langsung dari data, tidak ada
-          angka contoh.
-        </p>
+        {latestDate && (
+          <p className="fresh-note">
+            {checkedWeek} perusahaan dicek dalam 7 hari terakhir, terakhir{" "}
+            {latestLabel}. Semua angka dihitung langsung dari data, tidak ada
+            angka contoh.
+          </p>
+        )}
       </section>
 
       <section className="dash-section anim-fade-up" aria-label="Apa itu Karir">

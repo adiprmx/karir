@@ -28,29 +28,25 @@ rencana riset di bawah.
 ## Yang sudah diketahui dari data yang ada
 
 Satu-satunya sumber perilaku pengguna saat ini adalah analitik
-pengunjung anonim. Enam jenis event didefinisikan di
+pengunjung anonim. Sembilan jenis event didefinisikan di
 `web/lib/analytics-server.js`: `pageview`, `search`, `detail`,
-`portal_click`, `tracker_mark`, dan `filter`. Event dikirim dari
-halaman cari, pencarian di beranda, pelacak lamaran, dan pelacak
-klik portal. ID pengunjung acak disimpan di browser; tidak ada nama,
-email, atau alamat IP yang tersimpan.
+`portal_click`, `tracker_mark`, `filter`, `onboarding`, `report`,
+dan `channel_copy`. Event dikirim dari halaman cari, pencarian di
+beranda, pelacak lamaran, dan pelacak klik portal. ID pengunjung
+acak disimpan di browser; tidak ada nama, email, atau alamat IP
+yang tersimpan.
 
 Per 15 November 2026, pipa analitik belum menyimpan event apa pun,
-karena tiga hal:
-
-1. Aturan Firestore menuntut field `ts` berupa string, sementara
-   kode menulis timestamp. Event ditolak aturan.
-2. Variabel `ANALYTICS_SALT` belum dipasang di Vercel Production,
-   sehingga route analitik menjawab `{skipped: true}` dan tidak
-   menulis apa pun.
-3. Event `portal_click` mengirim nomor perusahaan sebagai string,
-   sementara validator menuntut angka. Event itu ditolak.
-
-Perbaikan ketiganya adalah pekerjaan tim Analitik di Fase 4
-implementasi. Sampai ketiganya selesai, tidak ada data perilaku
-pengguna yang bisa dibaca, dan dokumen ini tidak membuat klaim
-apa pun soal berapa orang memakai aplikasi atau fitur apa yang
-paling dipakai.
+karena satu hal yang tersisa: variabel `ANALYTICS_SALT` belum
+dipasang di Vercel Production, sehingga route analitik menjawab
+`{skipped: true}` dan tidak menulis apa pun. Dua penghambat lain
+sudah diperbaiki di Fase 4 gelombang 3: aturan Firestore kini
+menutup penulisan dari klien dan server menulis lewat token
+service account (masalah `ts` string vs timestamp hilang), dan
+event `portal_click` kini mengirim nomor perusahaan sebagai angka.
+Sampai garam dipasang, tidak ada data perilaku pengguna yang bisa
+dibaca, dan dokumen ini tidak membuat klaim apa pun soal berapa
+orang memakai aplikasi atau fitur apa yang paling dipakai.
 
 Yang sudah bisa dibaca panel admin setelah pipa berjalan:
 kunjungan per hari, halaman yang paling dibuka, kata kunci yang
@@ -59,9 +55,13 @@ pelacak. Dua jenis event belum masuk ringkasan admin: `portal_click`
 dan `filter`. Ringkasan hanya memuat 30 hari terakhir dan paling
 banyak 1000 event terbaru.
 
-Yang belum terukur sama sekali: alur onboarding di `/mulai`
-(tidak ada event di sana), interaksi peta, jumlah hasil tiap
-pencarian, dan filter apa yang dipakai. Pertanyaan soal hal-hal
+Yang belum terukur sama sekali: interaksi peta. Tiga hal sudah
+punya jenis event atau field di skema tapi pengirimnya belum
+dipasang: alur onboarding di `/mulai` (jenis `onboarding` sudah
+didefinisikan, belum dikirim dari halaman), jumlah hasil tiap
+pencarian (field `results` sudah ada di skema, pengirim belum
+mengisinya), dan filter apa yang dipakai (field `filter` sudah
+ada di skema, pengirim belum mengisinya). Pertanyaan soal hal-hal
 itu belum bisa dijawab dari data sampai instrumentasinya
 ditambahkan.
 

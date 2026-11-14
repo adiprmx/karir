@@ -2,25 +2,33 @@
 
 Daftar ini berisi pekerjaan yang sudah diketahui. Tidak ada tanggal di sini yang ditebak; yang belum punya tanggal ditulis apa adanya.
 
-## Menunggu pemilik
+## Sudah selesai: tiga langkah Firebase
 
-Tiga langkah di Firebase Console, akun `whoisadip@gmail.com`, proyek `karir-9d53a`. Sampai ketiganya selesai, umpan perubahan kosong dan cron menjawab 503.
+Tiga langkah di Firebase Console (akun `whoisadip@gmail.com`, proyek `karir-9d53a`) sudah selesai. Umpan perubahan terisi dan cron berjalan.
 
-- Terbitkan `web/firestore.rules` dari repo: Firestore Database, Rules, salin isi file itu, Publish. Tanpa ini, baca koleksi `changes` ditolak 403, umpan Yang berubah selalu kosong, dan tulis perubahan dari admin gagal diam-diam.
-- Service account: Project Settings, Service accounts, Generate new private key, lalu pasang hasil unduhannya sebagai env Vercel `FIREBASE_SERVICE_ACCOUNT` (string JSON) bersama `CRON_SECRET` (string acak). Tanpa ini cron menjawab 503 `cron belum diaktifkan`.
-- Akun admin: Authentication, Users, Add user. Email dan kata sandi dibuat pemilik sendiri; kata sandi tidak pernah lewat asisten.
+- Aturan Firestore (`web/firestore.rules`) sudah diterbitkan. Baca koleksi `changes` terbuka untuk publik, tulisnya hanya untuk admin.
+- Service account sudah dipasang sebagai env Vercel `FIREBASE_SERVICE_ACCOUNT` bersama `CRON_SECRET`. Cron cek ulang berjalan tiap 01:00 WIB sejak 9 November 2026 dan mencatat perubahan ke umpan Yang berubah.
+- Akun admin sudah dibuat dan klaim admin sudah dipasang.
 
-## Sesudah akun admin dibuat
+## Sudah terverifikasi
 
-- Tes login di `https://karir-adiprmx.vercel.app/admin`, lalu tes tulis satu perusahaan: ubah catatan kecil, simpan, periksa tampil di `/cari`, di Firestore, dan tercatat di `audit_logs`.
-- Tes cek massal admin end-to-end, termasuk pencatatan perubahan ke umpan Yang berubah bila aturan `changes` sudah terbit.
-- Tes cron dengan service account terpasang: panggil `/api/cron/recheck` dan periksa jawabannya bukan 503, lalu periksa satu perubahan tercatat bila ada portal yang berbalik.
+- Aturan akses sudah dites: 11 cek lolos, termasuk penolakan 403 untuk non-admin dan akses admin ke koleksi admin.
+- Cron sudah terbukti berjalan: perubahan status tercatat di umpan Yang berubah sejak 9 November 2026.
+
+## Masih perlu dites
+
+- Masuk ke panel `/admin` dari browser, ubah catatan kecil satu perusahaan, simpan, lalu periksa tampil di `/cari`, di Firestore, dan tercatat di `audit_logs`.
+- Cek massal admin end-to-end: jalankan dari panel, lalu periksa perubahan tercatat di umpan Yang berubah bila ada portal yang berbalik.
+
+## Berjalan terus
+
+- Hunting harian: menambah perusahaan baru dan mengecek ulang yang sudah ada, setiap hari.
 
 ## Rombak tampilan
 
-Tampilan aplikasi dirombak dari nol oleh Claude. Brief sudah disiapkan (`brief-frontend-karir-untuk-claude.md` di folder file pemilik), isinya hanya fakta produk dan tujuan, tanpa arahan desain. Statusnya menunggu hasil Claude. Hasilnya nanti dipasang ke repo, di-deploy, dan diverifikasi live sebelum diumumkan.
+Tampilan aplikasi dirombak dari nol oleh Claude. Hasilnya datang sebagai versi 3.0.0 pada 11 November 2026 dan ditolak pemilik di hari yang sama karena tampilannya kaku dan kelihatan buatan AI. Masukan untuk ronde 2 sudah disiapkan; ronde 2 menunggu keputusan pemilik.
 
 ## Tidak direncanakan
 
-- Akun wajib. Masuk tetap pilihan, bukan kewajiban — akun pengguna sendiri sudah ada sejak versi 2.8.1, dan semua fitur tetap bisa dipakai tanpa masuk.
+- Akun wajib. Masuk tetap pilihan, bukan kewajiban. Akun pengguna sendiri sudah ada sejak versi 2.8.1, dan semua fitur tetap bisa dipakai tanpa masuk.
 - Payment gateway. Aplikasi tidak memungut pembayaran apa pun.

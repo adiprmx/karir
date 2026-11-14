@@ -2,14 +2,20 @@
  * Dijalankan dengan: node --test lib/cities.test.js
  * Mencakup regresi PETA-01 (W-P0-06): pencocokan kata utuh + daftar
  * negasi, supaya kalimat peniadaan seperti "tidak ada di Depok" tidak
- * lagi memetakan perusahaan ke Depok. */
+ * lagi memetakan perusahaan ke Depok; PETA-02 (matchCities: satu
+ * perusahaan muncul di tiap kota yang tercantum di lokasinya); dan
+ * PETA-03 (18 kota tambahan, termasuk Cilegon, Samarinda, Balikpapan). */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { matchCity } from "./cities.js";
+import { matchCity, matchCities } from "./cities.js";
 
 function nameOf(lokasi) {
   const city = matchCity(lokasi);
   return city ? city.name : null;
+}
+
+function namesOf(lokasi) {
+  return matchCities(lokasi).map((c) => c.name);
 }
 
 describe("kata utuh, bukan substring", () => {
@@ -114,6 +120,115 @@ describe("masukan kosong dan tidak dikenal", () => {
   });
 
   it("kota yang tidak ada di daftar mengembalikan null", () => {
-    assert.equal(nameOf("Cilegon"), null);
+    assert.equal(nameOf("Jayapura"), null);
+  });
+});
+
+describe("kota tambahan (PETA-03)", () => {
+  it("'Cilegon' cocok ke Cilegon", () => {
+    assert.equal(nameOf("Cilegon; Samarinda"), "Cilegon");
+  });
+
+  it("'Samarinda' cocok ke Samarinda", () => {
+    assert.equal(nameOf("tes Samarinda"), "Samarinda");
+  });
+
+  it("'Balikpapan' cocok ke Balikpapan (kasus Mandiri Herindo #498)", () => {
+    assert.equal(
+      nameOf("Site project (termasuk Manggar, Balikpapan, Kalimantan Timur)"),
+      "Balikpapan",
+    );
+  });
+
+  it("'Makassar' cocok ke Makassar", () => {
+    assert.equal(nameOf("Makassar"), "Makassar");
+  });
+
+  it("'Medan' cocok ke Medan", () => {
+    assert.equal(nameOf("Medan, Sumatera Utara"), "Medan");
+  });
+
+  it("'Malang' cocok ke Malang", () => {
+    assert.equal(nameOf("Kota Malang"), "Malang");
+  });
+
+  it("'Surakarta' cocok ke Solo (alias)", () => {
+    assert.equal(nameOf("Surakarta"), "Solo");
+  });
+
+  it("'Lampung' cocok ke Bandar Lampung", () => {
+    assert.equal(nameOf("Lampung"), "Bandar Lampung");
+  });
+
+  it("'Bali' cocok ke Denpasar", () => {
+    assert.equal(nameOf("Bali"), "Denpasar");
+  });
+
+  it("'Cimanggis' cocok ke Depok (kecamatan di Kota Depok, kasus #224)", () => {
+    assert.equal(nameOf("Medifarma Cimanggis"), "Depok");
+  });
+
+  it("kota baru tidak mengalahkan kota lama: 'Jakarta, Makassar' tetap Jakarta untuk matchCity", () => {
+    assert.equal(nameOf("Jakarta, Makassar"), "Jakarta");
+  });
+});
+
+describe("matchCities: perusahaan multi-kota (PETA-02)", () => {
+  it("satu kota mengembalikan satu kota", () => {
+    assert.deepEqual(namesOf("Depok"), ["Depok"]);
+  });
+
+  it("teks kosong mengembalikan daftar kosong", () => {
+    assert.deepEqual(matchCities(""), []);
+    assert.deepEqual(matchCities(null), []);
+  });
+
+  it("lokasi tanpa kota mengembalikan daftar kosong", () => {
+    assert.deepEqual(namesOf("Tidak bisa dicek"), []);
+  });
+
+  it("'Jakarta, Bogor, Depok' mengembalikan ketiganya (urutan CITIES)", () => {
+    assert.deepEqual(namesOf("Jakarta, Bogor, Depok"), [
+      "Depok",
+      "Bogor",
+      "Jakarta",
+    ]);
+  });
+
+  it("lokasi Roti O #190 mengembalikan semua kotanya", () => {
+    assert.deepEqual(
+      namesOf("Jakarta, Bogor, Depok, Tangerang, Bekasi, Cikarang"),
+      ["Cikarang", "Depok", "Bekasi", "Tangerang", "Bogor", "Jakarta"],
+    );
+  });
+
+  it("lokasi CKB #460 mengembalikan Cilegon dan Samarinda", () => {
+    assert.deepEqual(namesOf("Cilegon; Samarinda; Buhut (Kalimantan Tengah)"), [
+      "Cilegon",
+      "Samarinda",
+    ]);
+  });
+
+  it("kota yang dinegasikan tidak ikut, kota lain tetap ikut", () => {
+    assert.deepEqual(namesOf("tidak ada di Depok, ada di Bandung"), [
+      "Bandung",
+    ]);
+  });
+
+  it("lokasi Fore Coffee #330 mengembalikan daftar kosong (negasi)", () => {
+    assert.deepEqual(
+      namesOf(
+        "Indonesia (penempatan di seluruh Indonesia) — tidak ada penyebutan Bogor/Depok",
+      ),
+      [],
+    );
+  });
+
+  it("alias tidak menggandakan kota: 'Solo, Surakarta' mengembalikan satu Solo", () => {
+    assert.deepEqual(namesOf("Solo, Surakarta"), ["Solo"]);
+  });
+
+  it("kota yang sama disebut dua kali hanya muncul sekali", () => {
+    assert.deepEqual(namesOf("Jakarta dan Jakarta Selatan"), ["Jakarta"]);
   });
 });

@@ -1,15 +1,28 @@
-/* GET /api/token — keluarkan token berumur pendek (60 detik) untuk
- * memanggil /api/index. Token hanya diberikan bila halaman peminta
- * berasal dari situs ini sendiri: origin header Referer atau Origin
- * harus sama dengan origin request. Tanpa origin yang cocok, jawab 403.
+/* GET /api/token — keluarkan token berumur pendek untuk memanggil
+ * /api/index. Token hanya diberikan bila halaman peminta berasal
+ * dari situs ini sendiri: origin header Referer atau Origin harus
+ * sama dengan origin request. Tanpa origin yang cocok, jawab 403.
+ * Gerbang: tolak UA otomatis (403), lalu batas laju 60/menit per
+ * hash IP lewat limiter bersama (429) — batas longgar, karena
+ * pemakaian normal hanya ~1 token per menit (BE-11). Urutan gerbang
+ * disengaja: cek origin jalan SEBELUM batas laju, supaya request
+ * dari luar situs tidak membakar jatah batas laju.
+ * Respons membawa `expiresIn` (detik) supaya klien tahu umur token
+ * tanpa menebak (BE-12); nilainya sama dengan umur yang diterima
+ * /api/index (TOKEN_MAX_AGE_SEC, satu sumber kebenaran).
  * Secret dibaca dari env API_TOKEN_SECRET dan tidak punya nilai
- * pengganti: bila env kosong, rute menjawab 503 dan tidak mengeluarkan
- * token. Secret dan token tidak pernah dicatat. */
+ * pengganti: bila env kosong, rute menjawab 503 dan tidak
+ * mengeluarkan token. Secret dan token tidak pernah dicatat. */
 import { NextResponse } from "next/server";
-import { issueToken } from "@/lib/api-guard";
+import { issueToken, isBotUa, getClientIp, TOKEN_MAX_AGE_SEC } from "@/lib/api-guard";
+import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
+import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
 import { requireEnv } from "@/lib/require-env";
 
 export const dynamic = "force-dynamic";
+
+const WINDOW_MS = 60_000;
+const LIMIT_PER_MINUTE = 60;
 
 function headerOrigin(value) {
   if (!value) return "";
@@ -21,6 +34,12 @@ function headerOrigin(value) {
 }
 
 export async function GET(request) {
+  if (isBotUa(request.headers.get("user-agent") || "")) {
+    return NextResponse.json(
+      { error: "Permintaan otomatis ditolak." },
+      { status: 403 },
+    );
+  }
   let ownOrigin = "";
   try {
     ownOrigin = new URL(request.url).origin;
@@ -38,6 +57,25 @@ export async function GET(request) {
       { status: 403 },
     );
   }
+  /* Batas laju memakai hash IP; bila garam analitik belum dipasang,
+   * hash tidak bisa dibuat dan batas laju dilewati — tidak ada hash
+   * lemah dan tidak ada IP mentah yang disimpan. */
+  let limited = false;
+  try {
+    const key = scopedKey(
+      "token",
+      hashVisitor(getClientIp(request), todayJakarta()),
+    );
+    limited = !(await getSharedLimiter().check(key, LIMIT_PER_MINUTE, WINDOW_MS));
+  } catch {
+    console.warn("Batas laju /api/token dilewati: env ANALYTICS_SALT belum dipasang.");
+  }
+  if (limited) {
+    return NextResponse.json(
+      { error: "Terlalu banyak permintaan. Coba lagi sebentar." },
+      { status: 429 },
+    );
+  }
   let secret;
   try {
     secret = requireEnv("API_TOKEN_SECRET");
@@ -48,7 +86,7 @@ export async function GET(request) {
     );
   }
   return NextResponse.json(
-    { token: issueToken(secret) },
+    { token: issueToken(secret), expiresIn: TOKEN_MAX_AGE_SEC },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }

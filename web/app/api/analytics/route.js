@@ -16,7 +16,7 @@ import {
   writeAnalyticsEvent,
 } from "@/lib/analytics-server";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
-import { getSharedLimiter } from "@/lib/rate-limit";
+import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +43,11 @@ export async function POST(request) {
     return NextResponse.json({ skipped: true }, { status: 200 });
   }
   /* Batas 30/menit per hash pengunjung, lewat limiter bersama supaya
-   * dihitung di semua instance, bukan per instance. */
-  if (!(await getSharedLimiter().check(visitorHash, 30, 60_000))) {
+   * dihitung di semua instance, bukan per instance. Cakupan
+   * "analytics" memisahkan ember rute ini dari rute lain (BE-03). */
+  if (!(await getSharedLimiter().check(scopedKey("analytics", visitorHash), 30, 60_000))) {
     return NextResponse.json(
-      { error: "terlalu banyak request" },
+      { error: "Terlalu banyak permintaan. Coba lagi sebentar." },
       { status: 429 },
     );
   }

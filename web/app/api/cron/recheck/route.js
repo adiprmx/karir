@@ -11,14 +11,19 @@
  *    account (env FIREBASE_SERVICE_ACCOUNT, string JSON). Token dibuat
  *    dari JWT RS256 yang ditandatangani node:crypto, tanpa dependensi
  *    baru. Bila env itu tidak ada, rute menjawab 503 dan tidak gagal total.
- * 3. Anggaran waktu 50 detik (batas fungsi Vercel Hobby sekitar 60 detik).
- *    Bila waktu habis di tengah jalan, sisanya dicatat sebagai terpotong.
+ * 3. Anggaran waktu 50 detik (batas fungsi Vercel Hobby sekitar 60 detik,
+ *    dinyatakan eksplisit lewat maxDuration = 60). Bila waktu habis di
+ *    tengah jalan, sisanya dicatat sebagai terpotong. Batas waktu juga
+ *    dicek sebelum fase tulis tiap batch, supaya batch yang mulai
+ *    dekat batas tidak memaksa tulis melewati batas fungsi (OPS-07).
  * 4. Fase alert jalan DULU, sebelum loop cek portal (lihat butir
  *    Notifikasi di bawah). Alasannya: loop cek bisa menghabiskan
  *    seluruh anggaran, dan bila fase alert menunggu giliran sesudah
  *    loop, fase itu tidak pernah jalan (terbukti 9 Nov 2026: run
- *    56,8 detik, alert + snapshot dilewati utuh).
- * 5. Tiap portal dicek paralel batch 5 lewat lib/check.js. Cek ini hanya
+ *    56,8 detik, alert + snapshot dilewati utuh). Fase alert sendiri
+ *    dibatasi anggaran 15 detik dan menulis alert paralel batch 5,
+ *    supaya tidak memakan jatah loop cek (NOTIF-15).
+ * 5. Tiap portal dicek paralel batch 8 lewat lib/check.js. Cek ini hanya
  *    menguji portal bisa dibuka atau tidak, BUKAN isi lowongannya. Karena
  *    itu pemetaan statusnya hati-hati:
  *    - ada lowongan + portal mati -> "Portal tidak bisa dibuka" + catat perubahan
@@ -26,18 +31,39 @@
  *    - portal yang tadinya mati + sekarang hidup -> "Tidak dapat
  *      diverifikasi" + catat perubahan (lowongannya sendiri belum dicek
  *      ulang manusia, jadi tidak boleh langsung kembali jadi ada lowongan)
- *    Antrean diurutkan dari yang paling lama tidak dicek, supaya cek
- *    harian berputar ke seluruh daftar: perusahaan yang baru dicek
- *    (tanggal cek diperbarui tiap run) otomatis pindah ke belakang.
- *    Tanpa urutan ini, run yang terpotong anggaran akan selalu mengecek
- *    perusahaan yang sama dan sisanya tidak pernah terjangkau.
+ *    Antrean disusun buildCheckQueue (lib/check.js, BE-05) dalam tiga
+ *    tier: (1) mendesak — ada lowongan + batas lamar 0-7 hari lagi,
+ *    dicek pertama tiap run; (2) terbuka — ada lowongan lainnya,
+ *    dari yang paling lama tidak dicek; (3) mati — portal mati yang
+ *    dicek bergilir dengan sisa anggaran. Dalam tiap tier, urutan
+ *    tanggal_cek tertua dulu membuat cek harian berputar ke seluruh
+ *    daftar: perusahaan yang baru dicek (tanggal cek diperbarui
+ *    tiap run) otomatis pindah ke belakang. Tanpa urutan ini, run
+ *    yang terpotong anggaran akan selalu mengecek perusahaan yang
+ *    sama dan sisanya tidak pernah terjangkau.
  *    Perusahaan tanpa tautan karir tidak masuk antrean (tidak ada yang
  *    bisa dicek lewat URL) dan tidak menyumbat antrean.
  *
- * Balasan: {checked, changed, updated, skipped, truncated, alerts,
- * telegram, markerBumped}. alerts = alert baru yang dibuat di run ini;
- * telegram = "sent" | "failed" | "skipped-no-token" | "none";
- * markerBumped = true bila marker kesegaran dinaikkan di run ini.
+ * Balasan: {checked, changed, updated, skipped, openSkipped,
+ * truncated, alerts, alertsFailed, telegram, telegramMarked,
+ * alertPhaseTruncated, snapshotKnown, snapshotWritten, queue,
+ * markerBumped, heartbeatWritten}. alerts = alert baru yang dibuat
+ * di run ini; telegram = "sent" | "failed" | "skipped-no-token" |
+ * "none"; telegramMarked = alert yang berhasil ditandai terkirim
+ * sesudah kirim langsung (NOTIF-01); openSkipped = perusahaan tier
+ * mendesak/terbuka yang tidak sempat dicek karena terpotong;
+ * queue = {urgent, open, dead, total}; markerBumped = true bila
+ * marker kesegaran dinaikkan di run ini; heartbeatWritten = true
+ * bila dokumen cron-runs tercatat (OPS-01).
+ *
+ * Heartbeat (OPS-01): di akhir run, ringkasan ditulis ke dokumen
+ * cron-runs/{tanggal-WIB} (buildCronRunRecord, lib/notify.js).
+ * Watcher agent-side (notify_watch.py) membaca dokumen itu tiap
+ * pagi: bila tidak ada, cron dianggap tidak jalan dan owner
+ * diberitahu lewat Telegram; bila openSkipped > 0 dua hari
+ * berturut-turut, owner diberitahu antrean terpotong. Tulis
+ * heartbeat best-effort — gagal menulis tidak menggagalkan run,
+ * hanya dicatat di ringkasan.
  *
  * Marker kesegaran (meta/lastChange, arsitektur seed-first S3): bila
  * run ini mengubah status perusahaan apa pun (PATCH status berhasil)
@@ -59,15 +85,24 @@
  *   alert deadline-{no}-{batas_lamar}.
  * - Alert ditulis ke koleksi alerts dengan id deterministik (jadi
  *   idempotent), lalu paling banyak satu pesan Telegram gabungan
- *   dikirim bila ada alert baru. Kegagalan Telegram tidak pernah
+ *   dikirim bila ada alert baru. Pesan di atas 4096 karakter dipecah
+ *   jadi beberapa potongan (NOTIF-08). Sesudah kirim langsung
+ *   berhasil, tiap alert ditandai sent=true + sentAt supaya watcher
+ *   tidak mengirim ulang (NOTIF-01). Kegagalan Telegram tidak pernah
  *   menggagalkan cron. Bila env TELEGRAM_BOT_TOKEN belum dipasang,
  *   pengiriman dilewati dan alert tetap tercatat untuk watcher
- *   agent-side (notify_watch.py). */
+ *   agent-side (notify_watch.py).
+ * - Bila tulis alert new-target gagal (atau fase alert kehabisan
+ *   anggaran sebelum mencoba), nomor itu dikeluarkan dari snapshot
+ *   meta/targets supaya run berikut mencoba lagi — bukan hilang
+ *   selamanya (NOTIF-06). Kegagalan tulis snapshot dicatat di log
+ *   dan ringkasan, bukan ditelan diam-diam (NOTIF-07). */
 import { NextResponse } from "next/server";
 import { createSign, timingSafeEqual } from "node:crypto";
 import { requireEnv } from "@/lib/require-env";
+import { jsonWithTimeout } from "@/lib/companies";
 import { getCompaniesWithSource, STATUS_ORDER } from "@/lib/companies";
-import { checkUrl } from "@/lib/check";
+import { buildCheckQueue, checkUrl } from "@/lib/check";
 import {
   OPEN_STATUS,
   DEFAULT_CHAT_ID,
@@ -75,12 +110,24 @@ import {
   collectDeadlineAlerts,
   formatTelegramMessage,
   sendTelegramMessage,
+  markAlertsSent,
+  buildCronRunRecord,
 } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
+/* Batas durasi fungsi di Vercel (paket Hobby: maks 60 detik).
+ * Dinyatakan eksplisit supaya anggaran internal 50 detik selalu
+ * punya margin 10 detik untuk tulis heartbeat + balasan (OPS-07). */
+export const maxDuration = 60;
 
 const DEADLINE_MS = 50_000;
-const BATCH = 5;
+const BATCH = 8;
+/* Anggaran fase alert, dihitung sejak fase itu mulai (bukan sejak
+ * run mulai, karena muat data + tukar token bisa lambat sendiri).
+ * Alert ditulis paralel per batch kecil supaya fase ini tidak
+ * memakan jatah loop cek (NOTIF-15). */
+const ALERT_BUDGET_MS = 15_000;
+const ALERT_BATCH = 5;
 const OPEN_STATUSES = ["Ada lowongan"];
 const DEAD_STATUS = "Portal tidak bisa dibuka";
 const UNVERIFIED_STATUS = "Tidak dapat diverifikasi";
@@ -157,7 +204,11 @@ async function firestoreFetch(url, token, options = {}) {
     if (!res.ok) {
       throw new Error(`Firestore tulis gagal: HTTP ${res.status}`);
     }
-    return res.json().catch(() => ({}));
+    /* res.json() di sini WAJIB bertimeout (BE-09): return langsung
+     * mematikan timer AbortController di finally sebelum body
+     * dibaca, jadi tanpa jsonWithTimeout panggilan ini bisa
+     * menggantung selamanya saat body stall. */
+    return jsonWithTimeout(res, 10_000).catch(() => ({}));
   } finally {
     clearTimeout(timer);
   }
@@ -177,7 +228,9 @@ async function firestoreGet(url, token) {
     if (!res.ok) {
       throw new Error(`Firestore baca gagal: HTTP ${res.status}`);
     }
-    return res.json();
+    /* Lihat catatan di firestoreFetch: res.json() tanpa timeout
+     * bisa menggantung selamanya karena timer sudah dimatikan. */
+    return jsonWithTimeout(res, 10_000);
   } finally {
     clearTimeout(timer);
   }
@@ -281,6 +334,38 @@ function secretsEqual(a, b) {
   return timingSafeEqual(bufA, bufB);
 }
 
+/* Balasan 503 generik untuk semua kegagalan konfigurasi cron
+ * (SEC-05): satu pesan yang sama, tanpa menyebut variabel mana
+ * yang hilang atau bagian service account mana yang bermasalah —
+ * detail itu hanya dicatat di log server. Pemanggil anonim tidak
+ * bisa memetakan status konfigurasi server dari balasan ini. */
+function cronUnavailable() {
+  return NextResponse.json(
+    {
+      error: "cron belum diaktifkan",
+      detail: "konfigurasi cron belum lengkap",
+    },
+    { status: 503 },
+  );
+}
+
+/* Tulis dokumen heartbeat run ini ke koleksi cron-runs
+ * (id dokumen = tanggal WIB run). Kembalikan true bila tulis
+ * berhasil, false bila gagal (tidak pernah melempar: kegagalan
+ * menulis heartbeat tidak boleh menggagalkan balasan cron —
+ * watcher akan menganggap run ini tidak tercatat). */
+async function writeCronRunRecord(fsBase, token, date, fields) {
+  try {
+    await firestoreFetch(`${fsBase}/cron-runs/${date}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request) {
   /* 1. Keamanan cron: fail-closed. Tanpa CRON_SECRET, rute tidak
    * pernah berjalan — menjawab 503, bukan mengizinkan tanpa auth. */
@@ -288,13 +373,8 @@ export async function GET(request) {
   try {
     secret = requireEnv("CRON_SECRET");
   } catch {
-    return NextResponse.json(
-      {
-        error: "cron belum diaktifkan",
-        detail: "CRON_SECRET belum dipasang",
-      },
-      { status: 503 },
-    );
+    console.warn("Cron ditolak: CRON_SECRET belum dipasang.");
+    return cronUnavailable();
   }
   const auth = request.headers.get("authorization") || "";
   if (!secretsEqual(auth, `Bearer ${secret}`)) {
@@ -304,34 +384,19 @@ export async function GET(request) {
   /* 2. Service account wajib ada untuk menulis. */
   const saRaw = process.env.FIREBASE_SERVICE_ACCOUNT || "";
   if (!saRaw) {
-    return NextResponse.json(
-      {
-        error: "cron belum diaktifkan",
-        detail: "service account belum dipasang",
-      },
-      { status: 503 },
-    );
+    console.warn("Cron ditolak: service account belum dipasang.");
+    return cronUnavailable();
   }
   let sa;
   try {
     sa = JSON.parse(saRaw);
   } catch {
-    return NextResponse.json(
-      {
-        error: "cron belum diaktifkan",
-        detail: "service account tidak bisa dibaca",
-      },
-      { status: 503 },
-    );
+    console.warn("Cron ditolak: service account tidak bisa dibaca.");
+    return cronUnavailable();
   }
   if (!sa.client_email || !sa.private_key || !sa.project_id) {
-    return NextResponse.json(
-      {
-        error: "cron belum diaktifkan",
-        detail: "service account tidak lengkap",
-      },
-      { status: 503 },
-    );
+    console.warn("Cron ditolak: service account tidak lengkap.");
+    return cronUnavailable();
   }
 
   const startedAt = Date.now();
@@ -362,19 +427,12 @@ export async function GET(request) {
     );
   }
 
-  /* Perusahaan yang ada lowongannya dulu, lalu portal yang sedang mati
-   * (jalan pulih), diurutkan dari yang paling lama tidak dicek supaya
-   * cek harian berputar ke seluruh daftar. Tanpa tautan karir tidak
-   * masuk antrean: tidak ada URL yang bisa dicek. */
-  const open = companies.filter(
-    (c) => OPEN_STATUSES.includes(c.status) && c.link_karir,
-  );
-  const dead = companies.filter(
-    (c) => c.status === DEAD_STATUS && c.link_karir,
-  );
-  const queue = [...open, ...dead].sort((a, b) =>
-    (a.tanggal_cek || "").localeCompare(b.tanggal_cek || ""),
-  );
+  /* Antrean cek tiga tier (BE-05, lihat buildCheckQueue di
+   * lib/check.js): mendesak (batas lamar dekat) dulu tiap run,
+   * lalu yang ada lowongan, lalu portal mati bergilir. */
+  const { queue, counts: queueCounts } = buildCheckQueue(companies, {
+    todayIso: today,
+  });
 
   let token;
   try {
@@ -413,10 +471,18 @@ export async function GET(request) {
     changed: 0,
     updated: 0,
     skipped: 0,
+    openSkipped: 0,
     truncated: false,
     alerts: 0,
+    alertsFailed: 0,
     telegram: "none",
+    telegramMarked: 0,
+    alertPhaseTruncated: false,
+    snapshotKnown,
+    snapshotWritten: false,
+    queue: queueCounts,
     markerBumped: false,
+    heartbeatWritten: false,
   };
 
   /* Status tiap perusahaan, mulai dari data yang baru dimuat. Fase
@@ -434,6 +500,10 @@ export async function GET(request) {
    * mati -> belum terverifikasi), jadi perbandingan snapshot tetap
    * benar. */
   const freshAlerts = [];
+  /* Nomor new-target yang tulis alertnya gagal (atau belum sempat
+   * dicoba karena anggaran fase alert habis): dikeluarkan dari
+   * snapshot supaya run berikut mencoba lagi (NOTIF-06). */
+  const failedNewTargetNos = new Set();
   try {
     const currentTargets = companies
       .filter((c) => statusAfter.get(c.no) === OPEN_STATUS)
@@ -443,34 +513,84 @@ export async function GET(request) {
         ? []
         : collectNewTargetAlerts(previousTargetNos, currentTargets, today);
     const deadlineAlerts = collectDeadlineAlerts(currentTargets, today);
-    for (const alert of [...newTargetAlerts, ...deadlineAlerts]) {
-      const result = await createAlert(fsBase, token, alert);
-      if (result === "created") freshAlerts.push(alert);
+    const allAlerts = [...newTargetAlerts, ...deadlineAlerts];
+    const newTargetIds = new Set(newTargetAlerts.map((a) => a.id));
+    /* Tulis alert paralel per batch kecil, dibatasi anggaran fase
+     * sendiri (NOTIF-15): tanpa batas ini, banyak alert baru +
+     * jaringan lambat bisa memakan seluruh anggaran run sebelum
+     * satu portal pun dicek. Urutan freshAlerts tetap deterministik
+     * (Promise.all menjaga urutan dalam batch, batch jalan urut). */
+    const alertPhaseStart = Date.now();
+    let alertsFailed = 0;
+    for (let j = 0; j < allAlerts.length; j += ALERT_BATCH) {
+      if (Date.now() - alertPhaseStart > ALERT_BUDGET_MS) {
+        summary.alertPhaseTruncated = true;
+        for (const alert of allAlerts.slice(j)) {
+          if (newTargetIds.has(alert.id)) {
+            failedNewTargetNos.add(alert.companyNo);
+          }
+        }
+        console.warn(
+          "Fase alert kehabisan anggaran 15 detik; " +
+            `${allAlerts.length - j} alert ditunda ke run berikut.`,
+        );
+        break;
+      }
+      const results = await Promise.all(
+        allAlerts.slice(j, j + ALERT_BATCH).map(async (alert) => ({
+          alert,
+          result: await createAlert(fsBase, token, alert),
+        })),
+      );
+      for (const { alert, result } of results) {
+        if (result === "created") freshAlerts.push(alert);
+        else if (result === "failed") {
+          alertsFailed += 1;
+          if (alert.type === "new-target") {
+            failedNewTargetNos.add(alert.companyNo);
+          }
+        }
+      }
     }
     summary.alerts = freshAlerts.length;
+    summary.alertsFailed = alertsFailed;
 
     /* Tulis snapshot baru (selalu, walau tidak ada alert baru) —
      * kecuali bila baca snapshot sebelumnya gagal, supaya deteksi
-     * tidak hilang diam-diam. */
+     * tidak hilang diam-diam. Nomor yang alertnya gagal dibuat
+     * dikeluarkan dari snapshot (NOTIF-06). Kegagalan tulis
+     * dicatat di log + ringkasan, bukan ditelan (NOTIF-07). */
     if (snapshotKnown) {
-      await firestoreFetch(`${fsBase}/meta/targets`, token, {
-        method: "PATCH",
-        body: JSON.stringify({
-          fields: {
-            targetNos: {
-              arrayValue: {
-                values: currentTargets.map((c) => ({
-                  integerValue: String(c.no),
-                })),
+      const snapshotNos = currentTargets
+        .map((c) => c.no)
+        .filter((no) => !failedNewTargetNos.has(no));
+      try {
+        await firestoreFetch(`${fsBase}/meta/targets`, token, {
+          method: "PATCH",
+          body: JSON.stringify({
+            fields: {
+              targetNos: {
+                arrayValue: {
+                  values: snapshotNos.map((no) => ({
+                    integerValue: String(no),
+                  })),
+                },
               },
+              updatedAt: { stringValue: new Date().toISOString() },
             },
-            updatedAt: { stringValue: new Date().toISOString() },
-          },
-        }),
-      }).catch(() => {});
+          }),
+        });
+        summary.snapshotWritten = true;
+      } catch {
+        console.warn(
+          "Tulis snapshot meta/targets gagal; deteksi lowongan baru " +
+            "bisa berulang besok.",
+        );
+      }
     }
 
-    /* Satu pesan gabungan, hanya bila ada alert baru di run ini. */
+    /* Satu pesan gabungan, hanya bila ada alert baru di run ini.
+     * Pesan panjang dipecah otomatis di sendTelegramMessage. */
     if (freshAlerts.length > 0) {
       const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
       if (!botToken) {
@@ -488,6 +608,44 @@ export async function GET(request) {
         summary.telegram = sent.ok ? "sent" : "failed";
         if (!sent.ok) {
           console.warn(`Notifikasi Telegram gagal: ${sent.error}`);
+        } else {
+          /* NOTIF-01: kirim langsung berhasil — tandai tiap alert
+           * sent=true + sentAt supaya watcher agent-side tidak
+           * mengirim ulang alert yang sama. Penandaan yang gagal
+           * dibiarkan sent=false: watcher akan mengirimnya, dan
+           * duplikat sesekali lebih baik daripada alert hilang. */
+          const sentAt = new Date().toISOString();
+          const { marked, failed } = await markAlertsSent(
+            async (alert) => {
+              try {
+                await firestoreFetch(
+                  `${fsBase}/alerts/${alert.id}` +
+                    `?updateMask.fieldPaths=sent&updateMask.fieldPaths=sentAt`,
+                  token,
+                  {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                      fields: {
+                        sent: { booleanValue: true },
+                        sentAt: { stringValue: sentAt },
+                      },
+                    }),
+                  },
+                );
+                return true;
+              } catch {
+                return false;
+              }
+            },
+            freshAlerts,
+          );
+          summary.telegramMarked = marked.length;
+          if (failed.length > 0) {
+            console.warn(
+              `Penandaan terkirim gagal untuk ${failed.length} alert; ` +
+                "watcher akan mengirim ulang.",
+            );
+          }
         }
       }
     }
@@ -508,16 +666,35 @@ export async function GET(request) {
     if (Date.now() > deadline) {
       summary.truncated = true;
       summary.skipped += queue.length - i;
+      /* openSkipped = tier mendesak/terbuka yang tidak sempat dicek:
+       * sinyal utama untuk watcher (OPS-01). Tier mati yang
+       * terpotong tidak dihitung — itu rotasi yang disengaja. */
+      summary.openSkipped += queue
+        .slice(i)
+        .filter((q) => q.tier !== "dead").length;
       break;
     }
     const batch = queue.slice(i, i + BATCH);
     const checks = await Promise.all(
-      batch.map(async (c) => {
+      batch.map(async ({ company: c }) => {
         if (!c.link_karir) return { company: c, result: null };
         const result = await checkUrl(c.link_karir);
         return { company: c, result };
       }),
     );
+
+    /* OPS-07: cek batas waktu lagi SEBELUM fase tulis. Batch yang
+     * mulai dekat batas bisa selesai cek sesudah batas; tanpa cek
+     * ini, tulis paralel (timeout 10 detik tiap tulis) memaksa run
+     * melewati batas fungsi dan Vercel mematikannya di tengah
+     * tulis. Hasil cek batch ini dibuang (tidak dihitung checked,
+     * tanggal_cek tidak diperbarui) dan dicoba lagi besok. */
+    if (Date.now() > deadline) {
+      summary.truncated = true;
+      summary.skipped += batch.length;
+      summary.openSkipped += batch.filter((q) => q.tier !== "dead").length;
+      break;
+    }
 
     const writes = [];
     for (const { company, result } of checks) {
@@ -602,6 +779,28 @@ export async function GET(request) {
    * jauh di bawah kuota, dan metering FIN-02 menjaganya. */
   if (statusPatched > 0 || summary.updated > 0) {
     summary.markerBumped = await bumpMarker(fsBase, token, today);
+  }
+
+  /* 8. Heartbeat (OPS-01): catat ringkasan run ini ke
+   * cron-runs/{tanggal} supaya watcher bisa mendeteksi run yang
+   * hilang atau terpotong. Best-effort: gagal menulis hanya
+   * dicatat di ringkasan — watcher akan menganggap run ini tidak
+   * tercatat dan memberitahu owner. */
+  const finishedAt = Date.now();
+  summary.heartbeatWritten = await writeCronRunRecord(
+    fsBase,
+    token,
+    today,
+    buildCronRunRecord(summary, {
+      date: today,
+      startedAt,
+      finishedAt,
+    }),
+  );
+  if (!summary.heartbeatWritten) {
+    console.warn(
+      "Heartbeat cron gagal ditulis: dokumen cron-runs tidak tercatat.",
+    );
   }
 
   return NextResponse.json(summary);

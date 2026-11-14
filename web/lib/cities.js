@@ -1,7 +1,17 @@
 /* Koordinat kota (fakta geografis umum) dan pencocok lokasi perusahaan.
  * Urutan penting: kota yang lebih spesifik dicek dulu, "Gunung Putri"
  * sebelum "Bogor" dan "Cikarang" sebelum "Bekasi", supaya lokasi seperti
- * "Gunung Putri Bogor" atau "Cikarang, Bekasi" jatuh ke kota yang benar. */
+ * "Gunung Putri Bogor" atau "Cikarang, Bekasi" jatuh ke kota yang benar.
+ * Kota-kota di bawah garis pemisah (PETA-03, 15 Nov 2026) ditambahkan
+ * karena muncul di teks lokasi perusahaan yang ada lowongan; koordinatnya
+ * hasil geocode 15 Nov 2026, tiga yang pertama (Cilegon, Samarinda,
+ * Balikpapan) diverifikasi balik lewat reverse geocode (masing-masing
+ * jatuh di dalam kota yang benar). Urutan di blok ini alfabetis — tidak
+ * ada yang tumpang tindih nama, jadi urutannya tidak memengaruhi hasil.
+ * "Solo" memakai nama yang dikenal pengguna dengan kunci "surakarta"
+ * sebagai alias; "Bandar Lampung" memakai kunci "lampung" karena teks
+ * lokasi menulis nama provinsinya; "Bali" dipetakan ke Denpasar (ibu
+ * kota provinsi) karena teks lokasi menyebut pulaunya, bukan kotanya. */
 
 export const CITIES = [
   { name: "Gunung Putri", lat: -6.423, lng: 106.93, keys: ["gunung putri"] },
@@ -9,7 +19,7 @@ export const CITIES = [
   { name: "Cikarang", lat: -6.2568, lng: 107.1447, keys: ["cikarang"] },
   { name: "Bojonggede", lat: -6.4833, lng: 106.79, keys: ["bojonggede"] },
   { name: "Cibinong", lat: -6.4812, lng: 106.854, keys: ["cibinong"] },
-  { name: "Depok", lat: -6.4025, lng: 106.7942, keys: ["depok"] },
+  { name: "Depok", lat: -6.4025, lng: 106.7942, keys: ["depok", "cimanggis"] },
   { name: "Bekasi", lat: -6.2383, lng: 106.9756, keys: ["bekasi"] },
   { name: "Karawang", lat: -6.3061, lng: 107.2993, keys: ["karawang"] },
   { name: "Tangerang", lat: -6.17, lng: 106.64, keys: ["tangerang"] },
@@ -25,6 +35,35 @@ export const CITIES = [
   { name: "Batam", lat: 1.13, lng: 104.05, keys: ["batam"] },
   { name: "Bogor", lat: -6.5971, lng: 106.806, keys: ["bogor"] },
   { name: "Jakarta", lat: -6.2088, lng: 106.8456, keys: ["jakarta"] },
+  // --- Kota tambahan (PETA-03): muncul di data target, di bawah ini ---
+  { name: "Balikpapan", lat: -1.2379, lng: 116.8529, keys: ["balikpapan"] },
+  {
+    name: "Bandar Lampung",
+    lat: -5.4224,
+    lng: 105.26,
+    keys: ["bandar lampung", "lampung"],
+  },
+  { name: "Banjarmasin", lat: -3.329, lng: 114.5905, keys: ["banjarmasin"] },
+  { name: "Cilegon", lat: -6.026, lng: 106.0468, keys: ["cilegon"] },
+  { name: "Cirebon", lat: -6.7377, lng: 108.5196, keys: ["cirebon"] },
+  {
+    name: "Denpasar",
+    lat: -8.6727,
+    lng: 115.2358,
+    keys: ["denpasar", "bali"],
+  },
+  { name: "Gresik", lat: -7.1602, lng: 112.6471, keys: ["gresik"] },
+  { name: "Makassar", lat: -5.1465, lng: 119.4229, keys: ["makassar"] },
+  { name: "Malang", lat: -7.9907, lng: 112.6397, keys: ["malang"] },
+  { name: "Medan", lat: 3.5921, lng: 98.6769, keys: ["medan"] },
+  { name: "Palembang", lat: -2.8899, lng: 104.6936, keys: ["palembang"] },
+  { name: "Pekanbaru", lat: 0.5274, lng: 101.4523, keys: ["pekanbaru"] },
+  { name: "Probolinggo", lat: -7.7832, lng: 113.178, keys: ["probolinggo"] },
+  { name: "Purwokerto", lat: -7.4252, lng: 109.2298, keys: ["purwokerto"] },
+  { name: "Samarinda", lat: -0.4788, lng: 117.1456, keys: ["samarinda"] },
+  { name: "Serang", lat: -6.1054, lng: 106.1586, keys: ["serang"] },
+  { name: "Solo", lat: -7.5573, lng: 110.8223, keys: ["solo", "surakarta"] },
+  { name: "Tegal", lat: -6.8673, lng: 109.1365, keys: ["tegal"] },
 ];
 
 /* Kata peniadaan: kemunculan kota yang didahului salah satunya dalam
@@ -93,20 +132,42 @@ function isNegated(text, start) {
   return false;
 }
 
-/* Cocokkan teks lokasi bebas ke kota. Kembalikan objek kota atau null
- * bila tidak ada yang cocok. Sebuah kota cocok bila ada SATU
- * kemunculan kata utuhnya yang tidak dinegasikan — jadi kota yang
- * sama disebut sekali dalam peniadaan dan sekali di luar peniadaan
- * tetap cocok. */
-export function matchCity(lokasi) {
-  if (!lokasi) return null;
-  const text = String(lokasi).toLowerCase().replace(/\s+/g, " ");
-  for (const city of CITIES) {
-    for (const key of city.keys) {
-      for (const start of findWholeWord(text, key)) {
-        if (!isNegated(text, start)) return city;
-      }
+/* Apakah kota ini cocok dengan teks (sudah dinormalisasi)? Sebuah kota
+ * cocok bila ada SATU kemunculan kata utuh dari salah satu kuncinya
+ * yang tidak dinegasikan — jadi kota yang sama disebut sekali dalam
+ * peniadaan dan sekali di luar peniadaan tetap cocok. */
+function cityMatches(text, city) {
+  for (const key of city.keys) {
+    for (const start of findWholeWord(text, key)) {
+      if (!isNegated(text, start)) return true;
     }
   }
+  return false;
+}
+
+function normalizeText(lokasi) {
+  if (!lokasi) return "";
+  return String(lokasi).toLowerCase().replace(/\s+/g, " ");
+}
+
+/* Cocokkan teks lokasi bebas ke kota. Kembalikan objek kota atau null
+ * bila tidak ada yang cocok. Kota pertama dalam urutan CITIES yang
+ * cocok yang dipakai (dipakai pemanggil yang butuh satu kota saja). */
+export function matchCity(lokasi) {
+  const text = normalizeText(lokasi);
+  if (!text) return null;
+  for (const city of CITIES) {
+    if (cityMatches(text, city)) return city;
+  }
   return null;
+}
+
+/* Cocokkan teks lokasi bebas ke SEMUA kota yang tercantum (PETA-02).
+ * Kembalikan daftar objek kota dalam urutan CITIES, atau daftar kosong
+ * bila tidak ada yang cocok. Satu perusahaan yang lokasinya menyebut
+ * banyak kota muncul di tiap kotanya di peta, bukan hanya di satu. */
+export function matchCities(lokasi) {
+  const text = normalizeText(lokasi);
+  if (!text) return [];
+  return CITIES.filter((city) => cityMatches(text, city));
 }

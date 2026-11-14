@@ -40,6 +40,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { STATUS_ORDER } from "@/lib/companies";
+import SupportReports from "./support-reports";
 
 const EMPTY = {
   no: "",
@@ -51,9 +52,32 @@ const EMPTY = {
   catatan: "",
   lokasi: "",
   posisi: "",
+  batas_lamar: "",
 };
 
+/* Format CSV impor/ekspor panel: 13 kolom, sama dengan kolom repo
+ * data/daftar-link-karir.csv (BE-06 + DATA-02 — format 9 kolom yang
+ * lama membuat impor menimpa kanal melamar dan batas lamar dengan
+ * setDoc tanpa merge). Impor masih menerima format 9 kolom lama
+ * (CSV_HEADER_9); baris dari file lama tidak menyentuh kolom kanal
+ * dan batas lamar yang sudah tersimpan (setDoc merge). */
 const CSV_HEADER = [
+  "no",
+  "perusahaan",
+  "kategori",
+  "link_karir",
+  "status",
+  "tanggal_cek",
+  "catatan",
+  "lokasi",
+  "posisi",
+  "email_hrd",
+  "wa_hrd",
+  "kontak_lain",
+  "batas_lamar",
+];
+
+const CSV_HEADER_9 = [
   "no",
   "perusahaan",
   "kategori",
@@ -74,7 +98,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const VISITOR_LIMIT = 300;
 const PROFILES_LIMIT = 100;
 const AUDIT_LIMIT = 10;
-const REPORTS_LIMIT = 10;
 const VISITOR_DAYS = 30;
 /* Kuota baca harian Firestore paket Spark. */
 const QUOTA_DAILY_LIMIT = 50000;
@@ -368,6 +391,19 @@ function parseDate(value) {
   return Number.isNaN(t.getTime()) ? null : t;
 }
 
+/* Validasi tanggal kalender yang ketat: format YYYY-MM-DD dan tanggal
+ * yang benar-benar ada. Konstruktor Date JavaScript diam-diam
+ * menggeser tanggal yang tidak ada (2026-02-30 menjadi 2 Maret),
+ * jadi komponen hasil parse wajib cocok lagi dengan masukannya.
+ * Dipakai untuk batas_lamar (BE-06) di form dan impor CSV. */
+function isValidDateString(value) {
+  const s = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
 function isStale(c) {
   const t = parseDate(c.tanggal_cek);
   if (!t) return true;
@@ -479,8 +515,6 @@ export default function Admin() {
   const [importing, setImporting] = useState(false);
   const [auditEntries, setAuditEntries] = useState([]);
   const [auditError, setAuditError] = useState("");
-  const [reports, setReports] = useState([]);
-  const [reportsError, setReportsError] = useState("");
   const [visitorEvents, setVisitorEvents] = useState([]);
   const [loadingVisitors, setLoadingVisitors] = useState(false);
   const [visitorsError, setVisitorsError] = useState("");
@@ -557,22 +591,6 @@ export default function Admin() {
       setAuditEntries(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch {
       setAuditError("Jejak perubahan tidak bisa dimuat.");
-    }
-  }
-
-  async function loadReports() {
-    setReportsError("");
-    try {
-      const snap = await getDocs(
-        query(
-          collection(db, "reports"),
-          orderBy("dibuat", "desc"),
-          limit(REPORTS_LIMIT),
-        ),
-      );
-      setReports(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    } catch {
-      setReportsError("Laporan tautan mati tidak bisa dimuat.");
     }
   }
 
@@ -746,6 +764,7 @@ export default function Admin() {
       catatan: c.catatan || "",
       lokasi: c.lokasi || "",
       posisi: c.posisi || "",
+      batas_lamar: c.batas_lamar || "",
     });
     setMessage("");
     setLinkCheck(null);
@@ -762,6 +781,13 @@ export default function Admin() {
     setLinkCheck(null);
   }
 
+  /* Data lengkap 13 field untuk simpan. Form tidak menampilkan kolom
+   * kanal (email_hrd, wa_hrd, kontak_lain) — nilainya diambil dari
+   * dokumen yang sedang diedit supaya simpan tidak menghapusnya
+   * (setDoc tanpa merge menimpa seluruh dokumen; sebelum perbaikan
+   * ini tiap simpan dari panel menghapus kanal melamar dan batas
+   * lamar perusahaan itu dari Firestore). Perusahaan baru mendapat
+   * kanal kosong. */
   function buildData() {
     return {
       no: Number(form.no),
@@ -773,6 +799,10 @@ export default function Admin() {
       catatan: form.catatan.trim(),
       lokasi: form.lokasi.trim(),
       posisi: form.posisi.trim(),
+      email_hrd: (selected && selected.email_hrd) || "",
+      wa_hrd: (selected && selected.wa_hrd) || "",
+      kontak_lain: (selected && selected.kontak_lain) || "",
+      batas_lamar: form.batas_lamar.trim(),
     };
   }
 
@@ -796,9 +826,19 @@ export default function Admin() {
       setSaving(false);
       return;
     }
+    if (form.batas_lamar.trim() && !isValidDateString(form.batas_lamar)) {
+      setMessage(
+        "Batas lamar harus berupa tanggal yang valid (YYYY-MM-DD), mis. 2026-11-30. Kosongkan bila tidak ada batas.",
+      );
+      setSaving(false);
+      return;
+    }
     try {
       const data = buildData();
-      await setDoc(doc(db, "companies", String(no)), data);
+      /* merge: true sebagai jaring pengaman — field yang tidak ada di
+       * data (mis. field baru yang ditambahkan belakangan) tidak ikut
+       * terhapus saat simpan. */
+      await setDoc(doc(db, "companies", String(no)), data, { merge: true });
       setCompanies((prev) => {
         const rest = prev.filter((c) => Number(c.no) !== no);
         return [...rest, { id: String(no), ...data }].sort(
@@ -806,6 +846,15 @@ export default function Admin() {
         );
       });
       const auditOk = await writeAudit("save", no, data.perusahaan);
+      /* Perubahan status dari panel dicatat ke umpan Yang berubah
+       * (koleksi `changes`) — tanpa ini, write-back harian (yang
+       * membaca `changes`) tidak pernah tahu status itu berubah dari
+       * panel, dan CSV tertinggal dari data live. Hanya status yang
+       * dicatat: skema entri changes hanya punya from/to status.
+       * Gagal tulis tidak menggagalkan simpan. */
+      if (selected && selected.status !== data.status) {
+        await writeChange(selected, selected.status, data.status);
+      }
       setMessage(
         auditOk
           ? `Tersimpan: ${data.perusahaan}.`
@@ -920,7 +969,7 @@ export default function Admin() {
               error:
                 body.ok === true
                   ? undefined
-                  : body.error || `kode ${body.status}`,
+                  : body.detail || body.error || `kode ${body.status}`,
               checkedAt: new Date().toISOString(),
             }
           : {
@@ -977,28 +1026,33 @@ export default function Admin() {
           return;
         }
         const header = rows[0].map((h) => h.trim());
-        const headerOk =
+        const isFullHeader =
           header.length === CSV_HEADER.length &&
           CSV_HEADER.every((h, i) => header[i] === h);
-        if (!headerOk) {
+        const isLegacyHeader =
+          header.length === CSV_HEADER_9.length &&
+          CSV_HEADER_9.every((h, i) => header[i] === h);
+        if (!isFullHeader && !isLegacyHeader) {
           setCsvError(
-            "Baris pertama harus berisi: no, perusahaan, kategori, link_karir, status, tanggal_cek, catatan, lokasi, posisi.",
+            "Baris pertama harus berisi 13 kolom (no, perusahaan, kategori, link_karir, status, tanggal_cek, catatan, lokasi, posisi, email_hrd, wa_hrd, kontak_lain, batas_lamar) atau 9 kolom lama tanpa 4 kolom terakhir.",
           );
           return;
         }
+        const full = isFullHeader;
+        const width = full ? CSV_HEADER.length : CSV_HEADER_9.length;
         const valid = [];
         const rejected = [];
         rows.slice(1).forEach((cells, idx) => {
           const lineNo = idx + 2;
-          if (cells.length !== CSV_HEADER.length) {
+          if (cells.length !== width) {
             rejected.push({
               line: lineNo,
-              reason: `jumlah kolom ${cells.length}, harus ${CSV_HEADER.length}.`,
+              reason: `jumlah kolom ${cells.length}, harus ${width}.`,
             });
             return;
           }
           const [noRaw, perusahaan, kategori, link_karir, status, tanggal_cek, catatan, lokasi, posisi] =
-            cells.map((c) => c.trim());
+            cells.slice(0, 9).map((c) => c.trim());
           const no = Number(noRaw);
           if (!noRaw || !Number.isInteger(no) || no <= 0) {
             rejected.push({ line: lineNo, reason: "nomor tidak valid." });
@@ -1022,7 +1076,7 @@ export default function Admin() {
             });
             return;
           }
-          valid.push({
+          const row = {
             no,
             perusahaan,
             kategori,
@@ -1032,7 +1086,24 @@ export default function Admin() {
             catatan,
             lokasi,
             posisi,
-          });
+          };
+          if (full) {
+            const [email_hrd, wa_hrd, kontak_lain, batas_lamar] = cells
+              .slice(9, 13)
+              .map((c) => c.trim());
+            if (batas_lamar && !isValidDateString(batas_lamar)) {
+              rejected.push({
+                line: lineNo,
+                reason: `batas_lamar "${batas_lamar}" bukan tanggal YYYY-MM-DD yang valid.`,
+              });
+              return;
+            }
+            row.email_hrd = email_hrd;
+            row.wa_hrd = wa_hrd;
+            row.kontak_lain = kontak_lain;
+            row.batas_lamar = batas_lamar;
+          }
+          valid.push(row);
         });
         setCsvValid(valid);
         setCsvRejected(rejected);
@@ -1066,7 +1137,9 @@ export default function Admin() {
       const chunk = csvValid.slice(i, i + 10);
       const results = await Promise.allSettled(
         chunk.map((row) =>
-          setDoc(doc(db, "companies", String(row.no)), row),
+          /* merge: true — baris dari file 9 kolom lama tidak menghapus
+           * kanal melamar dan batas lamar yang sudah tersimpan. */
+          setDoc(doc(db, "companies", String(row.no)), row, { merge: true }),
         ),
       );
       results.forEach((r, j) => {
@@ -1086,7 +1159,15 @@ export default function Admin() {
       setCompanies((prev) => {
         const byNo = new Map(prev.map((c) => [Number(c.no), c]));
         okRows.forEach((row) =>
-          byNo.set(row.no, { id: String(row.no), ...row }),
+          /* Timpa hanya kolom yang ada di file; kolom lain (mis. kanal
+           * dari file 9 kolom lama) dipertahankan dari data lama —
+           * tanpa ini, simpan berikutnya dari form akan menimpa kanal
+           * itu dengan kosong. */
+          byNo.set(row.no, {
+            ...byNo.get(row.no),
+            id: String(row.no),
+            ...row,
+          }),
         );
         return [...byNo.values()].sort((a, b) => a.no - b.no);
       });
@@ -1539,7 +1620,7 @@ export default function Admin() {
             <p className="notice">
               {linkCheck.ok
                 ? `Tautan bisa dibuka, kode ${linkCheck.status}.`
-                : `Tautan tidak bisa dibuka: ${linkCheck.error || "tidak diketahui."}`}
+                : `Tautan tidak bisa dibuka: ${linkCheck.detail || linkCheck.error || "tidak diketahui."}`}
             </p>
           )}
           <fieldset>
@@ -1563,6 +1644,18 @@ export default function Admin() {
               onChange={(e) => setForm({ ...form, tanggal_cek: e.target.value })}
               placeholder="2026-11-06"
             />
+          </fieldset>
+          <fieldset>
+            <legend>Batas lamar (YYYY-MM-DD)</legend>
+            <input
+              type="date"
+              value={form.batas_lamar}
+              onChange={(e) => setForm({ ...form, batas_lamar: e.target.value })}
+            />
+            <p className="section-note">
+              Tanggal terakhir melamar, bila ada. Kosongkan bila tidak
+              ada batas.
+            </p>
           </fieldset>
           <fieldset>
             <legend>Lokasi</legend>
@@ -1654,9 +1747,11 @@ export default function Admin() {
       <div className="filters" style={{ marginTop: 24 }}>
         <p className="section-label">Impor dan unduh data</p>
         <p className="section-note">
-          Impor menerima file CSV dengan baris pertama: no, perusahaan,
-          kategori, link_karir, status, tanggal_cek, catatan, lokasi,
-          posisi. Maksimal 100 baris per impor.
+          Impor menerima file CSV 13 kolom (no, perusahaan, kategori,
+          link_karir, status, tanggal_cek, catatan, lokasi, posisi,
+          email_hrd, wa_hrd, kontak_lain, batas_lamar) — sama dengan
+          format CSV repo — atau 9 kolom lama tanpa 4 kolom terakhir.
+          Maksimal 100 baris per impor.
         </p>
         <fieldset>
           <legend>Pilih file CSV</legend>
@@ -1746,7 +1841,7 @@ export default function Admin() {
       <div className="filters" style={{ marginTop: 24 }}>
         <p className="section-label">Laporan tautan mati</p>
         <p className="section-note">
-          10 laporan terakhir dari pengunjung yang menemukan tautan karir
+          Laporan terbaru dari pengunjung yang menemukan tautan karir
           tidak bisa dibuka. Dimuat hanya bila dibuka, supaya hemat kuota
           baca.
         </p>
@@ -1756,27 +1851,12 @@ export default function Admin() {
             className="btn ghost"
             onClick={() => {
               setReportsOpen(true);
-              loadReports();
             }}
           >
             Tampilkan laporan tautan mati
           </button>
         ) : (
-          <>
-            {reportsError && <p className="notice">{reportsError}</p>}
-            {reports.length === 0 && !reportsError ? (
-              <p className="notice">Belum ada laporan.</p>
-            ) : (
-              <ul className="recheck-list">
-                {reports.map((r) => (
-                  <li key={r.id}>
-                    {formatTime(r.dibuat)} · {r.no}. {r.perusahaan} ·{" "}
-                    {r.alasan}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
+          <SupportReports db={db} />
         )}
       </div>
 

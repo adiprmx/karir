@@ -9,7 +9,13 @@
  *   deadline-{no}-{batas_lamar}) supaya satu kejadian tidak pernah
  *   tercatat dua kali, dan tidak ada spam harian untuk alert yang sama.
  * - Satu run cron mengirim paling banyak satu pesan Telegram gabungan,
- *   hanya bila ada alert baru di run itu.
+ *   hanya bila ada alert baru di run itu. Pesan di atas 4096 karakter
+ *   dipecah jadi beberapa potongan (Bot API menolak pesan panjang utuh).
+ * - Setelah kirim langsung berhasil, cron menandai tiap alert sent=true
+ *   (markAlertsSent) supaya watcher tidak mengirim ulang (NOTIF-01).
+ * - Tiap run cron menulis dokumen heartbeat ke koleksi cron-runs
+ *   (buildCronRunRecord) supaya watcher bisa mendeteksi run yang
+ *   hilang atau terpotong (OPS-01).
  * - Tanggal batas lamar hanya dari catatan yang sudah ada, tidak pernah
  *   dikarang. Parser di bawah menolak tanggal yang tidak bisa diparse
  *   tanpa ragu (bulan tidak dikenal, tanggal kalender tidak valid).
@@ -241,6 +247,49 @@ export function collectDeadlineAlerts(targets, todayIso) {
     }));
 }
 
+/* Batas panjang satu pesan teks Bot API Telegram. Pesan yang lebih
+ * panjang ditolak utuh (HTTP 400), jadi pesan gabungan dipecah
+ * sebelum dikirim (NOTIF-08): tanpa pemecahan, satu hari dengan
+ * banyak alert baru membuat owner tidak menerima apa pun, dan
+ * watcher mengulang pesan gagal yang sama di tiap run. */
+export const TELEGRAM_MESSAGE_LIMIT = 4096;
+
+/* Pecah teks menjadi potongan-potongan yang masing-masing tidak
+ * lebih dari limit karakter, sedapat mungkin pada batas baris
+ * supaya tidak memotong tengah kalimat. Baris tunggal yang lebih
+ * panjang dari limit dipotong keras per limit karakter. Teks kosong
+ * menghasilkan [] (pemanggil tidak mengirim apa pun). */
+export function splitTelegramMessage(text, limit = TELEGRAM_MESSAGE_LIMIT) {
+  if (typeof text !== "string" || text.length === 0) return [];
+  if (text.length <= limit) return [text];
+  const chunks = [];
+  let current = "";
+  const pushLine = (line) => {
+    if (line.length > limit) {
+      /* Baris terlalu panjang: tutup potongan berjalan, lalu potong
+       * keras barisnya. */
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      for (let i = 0; i < line.length; i += limit) {
+        chunks.push(line.slice(i, i + limit));
+      }
+      return;
+    }
+    const next = current ? `${current}\n${line}` : line;
+    if (next.length > limit) {
+      chunks.push(current);
+      current = line;
+    } else {
+      current = next;
+    }
+  };
+  for (const line of text.split("\n")) pushLine(line);
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 function shortPosisi(posisi, max = 140) {
   const s = (posisi || "").replace(/\s+/g, " ").trim();
   if (s.length <= max) return s;
@@ -274,11 +323,15 @@ export function formatTelegramMessage(alerts, todayIso) {
   return lines.join("\n");
 }
 
-/* Kirim satu pesan ke Telegram Bot API. Timeout 10 detik. Tidak pernah
- * melempar: setiap kegagalan (timeout, HTTP bukan 200, jawaban bukan
- * JSON ok) dikembalikan sebagai {ok:false, error} supaya pemanggil
- * (cron) tetap bisa lanjut dan membalas sukses. Token hanya dipakai
- * di URL request, tidak pernah dicetak. */
+/* Kirim satu pesan ke Telegram Bot API. Timeout 10 detik per
+ * potongan. Pesan di atas 4096 karakter dipecah dulu lewat
+ * splitTelegramMessage dan dikirim berurutan (NOTIF-08) — Bot API
+ * menolak pesan panjang utuh. Tidak pernah melempar: setiap
+ * kegagalan (timeout, HTTP bukan 200, jawaban bukan JSON ok)
+ * dikembalikan sebagai {ok:false, error} supaya pemanggil (cron)
+ * tetap bisa lanjut dan membalas sukses. Token hanya dipakai di URL
+ * request, tidak pernah dicetak. {ok:true} berarti SEMUA potongan
+ * terkirim; bila satu potongan gagal, sisanya tidak dicoba. */
 export async function sendTelegramMessage({
   token,
   chatId = DEFAULT_CHAT_ID,
@@ -287,30 +340,101 @@ export async function sendTelegramMessage({
   timeoutMs = 10_000,
 }) {
   if (!token || !text) return { ok: false, error: "token atau teks kosong" };
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchImpl(
-      `https://api.telegram.org/bot${token}/sendMessage`,
-      {
-        method: "POST",
-        signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: String(chatId), text }),
-      },
-    );
-    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
-    const body = await res.json().catch(() => null);
-    if (!body || body.ok !== true) {
-      return { ok: false, error: "jawaban Telegram tidak ok" };
+  const chunks = splitTelegramMessage(text);
+  for (const chunk of chunks) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchImpl(
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: String(chatId), text: chunk }),
+        },
+      );
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+      const body = await res.json().catch(() => null);
+      if (!body || body.ok !== true) {
+        return { ok: false, error: "jawaban Telegram tidak ok" };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        error: err && err.name === "AbortError" ? "timeout" : "gagal terhubung",
+      };
+    } finally {
+      clearTimeout(timer);
     }
-    return { ok: true };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err && err.name === "AbortError" ? "timeout" : "gagal terhubung",
-    };
-  } finally {
-    clearTimeout(timer);
   }
+  return { ok: true };
+}
+
+/* Tandai alert sudah terkirim (NOTIF-01): setelah cron berhasil
+ * mengirim pesan Telegram langsung, tiap alert ditandai sent=true +
+ * sentAt supaya watcher agent-side tidak mengirim ulang alert yang
+ * sama (satu sumber kebenaran untuk status terkirim). patchFn
+ * disuntik pemanggil — di route cron, PATCH Firestore per id alert —
+ * dan mengembalikan true bila penandaan berhasil. Tidak pernah
+ * melempar; kegagalan dilaporkan per id supaya pemanggil bisa
+ * mencatatnya. Alert yang gagal ditandai tetap sent=false sehingga
+ * watcher akan mengirimnya: duplikat sesekali lebih baik daripada
+ * alert yang hilang. */
+export async function markAlertsSent(patchFn, alerts) {
+  const marked = [];
+  const failed = [];
+  await Promise.all(
+    (alerts || []).map(async (alert) => {
+      try {
+        const ok = await patchFn(alert);
+        if (ok) marked.push(alert.id);
+        else failed.push(alert.id);
+      } catch {
+        failed.push(alert.id);
+      }
+    }),
+  );
+  return { marked, failed };
+}
+
+/* Bentuk dokumen heartbeat satu run cron (OPS-01): koleksi
+ * `cron-runs`, id dokumen = tanggal WIB run. Ditulis cron di akhir
+ * run; dibaca watcher agent-side untuk mendeteksi run yang hilang
+ * (dokumen tidak ada) atau perusahaan yang ada lowongan tidak
+ * sempat dicek 2 hari berturut-turut (openSkipped > 0). Nilai
+ * dikembalikan dalam bentuk field Firestore (stringValue /
+ * integerValue / booleanValue) supaya route tinggal membungkusnya
+ * dalam {fields}. */
+export function buildCronRunRecord(summary, { date, startedAt, finishedAt }) {
+  const s = summary || {};
+  const queue = s.queue || {};
+  return {
+    date: { stringValue: date },
+    status: { stringValue: s.truncated === true ? "truncated" : "ok" },
+    startedAt: { stringValue: new Date(startedAt).toISOString() },
+    finishedAt: { stringValue: new Date(finishedAt).toISOString() },
+    durationMs: {
+      integerValue: String(Math.max(0, finishedAt - startedAt)),
+    },
+    checked: { integerValue: String(s.checked || 0) },
+    changed: { integerValue: String(s.changed || 0) },
+    updated: { integerValue: String(s.updated || 0) },
+    skipped: { integerValue: String(s.skipped || 0) },
+    openSkipped: { integerValue: String(s.openSkipped || 0) },
+    alerts: { integerValue: String(s.alerts || 0) },
+    alertsFailed: { integerValue: String(s.alertsFailed || 0) },
+    telegram: { stringValue: s.telegram || "none" },
+    telegramMarked: { integerValue: String(s.telegramMarked || 0) },
+    markerBumped: { booleanValue: s.markerBumped === true },
+    queueTotal: { integerValue: String(queue.total || 0) },
+    queueUrgent: { integerValue: String(queue.urgent || 0) },
+    queueOpen: { integerValue: String(queue.open || 0) },
+    queueDead: { integerValue: String(queue.dead || 0) },
+    alertPhaseTruncated: {
+      booleanValue: s.alertPhaseTruncated === true,
+    },
+    snapshotKnown: { booleanValue: s.snapshotKnown !== false },
+    snapshotWritten: { booleanValue: s.snapshotWritten === true },
+  };
 }

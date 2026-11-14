@@ -17,6 +17,58 @@
 export const TOKEN_TTL_MS = 60_000;
 /* Jangan pakai izin yang sisa berlakunya tinggal kurang dari ini. */
 export const TOKEN_SAFETY_MS = 10_000;
+/* Batas waktu satu panggilan API (BE-09): tanpa ini fetch yang stall
+ * menggantung halaman tanpa batas. Timer mencakup res.json() juga —
+ * mematikan timer begitu header tiba adalah celah yang sama. */
+export const INDEX_FETCH_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(
+  fetchImpl,
+  url,
+  options = {},
+  timeoutMs = INDEX_FETCH_TIMEOUT_MS,
+) {
+  const controller = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      fetchImpl(url, { ...options, signal: controller.signal }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          try {
+            controller.abort();
+          } catch {
+            /* Pembatalan bersifat best-effort. */
+          }
+          reject(new Error("Timeout memuat data."));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readJsonWithTimeout(res, timeoutMs = INDEX_FETCH_TIMEOUT_MS) {
+  let timer;
+  try {
+    return await Promise.race([
+      res.json(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          try {
+            res.body?.cancel?.();
+          } catch {
+            /* Pembatalan body bersifat best-effort. */
+          }
+          reject(new Error("Timeout memuat data."));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export function parseTokenResponse(json, now = Date.now()) {
   if (!json || typeof json.token !== "string" || !json.token) return null;
@@ -34,7 +86,10 @@ export function isTokenFresh(cached, now = Date.now()) {
   );
 }
 
-export function createIndexFetcher(fetchImpl = fetch) {
+export function createIndexFetcher(
+  fetchImpl = fetch,
+  { timeoutMs = INDEX_FETCH_TIMEOUT_MS } = {},
+) {
   let cachedToken = null;
   let inflightToken = null;
   /* Meta respons /api/index terakhir: {source, seedDate}. */
@@ -47,35 +102,42 @@ export function createIndexFetcher(fetchImpl = fetch) {
   async function getToken(force = false) {
     if (!force && isTokenFresh(cachedToken)) return cachedToken.token;
     if (!inflightToken) {
-      inflightToken = fetchImpl("/api/token")
-        .then(async (r) => {
-          if (!r.ok) throw new Error("gagal");
-          const parsed = parseTokenResponse(await r.json());
-          if (!parsed) throw new Error("gagal");
-          cachedToken = parsed;
-          return parsed.token;
-        })
-        .finally(() => {
-          inflightToken = null;
-        });
+      inflightToken = (async () => {
+        const r = await fetchWithTimeout(fetchImpl, "/api/token", {}, timeoutMs);
+        if (!r.ok) throw new Error("gagal");
+        const parsed = parseTokenResponse(
+          await readJsonWithTimeout(r, timeoutMs),
+        );
+        if (!parsed) throw new Error("gagal");
+        cachedToken = parsed;
+        return parsed.token;
+      })().finally(() => {
+        inflightToken = null;
+      });
     }
     return inflightToken;
   }
 
   async function fetchIndex() {
     const token = await getToken();
-    let res = await fetchImpl("/api/index", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    let res = await fetchWithTimeout(
+      fetchImpl,
+      "/api/index",
+      { headers: { Authorization: `Bearer ${token}` } },
+      timeoutMs,
+    );
     if (res.status === 401) {
       cachedToken = null;
       const fresh = await getToken(true);
-      res = await fetchImpl("/api/index", {
-        headers: { Authorization: `Bearer ${fresh}` },
-      });
+      res = await fetchWithTimeout(
+        fetchImpl,
+        "/api/index",
+        { headers: { Authorization: `Bearer ${fresh}` } },
+        timeoutMs,
+      );
     }
     if (!res.ok) throw new Error("gagal");
-    const j = await res.json();
+    const j = await readJsonWithTimeout(res, timeoutMs);
     lastMeta = {
       source: j.source === "seed" ? "seed" : "live",
       seedDate: typeof j.seedDate === "string" ? j.seedDate : "",

@@ -1,6 +1,9 @@
 /* Umpan perubahan status Karir: daftar perubahan terbaru yang dicatat
  * cron cek ulang harian. Baca /api/changes saat mount. Bila belum ada
- * perubahan, tampilkan kalimat jujur, bukan daftar contoh. */
+ * perubahan, tampilkan kalimat jujur, bukan daftar contoh. Bila API
+ * menandai `degraded: true`, umpan sedang tidak bisa dimuat dari
+ * sumbernya — tampilkan state rusak, BUKAN state kosong, supaya
+ * pengunjung tidak salah mengira tidak ada perubahan (BE-14). */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -17,6 +20,7 @@ function isNew(c) {
 
 export default function ChangesFeed({ labels }) {
   const [changes, setChanges] = useState(null);
+  const [degraded, setDegraded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -26,7 +30,10 @@ export default function ChangesFeed({ labels }) {
     fetch("/api/changes", { signal: controller.signal })
       .then((res) => res.json())
       .then((body) => {
-        if (alive) setChanges(Array.isArray(body.changes) ? body.changes : []);
+        if (alive) {
+          setChanges(Array.isArray(body.changes) ? body.changes : []);
+          setDegraded(body.degraded === true);
+        }
       })
       .catch(() => {
         if (alive) setFailed(true);
@@ -43,6 +50,13 @@ export default function ChangesFeed({ labels }) {
     return (
       <div className="skeleton" style={{ height: 72 }} aria-label={labels.loading} />
     );
+  }
+  /* Umpan rusak (API 200 + daftar kosong + degraded): bedakan dari
+   * "belum ada perubahan". `labels.degraded` opsional — bila halaman
+   * belum meneruskannya, pakai teks error yang maknanya sama
+   * ("umpan belum bisa dimuat"). */
+  if (degraded && changes.length === 0) {
+    return <p className="empty-line">{labels.degraded || labels.error}</p>;
   }
   if (changes.length === 0) return <p className="empty-line">{labels.empty}</p>;
   return (

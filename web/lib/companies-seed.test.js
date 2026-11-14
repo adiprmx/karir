@@ -13,7 +13,10 @@
  * (e) getCompanyById ter-cache (2 panggilan = 1 fetch).
  * Plus: pencacah refill ditulis sekali per refill; alert kuota 70%
  * dibuat sekali per hari; getRelatedOrSeed memakai seed tanpa baca
- * daftar; marker yang belum ada (404) tetap memicu refill pertama. */
+ * daftar; marker yang belum ada (404) tetap memicu refill pertama.
+ * Blok BE-09: res.json() bertimeout — body yang stall (header 200
+ * tiba, body tidak pernah selesai) ditolak setelah 5 detik dan
+ * pemanggil jatuh ke seed, bukan menggantung selamanya. */
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
 
@@ -28,6 +31,7 @@ const {
   getCompanyById,
   getCompanyByIdWithSource,
   getRelatedOrSeed,
+  jsonWithTimeout,
   revalidateCompanies,
 } = await import("./companies.js");
 
@@ -86,6 +90,8 @@ function rekamanBaru() {
  * - markerStatus: 200 | 404 | 429 | 500 (baca marker)
  * - markerThrows: true = fetch marker melempar (offline)
  * - listStatus: 200 | 429 | 500 (baca daftar)
+ * - markerJsonStall / listJsonStall / byIdJsonStall: true = header
+ *   200 tiba tetapi body tidak pernah selesai (res.json() stall)
  * - rev, reads, refills, day: isi dokumen marker. */
 function pasangMock(rec, mode) {
   globalThis.fetch = async (url, options = {}) => {
@@ -107,6 +113,9 @@ function pasangMock(rec, mode) {
       }
       if (mode.markerStatus !== 200) {
         return { ok: false, status: mode.markerStatus, json: async () => ({}) };
+      }
+      if (mode.markerJsonStall) {
+        return { ok: true, status: 200, json: () => new Promise(() => {}) };
       }
       return {
         ok: true,
@@ -131,6 +140,9 @@ function pasangMock(rec, mode) {
       if (no === 999) {
         return { ok: false, status: 404, json: async () => ({}) };
       }
+      if (mode.byIdJsonStall) {
+        return { ok: true, status: 200, json: () => new Promise(() => {}) };
+      }
       return {
         ok: true,
         status: 200,
@@ -140,6 +152,9 @@ function pasangMock(rec, mode) {
     rec.list.push(u);
     if (mode.listStatus !== 200) {
       return { ok: false, status: mode.listStatus, json: async () => ({}) };
+    }
+    if (mode.listJsonStall) {
+      return { ok: true, status: 200, json: () => new Promise(() => {}) };
     }
     if (u.includes("pageToken=")) {
       return { ok: true, status: 200, json: async () => ({ documents: HALAMAN_2 }) };
@@ -433,5 +448,111 @@ describe("seed-first: getCompanyById dan getRelatedOrSeed", () => {
     assert.equal(rec.list.length, 0);
     assert.equal(rec.marker.length, 0);
     assert.equal(rec.byId.length, 0);
+  });
+});
+
+describe("BE-09: timeout res.json() — body yang stall tidak menggantung", () => {
+  it("jsonWithTimeout: json() yang tidak pernah resolve ditolak setelah timeout", async () => {
+    const t0 = Date.now();
+    await assert.rejects(
+      jsonWithTimeout({ json: () => new Promise(() => {}) }, 50),
+      /Timeout membaca body respons/,
+    );
+    /* Timeout 50 ms: penolakan harus datang cepat, bukan menggantung. */
+    assert.ok(Date.now() - t0 < 2000);
+  });
+
+  it("jsonWithTimeout: json() lambat tapi selesai tetap dipakai", async () => {
+    const hasil = await jsonWithTimeout(
+      {
+        json: async () => {
+          await new Promise((r) => setTimeout(r, 30));
+          return { a: 1 };
+        },
+      },
+      200,
+    );
+    assert.deepEqual(hasil, { a: 1 });
+  });
+
+  it("jsonWithTimeout: json() yang menolak langsung diteruskan", async () => {
+    await assert.rejects(
+      jsonWithTimeout(
+        {
+          json: async () => {
+            throw new Error("JSON rusak");
+          },
+        },
+        200,
+      ),
+      /JSON rusak/,
+    );
+  });
+
+  it("jsonWithTimeout: stream body dibatalkan saat timeout", async () => {
+    let dibatalkan = false;
+    await assert.rejects(
+      jsonWithTimeout(
+        {
+          json: () => new Promise(() => {}),
+          body: {
+            cancel: () => {
+              dibatalkan = true;
+            },
+          },
+        },
+        50,
+      ),
+      /Timeout membaca body respons/,
+    );
+    assert.equal(dibatalkan, true);
+  });
+
+  it("body marker stall -> seed disajikan dalam waktu terbatas (bukan hang)", async () => {
+    const rec = rekamanBaru();
+    pasangMock(rec, modeOk({ markerJsonStall: true }));
+    revalidateCompanies();
+    const t0 = Date.now();
+    const hasil = await getCompaniesWithSource();
+    const elapsed = Date.now() - t0;
+    assert.equal(hasil.source, "seed");
+    assert.equal(hasil.companies.length, 610);
+    /* Marker gagal dibaca: refill tidak dicoba sama sekali. */
+    assert.equal(rec.list.length, 0);
+    /* Timeout body 5 detik: tanpa perbaikan ini panggilan tidak
+     * pernah kembali. Batas bawah membuktikan penantian itu memang
+     * timeout body (bukan gagal instan karena alasan lain); batas
+     * atas longgar untuk CI yang lambat. */
+    assert.ok(elapsed >= 4000, `elapsed ${elapsed} ms`);
+    assert.ok(elapsed < 15_000, `elapsed ${elapsed} ms`);
+  });
+
+  it("body daftar stall saat refill -> seed disajikan dalam waktu terbatas", async () => {
+    const rec = rekamanBaru();
+    pasangMock(rec, modeOk({ listJsonStall: true }));
+    revalidateCompanies();
+    const t0 = Date.now();
+    const hasil = await getCompaniesWithSource();
+    const elapsed = Date.now() - t0;
+    assert.equal(hasil.source, "seed");
+    assert.equal(hasil.companies.length, 610);
+    assert.equal(rec.list.length, 1);
+    assert.equal(rec.patch.length, 0);
+    assert.ok(elapsed >= 4000, `elapsed ${elapsed} ms`);
+    assert.ok(elapsed < 15_000, `elapsed ${elapsed} ms`);
+  });
+
+  it("body perusahaan stall -> getCompanyByIdWithSource jatuh ke seed", async () => {
+    const rec = rekamanBaru();
+    pasangMock(rec, modeOk({ byIdJsonStall: true }));
+    revalidateCompanies();
+    const t0 = Date.now();
+    const hasil = await getCompanyByIdWithSource(1);
+    const elapsed = Date.now() - t0;
+    assert.equal(hasil.source, "seed");
+    assert.equal(hasil.company.perusahaan, "Unilever Indonesia");
+    assert.equal(rec.byId.length, 1);
+    assert.ok(elapsed >= 4000, `elapsed ${elapsed} ms`);
+    assert.ok(elapsed < 15_000, `elapsed ${elapsed} ms`);
   });
 });
