@@ -40,6 +40,15 @@ Lokasi yang diutamakan: Bogor, Depok, Cibinong, Citayam, Bojonggede, Citeureup, 
 
 Pengecualian: kalau kanal resmi perusahaan memang mengarah ke platform rekrutmen pihak ketiga (misalnya portal karir yang dikelola vendor), platform itu dicatat apa adanya, dengan catatan bahwa itu platform, bukan pemberi kerja langsung.
 
+## Tautan pemendek sebagai kanal melamar
+
+Tautan pemendek (misalnya bit.ly) dan tautan yang dibungkus pemendek tetap DITOLAK sebagai bukti — aturan di atas tidak berubah. Tetapi sebagai kanal melamar, tautan pemendek BOLEH dicantumkan di kolom kanal (`kontak_lain`, atau `wa_hrd` bila itu tautan WhatsApp yang dipendekkan), dengan dua syarat yang keduanya wajib dipenuhi:
+
+1. **Tautan pemendek itu sendiri berasal dari sumber resmi perusahaan**: tercantum di situs resmi perusahaan, portal karir resminya, atau akun resmi perusahaan. Tautan pemendek yang hanya beredar di postingan pihak ketiga, job board, atau agregator tidak boleh dicantumkan.
+2. **Sumbernya ditulis di `catatan`**: di mana tepatnya tautan itu ditemukan (misalnya "formulir dari poster lowongan di akun Instagram resmi perusahaan"). Tanpa catatan sumber, tautan pemendek tidak boleh masuk kolom kanal.
+
+Alasannya: banyak perusahaan resmi memang membagikan formulir lamarannya lewat tautan pemendek, dan menolak semuanya berarti menghilangkan kanal melamar yang sah. Tetapi tujuan akhir tautan pemendek tidak terlihat dari tautannya sendiri, jadi sumber resmi dan catatan sumber adalah satu-satunya pegangan bahwa tautan itu milik perusahaan tersebut. Pengunjung yang membuka kanal bertautan pemendek sebaiknya memeriksa dulu bahwa halaman tujuannya memang milik perusahaan yang dimaksud sebelum mengisi data apa pun.
+
 ## Standar verifikasi
 
 Satu baris disebut "terverifikasi" bila statusnya ditentukan dari bukti
@@ -112,7 +121,7 @@ investigasinya.
 | `posisi` | Judul posisi yang terlihat di halaman, atau "Tidak ada posisi terlihat", "Tidak bisa dicek", sesuai keadaan saat dicek. |
 | `email_hrd` | Alamat email HRD atau rekrutmen dari situs resmi perusahaan. Beberapa alamat dipisah `;`. Kosong bila tidak ditemukan. |
 | `wa_hrd` | Nomor WhatsApp HRD atau rekrutmen dari sumber resmi. Beberapa nomor dipisah `;`. Kosong bila tidak ditemukan. |
-| `kontak_lain` | Kontak melamar lain dari sumber resmi (misalnya formulir pendaftaran atau akun resmi perusahaan). Kosong bila tidak ada. |
+| `kontak_lain` | Kontak melamar lain dari sumber resmi (misalnya formulir pendaftaran atau akun resmi perusahaan). Tautan pemendek boleh dicantumkan di sini bila memenuhi aturan di seksi "Tautan pemendek sebagai kanal melamar" di atas. Kosong bila tidak ada. |
 | `batas_lamar` | Batas akhir melamar yang tercatat, format `YYYY-MM-DD`; kosong bila tidak ada batas yang tercatat. Batas ini diambil dari tanggal yang tertulis di kanal resmi perusahaan, bukan dari perkiraan. |
 
 ## Aplikasi web

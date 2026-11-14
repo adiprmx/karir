@@ -77,7 +77,7 @@ Data mentah tersedia dalam dua format: [daftar-link-karir.csv](data/daftar-link-
 | Notifikasi Telegram | Dipakai | Lowongan baru + batas lamar 0-3 hari, via cron 01:00 WIB |
 | Batas laju bersama | Dipakai | Redis bila env KV ada, lalu Firestore, lalu memori; satu limiter untuk semua endpoint API |
 | Payment gateway | Tidak dipakai | Tanpa bayar |
-| Akun pengguna | Opsional | Login Firebase (Email/Password + Google) untuk sinkron pelacak; tamu tetap bisa pakai semua fitur |
+| Akun pengguna | Opsional | Login Firebase (Email/Password) untuk sinkron pelacak; tamu tetap bisa pakai semua fitur |
 
 Dokumen: [PRODUCT.md](docs/PRODUCT.md), [DESIGN.md](docs/DESIGN.md), [METODE.md](docs/METODE.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), [API.md](docs/API.md), [SECURITY.md](SECURITY.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md). Usulan perusahaan baru dan koreksi tautan mengikuti aturan di CONTRIBUTING.md.
 
@@ -99,4 +99,4 @@ Buka halaman perusahaan di aplikasi, lalu pakai tombol Laporkan tautan mati. Ata
 
 Versi 2.10.0, 15 November 2026.
 
-Kode dan skrip di repo ini berlisensi MIT, dan data di folder data berlisensi CC BY 4.0.
+Kode dan skrip di repo ini berlisensi MIT (lihat [LICENSE](LICENSE)). Data di folder `data/` berlisensi [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — boleh dipakai ulang dengan atribusi; rincian lisensi dan cara memberi atribusi ada di [data/README.md](data/README.md).

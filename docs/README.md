@@ -7,5 +7,6 @@
 - `PRODUCT.md`: alur pengguna dan arah produk.
 - `DESIGN.md`: bahasa visual aplikasi.
 - `CI.md`: versi Node yang dipin, gerbang CI, dan cara kerja tes asap.
+- `PEMULIHAN.md`: cara memulihkan Firestore dari CSV, regenerasi seed, dan rekonsiliasi CSV–Firestore.
 
 File `app.js`, `companies.json`, `index.html`, dan `styles.css` di folder ini adalah aplikasi statis lama (GitHub Pages). Versi itu sudah tidak live dan sengaja disimpan sebagai versi sebelumnya.

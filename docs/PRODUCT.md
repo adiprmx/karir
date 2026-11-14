@@ -33,6 +33,26 @@ Setiap keputusan dicatat beserta alasannya di CHANGELOG (untuk rilis) atau di do
 
 Tanggal target hanya ditulis setelah pemilik menetapkannya. Pekerjaan yang belum punya tanggal ditulis apa adanya, tanpa tanggal tebakan.
 
+## Tujuan produk (draf — belum disetujui pemilik)
+
+Seksi ini adalah DRAF. Angka target di bawah ini adalah usulan tim, bukan janji yang sudah disetujui pemilik. Jangan mengutip angka-angka ini ke pengunjung sebagai janji sampai pemilik menyetujuinya. Yang sudah pasti adalah cara mengukurnya: setiap tujuan di bawah memakai data yang sudah ada hari ini (CSV, Firestore, atau analitik anonim), tanpa alat ukur baru.
+
+Dasar ukur per 14 November 2026 (tanggal cek terbaru di data): 610 perusahaan, 288 di antaranya berstatus "Ada lowongan", 183 baris punya kanal melamar lain (email HRD 125, WhatsApp HRD 13, kontak lain 162 — satu baris bisa punya lebih dari satu kanal).
+
+1. **Data lowongan selalu segar.** Usulan target: sekurang-kurangnya 95% perusahaan berstatus "Ada lowongan" sudah dicek ulang dalam 7 hari terakhir. Cara mengukur: hitung dari kolom `tanggal_cek` di CSV per status — tidak butuh analitik. Dasar ukur hari ini: 283 dari 288 (98,3%) sudah dicek dalam 7 hari terakhir. Cron cek ulang harian (01:00 WIB) yang menjaga angka ini; bila angkanya turun, antrean cron atau jadwal cek ulang yang perlu diperiksa, lihat `docs/monitoring-cron.md`.
+2. **Kanal melamar lain makin lengkap.** Usulan target: sekurang-kurangnya 40% baris punya kanal melamar lain (email, WhatsApp, atau kontak lain dari sumber resmi). Cara mengukur: hitung baris yang kolom `email_hrd`, `wa_hrd`, atau `kontak_lain`-nya terisi, dibagi total baris CSV. Dasar ukur hari ini: 183 dari 610 (30,0%). Target ini naik hanya lewat hunting kanal resmi, bukan dengan menebak alamat.
+3. **Pelacak lamaran dipakai pengunjung.** Usulan target: sekurang-kurangnya 10% pengunjung unik dalam 30 hari terakhir menandai minimal satu lamaran. Cara mengukur: ringkasan Pengunjung di panel admin menghitung pengunjung unik yang punya event `tracker_mark` (atau `portal_click` sebagai syarat alternatif) dalam 30 hari terakhir, dari koleksi `analytics_events`. Catatan: pipa analitik belum terverifikasi ujung-ke-ujung (menunggu `ANALYTICS_SALT` di Vercel Production) — angka dasarnya baru bisa dibaca setelah verifikasi itu selesai.
+4. **Pencarian menemukan hasil.** Usulan target: sekurang-kurangnya 90% pencarian di /cari mengembalikan minimal satu hasil. Cara mengukur: event `search` di analitik membawa jumlah hasil (`results`); hitung porsi event dengan `results` lebih dari 0 dalam 30 hari terakhir. Pencarian tanpa hasil adalah sinyal data yang kurang (peran atau wilayah yang belum tercakup), bukan sekadar angka.
+5. **Pengunjung membuka kanal resmi.** Usulan target: sekurang-kurangnya 30% pengunjung unik dalam 30 hari terakhir mengeklik minimal satu tombol portal atau kanal melamar. Cara mengukur: event `portal_click` dan `channel_copy` di analitik, diringkas per pengunjung di panel admin. Ini ukuran paling dekat dengan "Karir berhasil mengantar orang ke kanal resmi" — lebih berarti daripada sekadar jumlah kunjungan.
+
+Retensi membatasi jendela ukur: event analitik mentah disimpan 90 hari (cron pembersihan tiap Senin 02:00 WIB), dan ringkasan admin memakai 30 hari terakhir dengan batas 300 pengunjung. Tujuan di atas diukur dalam jendela 30 hari karena itu yang tersedia di panel admin hari ini.
+
+## Keputusan: mesin pencari hanya mengindeks Bahasa Indonesia
+
+Aplikasi punya dua bahasa antarmuka (Indonesia dan Inggris), tetapi bahasanya dipilih lewat cookie `karir-locale` di URL yang sama — tidak ada URL terpisah per bahasa (tanpa `/en/...`, tanpa subdomain). Karena itu mesin pencari hanya mengindeks versi Bahasa Indonesia, dan tidak ada `hreflang` (tidak ada URL alternatif yang bisa dirujuk).
+
+Ini keputusan sadar, bukan kekurangan yang terlewat. Alasannya: audiens Karir adalah pencari kerja di Indonesia, konten datanya (nama perusahaan, posisi, catatan cek) berbahasa Indonesia, dan satu URL per halaman menjaga skor pencarian tetap pada satu alamat. Bila suatu hari versi Inggris perlu diindeks, yang harus berubah dulu adalah arsitekturnya (URL terpisah per bahasa), bukan sekadar menambah tag `hreflang`.
+
 ## Alur pengguna (satu garis lurus, tanpa cabang buntu)
 
 1. Buka situs. Landing page langsung menjelaskan ini apa: 610 kanal karir resmi yang dicek langsung di browser, 288 di antaranya ada lowongan. Kolom pencarian ada di layar pertama, jadi pengunjung bisa langsung ketik domisili dan posisi tanpa daftar atau login.

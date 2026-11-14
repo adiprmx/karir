@@ -17,6 +17,16 @@ Repo ini menerima usulan perusahaan baru, koreksi tautan, dan hasil cek ulang. S
 - **Lokasi dan posisi harus yang tertulis di halaman.** Kalau halaman tidak mencantumkan lokasi atau posisi, tulis "Tidak tercantum". Kalau kanal tidak bisa dibuka, tulis "Tidak bisa dicek". Jangan menebak.
 - **Jangan mengubah data lama tanpa bukti.** Kalau hasil cek ulang berbeda dengan yang tercatat, sertakan tautan dan tanggal cek ulang di deskripsi pull request.
 
+## Kolom kanal melamar
+
+Selain tautan karir utama (`link_karir`), tiap baris punya tiga kolom kanal melamar lain. Ketiganya hanya diisi dari sumber resmi perusahaan (situs resmi, portal karir resmi, atau akun resmi perusahaan). Kanal yang sumbernya belum jelas tidak dimasukkan — kolomnya dikosongkan sampai sumber resminya ditemukan (aturan lengkapnya di `docs/METODE.md`, seksi "Standar verifikasi").
+
+- **`email_hrd`** — alamat email HRD atau rekrutmen. Bila lebih dari satu, pisahkan dengan `;` (titik koma). Kosong bila tidak ditemukan.
+- **`wa_hrd`** — nomor WhatsApp HRD atau rekrutmen. Bila lebih dari satu, pisahkan dengan `;`. Kosong bila tidak ditemukan.
+- **`kontak_lain`** — kontak melamar lain, misalnya formulir pendaftaran atau akun resmi perusahaan. Tautan pemendek (bit.ly dan sejenisnya) boleh dicantumkan di sini hanya bila tautan itu sendiri berasal dari sumber resmi perusahaan dan sumbernya ditulis di `catatan` (lihat `docs/METODE.md`, seksi "Tautan pemendek sebagai kanal melamar"). Kosong bila tidak ada.
+
+Baris tanpa `link_karir` hanya diterima bila punya kanal lain di salah satu dari tiga kolom ini, atau penjelasannya tertulis di `catatan`. Aturan ini dijaga `scripts/validate.py`.
+
 ## Aturan pengecekan
 
 Pengecekan ulang mengikuti metode yang sama seperti versi pertama:
@@ -48,6 +58,16 @@ npm run build
 ```
 
 Pull request yang gagal build tidak digabungkan sampai diperbaiki. Jangan pernah menulis nilai Firebase asli ke `web/.env.example`; file itu hanya berisi placeholder.
+
+## CI
+
+Setiap pull request ke `main` diperiksa otomatis oleh GitHub Actions (rincinya di `docs/CI.md`):
+
+- **App** (`.github/workflows/app.yml`) — jalan di tiap push dan pull request: install, tes unit (`npm test`), lint (`npm run lint`), build Next.js (`npm run build`), lalu tes asap. Pull request yang gagal di salah satu langkah ini tidak digabungkan.
+- **Validate data** (`.github/workflows/validate.yml`) — jalan bila data, README, atau skrip validasi berubah: `scripts/validate.py` dan `scripts/check-consistency.py` (CSV vs seed dan angka README). Cek live (`--live`) hanya jalan di `main`, bukan di pull request.
+- **Write-back harian** (`.github/workflows/write-back.yml`) — bukan gerbang pull request: workflow terjadwal yang menyalin status dan tanggal cek terbaru dari Firestore kembali ke CSV dan seed tiap hari 03:00 WIB.
+
+CI tidak memakai secret apa pun; build dan tes memakai nilai dummy. Sebelum mengirim pull request, jalankan gerbang yang relevan secara lokal (validasi data dari root repo, tes/lint/build dari folder `web/`) supaya tidak menunggu CI menemukan kesalahan yang bisa ditemukan sendiri.
 
 ## Kode etik
 

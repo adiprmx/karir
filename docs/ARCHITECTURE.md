@@ -33,8 +33,12 @@ per dokumen dengan `updateMask` lengkap. PATCH tanpa `updateMask` dilarang
 karena bisa menghapus field. Dokumen baru dibuat lewat POST create dengan
 ID dokumen sama dengan nomor baris. Skrip impor lama
 (`import_firestore.py`, 9 field) sudah tidak dipakai lagi. Skrip impor di
-repo (`web/scripts/import-firestore.mjs`) masih menulis 9 field dan belum
-diperbarui. Jangan dipakai sampai diperbaiki atau dihapus.
+repo (`web/scripts/import-firestore.mjs`) kini menulis ke-13 field (diperbaiki
+T8, sama seperti impor kanonis), tetapi tetap hanya untuk mengisi koleksi
+kosong: impor ulang menabrak HTTP 409 karena ID dokumen sudah ada, dan
+tulisnya hanya jalan bila aturan Firestore membuka tulis sementara. Untuk
+pemulihan, jalur kanonis `import_canonical.py` yang dipakai (lihat
+`docs/PEMULIHAN.md`).
 
 ## Sumber kebenaran data (keputusan S1, 14 Nov 2026)
 
