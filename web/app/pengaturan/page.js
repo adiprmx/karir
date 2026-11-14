@@ -25,6 +25,7 @@ import { clearOnboarding, useOnboarding } from "@/app/onboarding";
 import { clearAllTrackerStorage, todayLocal, useTracker } from "@/app/tracker";
 import { clearRecentSearch, loadRecentSearch } from "@/app/recent";
 import { Icon, showToast } from "@/app/visual";
+import InstallPrompt from "@/app/install-prompt";
 import { useAuthUser } from "@/app/auth-panel";
 import {
   isAnalyticsOptedOut,
@@ -617,6 +618,10 @@ export default function Pengaturan() {
           </Row>
         )}
       </section>
+
+      {/* MKT-08: kartu pasang aplikasi — hanya tampil bila browser
+        * menawarkan pemasangan dan belum pernah ditutup. */}
+      <InstallPrompt />
 
       <section className="panel" aria-label="Unduh data">
         <p className="label">Unduh dataku</p>

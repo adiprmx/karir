@@ -7,6 +7,7 @@ import seed from "@/data/companies.json";
 import { getLocale, t } from "@/lib/i18n";
 import SiteNav from "./site-nav";
 import AnalyticsTrack from "./analytics-track";
+import { InstallPromptListener } from "./install-prompt";
 import { Icon, ToastHost } from "./visual";
 
 /* Plus Jakarta Sans: huruf rancangan studio Indonesia (Tokotype), dibuat
@@ -114,6 +115,9 @@ export default async function RootLayout({ children }) {
         <Suspense fallback={null}>
           <AnalyticsTrack />
         </Suspense>
+        {/* MKT-08: menangkap event pasang aplikasi sejak awal supaya
+          * kartu di /pengaturan tidak kelewat eventnya. */}
+        <InstallPromptListener />
         {/* tabIndex -1: target skip link dan cadangan fokus pindah
           * rute (AKSES-01); tidak menambah tab stop. */}
         <main id="main" tabIndex={-1}>{children}</main>
