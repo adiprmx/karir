@@ -40,15 +40,18 @@ export function daysSince(value) {
 /* Selisih hari dari sekarang sampai tanggal ISO ("2026-11-15" bila hari
  * ini 2026-11-14 = 1). Negatif bila tanggal sudah lewat, null bila
  * bukan tanggal ISO yang valid. Dipakai halaman detail untuk
- * menandai seberapa dekat batas lamar. */
+ * menandai seberapa dekat batas lamar.
+ * "Hari ini" dihitung dalam WIB (UTC+7), bukan UTC: batas lamar adalah
+ * tanggal kalender Indonesia dan pengunjungnya di Indonesia — memakai
+ * UTC membuat penanda meleset satu hari pada 00:00–07:00 WIB. */
 export function daysUntil(value) {
   const t = Date.parse(`${value}T00:00:00Z`);
   if (Number.isNaN(t)) return null;
-  const now = new Date();
-  const todayUtc = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
+  const nowWib = new Date(Date.now() + 7 * 3600 * 1000);
+  const todayWib = Date.UTC(
+    nowWib.getUTCFullYear(),
+    nowWib.getUTCMonth(),
+    nowWib.getUTCDate(),
   );
-  return Math.round((t - todayUtc) / 86400000);
+  return Math.round((t - todayWib) / 86400000);
 }
