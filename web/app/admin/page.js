@@ -17,6 +17,15 @@
  * Setiap simpan/hapus/impor yang mengubah data perusahaan menaikkan
  * marker (bumpMarker) supaya instance web refill data live.
  */
+
+/* Struktur panel (FE-18): halaman ini hanya merakit seksi-seksi di
+ * web/app/admin/ — admin-gates.js untuk gerbang muat, masuk, dan
+ * bukan admin; admin-quality.js, admin-quota.js, admin-companies.js,
+ * admin-form.js, admin-bulk-check.js, admin-csv.js, admin-audit.js,
+ * admin-reports.js, dan admin-visitors.js untuk seksi-seksi panel;
+ * admin-helpers.js untuk fungsi murni dan konstanta. Semua state,
+ * efek, dan handler tetap di sini supaya perilaku tidak berubah;
+ * komponen seksi hanya menerima props dan menampilkan. */
 import { useEffect, useState } from "react";
 import {
   getIdTokenResult,
@@ -40,515 +49,43 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { STATUS_ORDER } from "@/lib/companies";
-import SupportReports from "./support-reports";
+import {
+  AUDIT_LIMIT,
+  BULK_CHECK_DELAY_MS,
+  EMPTY,
+  MAX_IMPORT,
+  PAGE_SIZE,
+  PROFILES_LIMIT,
+  VISITOR_LIMIT,
+  aggregateAccountActivity,
+  aggregateBotSignals,
+  aggregateVisitors,
+  buildCompanyData,
+  exportCompaniesCsv,
+  exportCompaniesJson,
+  filterAndSortCompanies,
+  hasNoLink,
+  hasNoLokasi,
+  isStale,
+  isValidDateString,
+  parseCsv,
+  todayStr,
+  validateCsvRows,
+} from "./admin-helpers";
+import { LoadingGate, LoginForm, NotAdmin } from "./admin-gates";
+import QualitySection from "./admin-quality";
+import QuotaSection from "./admin-quota";
+import CompaniesPanel from "./admin-companies";
+import CompanyForm from "./admin-form";
+import BulkCheckSection from "./admin-bulk-check";
+import CsvSection from "./admin-csv";
+import AuditSection from "./admin-audit";
+import ReportsSection from "./admin-reports";
+import VisitorsSection from "./admin-visitors";
 
-const EMPTY = {
-  no: "",
-  perusahaan: "",
-  kategori: "",
-  link_karir: "",
-  status: "Tidak ada lowongan",
-  tanggal_cek: "",
-  catatan: "",
-  lokasi: "",
-  posisi: "",
-  batas_lamar: "",
-};
-
-/* Format CSV impor/ekspor panel: 13 kolom, sama dengan kolom repo
- * data/daftar-link-karir.csv (BE-06 + DATA-02 — format 9 kolom yang
- * lama membuat impor menimpa kanal melamar dan batas lamar dengan
- * setDoc tanpa merge). Impor masih menerima format 9 kolom lama
- * (CSV_HEADER_9); baris dari file lama tidak menyentuh kolom kanal
- * dan batas lamar yang sudah tersimpan (setDoc merge). */
-const CSV_HEADER = [
-  "no",
-  "perusahaan",
-  "kategori",
-  "link_karir",
-  "status",
-  "tanggal_cek",
-  "catatan",
-  "lokasi",
-  "posisi",
-  "email_hrd",
-  "wa_hrd",
-  "kontak_lain",
-  "batas_lamar",
-];
-
-const CSV_HEADER_9 = [
-  "no",
-  "perusahaan",
-  "kategori",
-  "link_karir",
-  "status",
-  "tanggal_cek",
-  "catatan",
-  "lokasi",
-  "posisi",
-];
-
-const PAGE_SIZE = 20;
-const MAX_IMPORT = 100;
-const DAY_MS = 24 * 60 * 60 * 1000;
-/* Batas baca seksi admin (FIN-04): diperkecil dari nilai lama
- * (pengunjung 1000 -> 300, profil 500 -> 100, jejak/laporan 20 -> 10)
- * supaya satu kali buka panel tidak menghabiskan ribuan baca. */
-const VISITOR_LIMIT = 300;
-const PROFILES_LIMIT = 100;
-const AUDIT_LIMIT = 10;
-const VISITOR_DAYS = 30;
-/* Kuota baca harian Firestore paket Spark. */
-const QUOTA_DAILY_LIMIT = 50000;
-const TRACKER_ACTIONS = ["Ditandai", "Sudah dilamar", "Dipanggil", "Ditolak"];
-
-/* Hari (YYYY-MM-DD) dari satu catatan pengunjung: pakai kolom `day`
- * bila ada, kalau tidak dari `ts`. `ts` bisa berupa Timestamp
- * Firestore (objek dengan toDate(), atau { seconds }) — String()
- * mentah pada objek itu menghasilkan sampah, jadi dikonversi ke
- * tanggal dulu (ADM-05). Terakhir, potong 10 huruf pertama dari
- * string ISO. */
-function eventDay(e) {
-  if (typeof e.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.day)) {
-    return e.day;
-  }
-  const ts = e.ts;
-  let d = "";
-  if (ts && typeof ts.toDate === "function") {
-    const date = ts.toDate();
-    if (date instanceof Date && !Number.isNaN(date.getTime())) {
-      d = dayString(date);
-    }
-  } else if (ts && typeof ts.seconds === "number") {
-    const date = new Date(ts.seconds * 1000);
-    if (!Number.isNaN(date.getTime())) d = dayString(date);
-  } else {
-    d = String(ts || "").slice(0, 10);
-  }
-  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "";
-}
-
-function dayString(date) {
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${m}-${day}`;
-}
-
-function formatDay(day) {
-  const parts = day.split("-");
-  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  if (Number.isNaN(d.getTime())) return day;
-  return d.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function topCounts(map, keyName) {
-  return [...map.entries()]
-    .map(([key, count]) => ({ [keyName]: key, count }))
-    .sort((a, b) => {
-      if (b.count !== a.count) return b.count - a.count;
-      if (typeof a[keyName] === "number" && typeof b[keyName] === "number")
-        return a[keyName] - b[keyName];
-      return String(a[keyName]).localeCompare(String(b[keyName]), "id");
-    })
-    .slice(0, 10);
-}
-
-/* Ringkasan pengunjung dari catatan mentah. Fungsi murni: tidak
- * menyentuh jaringan atau state, jadi bisa dites langsung. `today`
- * bisa diisi tanggal tertentu supaya tes deterministik. Yang dihitung
- * hanya agregat anonim: alamat pengunjung tidak pernah disimpan atau
- * ditampilkan. */
-export function aggregateVisitors(events, companies, today = new Date()) {
-  const list = Array.isArray(events) ? events : [];
-  const names = new Map(
-    (Array.isArray(companies) ? companies : []).map((c) => [
-      Number(c.no),
-      c.perusahaan ? String(c.perusahaan) : `No. ${c.no}`,
-    ]),
-  );
-
-  const start = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-  start.setDate(start.getDate() - (VISITOR_DAYS - 1));
-  const cutoffStr = dayString(start);
-
-  const perDay = new Map();
-  const paths = new Map();
-  const searches = new Map();
-  const opened = new Map();
-  const portalClicks = new Map();
-  const portalChannels = { portal: 0, wa: 0, email: 0 };
-  const filters = new Map();
-  const noResult = new Map();
-  const tracker = new Map(TRACKER_ACTIONS.map((a) => [a, 0]));
-  const kindsByVisitor = new Map();
-
-  list.forEach((e) => {
-    if (!e || typeof e !== "object") return;
-    const who = e.visitorHash || e.visitor || "";
-    const day = eventDay(e);
-    if (who && day && day >= cutoffStr) {
-      if (!perDay.has(day)) perDay.set(day, new Set());
-      perDay.get(day).add(who);
-    }
-    if (e.type === "pageview" && typeof e.path === "string" && e.path.trim()) {
-      paths.set(e.path, (paths.get(e.path) || 0) + 1);
-    }
-    if (e.type === "search" && typeof e.q === "string" && e.q.trim()) {
-      const q = e.q.trim();
-      searches.set(q, (searches.get(q) || 0) + 1);
-      /* ANALITIK-03: pencarian tanpa hasil (results === 0). Event
-       * search lama tanpa field results diabaikan di sini. */
-      if (e.results === 0) {
-        noResult.set(q, (noResult.get(q) || 0) + 1);
-      }
-    }
-    if (e.type === "detail" && Number.isInteger(e.companyNo)) {
-      opened.set(e.companyNo, (opened.get(e.companyNo) || 0) + 1);
-    }
-    /* ANALITIK-02: klik lamar per perusahaan + per kanal (portal,
-     * wa, email dari field action). */
-    if (e.type === "portal_click") {
-      if (Number.isInteger(e.companyNo)) {
-        portalClicks.set(
-          e.companyNo,
-          (portalClicks.get(e.companyNo) || 0) + 1,
-        );
-      }
-      if (
-        e.action === "portal" ||
-        e.action === "wa" ||
-        e.action === "email"
-      ) {
-        portalChannels[e.action]++;
-      }
-    }
-    /* ANALITIK-02: nilai filter yang dipakai, format kontrak
-     * "kategori:X|status:Y|kota:Z" — tiap token dihitung terpisah. */
-    if (e.type === "filter" && typeof e.filter === "string") {
-      for (const token of e.filter.split("|")) {
-        const value = token.trim();
-        if (value) filters.set(value, (filters.get(value) || 0) + 1);
-      }
-    }
-    if (e.type === "tracker_mark" && TRACKER_ACTIONS.includes(e.action)) {
-      tracker.set(e.action, tracker.get(e.action) + 1);
-    }
-    /* ANALITIK-06: kunci yang sama dengan hitungan harian (perDay)
-     * — visitorHash diutamakan, visitor sebagai cadangan — supaya
-     * penyebut "serius" sepopulasi dengan hitungan harian. Catatan
-     * jujur: visitorHash berganti tiap hari (sengaja, demi
-     * privasi), jadi penyebut ini adalah kunjungan unik harian,
-     * bukan orang unik lintas hari. */
-    const key = e.visitorHash || e.visitor;
-    if (typeof key === "string" && key) {
-      if (!kindsByVisitor.has(key)) kindsByVisitor.set(key, new Set());
-      kindsByVisitor.get(key).add(e.type);
-    }
-  });
-
-  const daily = [];
-  for (let i = VISITOR_DAYS - 1; i >= 0; i--) {
-    const d = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-    );
-    d.setDate(d.getDate() - i);
-    const key = dayString(d);
-    daily.push({
-      day: key,
-      label: formatDay(key),
-      count: perDay.get(key)?.size || 0,
-    });
-  }
-
-  const totalVisitors = kindsByVisitor.size;
-  /* Serius: mencari, membuka detail, lalu menandai lamaran ATAU
-   * mengklik lamar (portal_click sebagai syarat alternatif —
-   * pengunjung yang langsung melamar tanpa menandai tetap serius). */
-  const serious = [...kindsByVisitor.values()].filter(
-    (kinds) =>
-      kinds.has("search") &&
-      kinds.has("detail") &&
-      (kinds.has("tracker_mark") || kinds.has("portal_click")),
-  ).length;
-
-  return {
-    total: list.length,
-    daily,
-    topPaths: topCounts(paths, "path"),
-    topSearches: topCounts(searches, "q"),
-    noResultSearches: topCounts(noResult, "q"),
-    topCompanies: topCounts(opened, "no").map((row) => ({
-      no: row.no,
-      name: names.get(row.no) || `No. ${row.no}`,
-      count: row.count,
-    })),
-    topPortalClicks: topCounts(portalClicks, "no").map((row) => ({
-      no: row.no,
-      name: names.get(row.no) || `No. ${row.no}`,
-      count: row.count,
-    })),
-    portalChannels,
-    topFilters: topCounts(filters, "filter"),
-    tracker: TRACKER_ACTIONS.map((action) => ({
-      action,
-      count: tracker.get(action),
-    })),
-    serious: {
-      count: serious,
-      total: totalVisitors,
-      percent:
-        totalVisitors === 0 ? 0 : Math.round((serious / totalVisitors) * 100),
-    },
-  };
-}
-
-/* Aktivitas akun yang masuk, dipisah dari tamu. Fungsi murni.
- * `events` catatan pengunjung (boleh membawa `uid` bila ada pengguna
- * yang masuk), `profiles` daftar profil akun { id/uid, email,
- * displayName }. Tamu dihitung sebagai agregat tanpa identitas.
- * "Butuh beneran": mencari peran spesifik, membuka detail, lalu
- * menandai lamaran atau mengklik lamar, sama seperti hitungan
- * serius di aggregateVisitors, hanya dipisah akun masuk vs tamu. */
-export function aggregateAccountActivity(events, profiles) {
-  const list = Array.isArray(events) ? events : [];
-  const profileByUid = new Map(
-    (Array.isArray(profiles) ? profiles : []).map((p) => [
-      String(p.id ?? p.uid ?? ""),
-      p,
-    ]),
-  );
-  const byUid = new Map();
-  const guestKinds = new Map();
-  const guests = { searches: 0, opened: 0, tracker: 0, total: 0 };
-
-  list.forEach((e) => {
-    if (!e || typeof e !== "object") return;
-    const isSearch = e.type === "search";
-    const isDetail = e.type === "detail";
-    const isTracker = e.type === "tracker_mark";
-    const uid =
-      typeof e.uid === "string" && e.uid ? e.uid : "";
-    if (uid) {
-      if (!byUid.has(uid)) {
-        byUid.set(uid, {
-          uid,
-          searches: 0,
-          opened: 0,
-          tracker: 0,
-          total: 0,
-          kinds: new Set(),
-        });
-      }
-      const r = byUid.get(uid);
-      r.total++;
-      if (isSearch) r.searches++;
-      if (isDetail) r.opened++;
-      if (isTracker) r.tracker++;
-      r.kinds.add(e.type);
-    } else {
-      const key = e.visitorHash || e.visitor || "tamu";
-      if (!guestKinds.has(key)) guestKinds.set(key, new Set());
-      guestKinds.get(key).add(e.type);
-      guests.total++;
-      if (isSearch) guests.searches++;
-      if (isDetail) guests.opened++;
-      if (isTracker) guests.tracker++;
-    }
-  });
-
-  const isSerious = (kinds) =>
-    kinds.has("search") &&
-    kinds.has("detail") &&
-    (kinds.has("tracker_mark") || kinds.has("portal_click"));
-
-  const accounts = [...byUid.values()]
-    .map((r) => {
-      const p = profileByUid.get(r.uid);
-      return {
-        uid: r.uid,
-        email: p && p.email ? String(p.email) : "",
-        displayName: p && p.displayName ? String(p.displayName) : "",
-        searches: r.searches,
-        opened: r.opened,
-        tracker: r.tracker,
-        total: r.total,
-        serious: isSerious(r.kinds),
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.total - a.total ||
-        a.email.localeCompare(b.email, "id") ||
-        a.uid.localeCompare(b.uid),
-    )
-    .slice(0, 10);
-
-  return {
-    accounts,
-    totalLogin: byUid.size,
-    seriousLogin: [...byUid.values()].filter((r) => isSerious(r.kinds))
-      .length,
-    guests: {
-      ...guests,
-      totalVisitors: guestKinds.size,
-      serious: [...guestKinds.values()].filter((k) => isSerious(k)).length,
-    },
-  };
-}
-
-/* Sinyal kemungkinan bot, hanya untuk dilihat admin, bukan untuk
- * memblokir otomatis. Fungsi murni. `top`: pengunjung paling aktif
- * berdasarkan jumlah aktivitas. `noPageview`: pengunjung dengan
- * minimal 3 aktivitas dan nol pageview. `flagged`: jumlah aktivitas
- * bertanda uaFlag dari server; bila field itu belum ada di data,
- * hasFlagField false dan angkanya 0. */
-export function aggregateBotSignals(events) {
-  const list = Array.isArray(events) ? events : [];
-  const byVisitor = new Map();
-  let flagged = 0;
-  let hasFlagField = false;
-  list.forEach((e) => {
-    if (!e || typeof e !== "object") return;
-    if ("uaFlag" in e) hasFlagField = true;
-    if (e.uaFlag === true) flagged++;
-    const key = e.visitorHash || e.visitor || "";
-    if (!key) return;
-    if (!byVisitor.has(key)) {
-      byVisitor.set(key, { key, count: 0, pageviews: 0 });
-    }
-    const r = byVisitor.get(key);
-    r.count++;
-    if (e.type === "pageview") r.pageviews++;
-  });
-  const all = [...byVisitor.values()];
-  return {
-    top: [...all]
-      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
-      .slice(0, 10),
-    noPageview: all
-      .filter((r) => r.count >= 3 && r.pageviews === 0)
-      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
-      .slice(0, 10),
-    noPageviewTotal: all.filter((r) => r.count >= 3 && r.pageviews === 0)
-      .length,
-    flagged,
-    hasFlagField,
-  };
-}
-
-function todayStr() {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
-function parseDate(value) {
-  if (!value) return null;
-  const parts = String(value).trim().split("-");
-  if (parts.length !== 3) return null;
-  const t = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  return Number.isNaN(t.getTime()) ? null : t;
-}
-
-/* Validasi tanggal kalender yang ketat: format YYYY-MM-DD dan tanggal
- * yang benar-benar ada. Konstruktor Date JavaScript diam-diam
- * menggeser tanggal yang tidak ada (2026-02-30 menjadi 2 Maret),
- * jadi komponen hasil parse wajib cocok lagi dengan masukannya.
- * Dipakai untuk batas_lamar (BE-06) di form dan impor CSV. */
-function isValidDateString(value) {
-  const s = String(value || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const [y, m, d] = s.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
-}
-
-function isStale(c) {
-  const t = parseDate(c.tanggal_cek);
-  if (!t) return true;
-  return Date.now() - t.getTime() > 30 * DAY_MS;
-}
-
-function hasNoLink(c) {
-  return !(c.link_karir || "").trim();
-}
-
-function hasNoLokasi(c) {
-  return !(c.lokasi || "").trim();
-}
-
-/* Baca teks CSV jadi baris-baris sel, menghormati tanda kutip ganda
- * (termasuk koma dan baris baru di dalam kutipan). */
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let cell = "";
-  let inQuotes = false;
-  const clean = String(text).replace(/^\uFEFF/, "");
-  for (let i = 0; i < clean.length; i++) {
-    const ch = clean[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (clean[i + 1] === '"') {
-          cell += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        cell += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      row.push(cell);
-      cell = "";
-    } else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && clean[i + 1] === "\n") i++;
-      row.push(cell);
-      cell = "";
-      rows.push(row);
-      row = [];
-    } else {
-      cell += ch;
-    }
-  }
-  if (cell !== "" || row.length > 0) {
-    row.push(cell);
-    rows.push(row);
-  }
-  return rows.filter((r) => !(r.length === 1 && r[0].trim() === ""));
-}
-
-function csvCell(value) {
-  const s = value == null ? "" : String(value);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-function formatTime(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso || "");
-  return d.toLocaleString("id-ID", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+/* Tiga agregasi pengunjung tetap diekspor dari halaman ini (FE-18),
+ * supaya permukaan modul tidak berubah bagi pengimpor yang ada. */
+export { aggregateVisitors, aggregateAccountActivity, aggregateBotSignals };
 
 export default function Admin() {
   const [user, setUser] = useState(null);
@@ -852,31 +389,6 @@ export default function Admin() {
     setLinkCheck(null);
   }
 
-  /* Data lengkap 13 field untuk simpan. Form tidak menampilkan kolom
-   * kanal (email_hrd, wa_hrd, kontak_lain) — nilainya diambil dari
-   * dokumen yang sedang diedit supaya simpan tidak menghapusnya
-   * (setDoc tanpa merge menimpa seluruh dokumen; sebelum perbaikan
-   * ini tiap simpan dari panel menghapus kanal melamar dan batas
-   * lamar perusahaan itu dari Firestore). Perusahaan baru mendapat
-   * kanal kosong. */
-  function buildData() {
-    return {
-      no: Number(form.no),
-      perusahaan: form.perusahaan.trim(),
-      kategori: form.kategori.trim(),
-      link_karir: form.link_karir.trim(),
-      status: form.status,
-      tanggal_cek: form.tanggal_cek.trim(),
-      catatan: form.catatan.trim(),
-      lokasi: form.lokasi.trim(),
-      posisi: form.posisi.trim(),
-      email_hrd: (selected && selected.email_hrd) || "",
-      wa_hrd: (selected && selected.wa_hrd) || "",
-      kontak_lain: (selected && selected.kontak_lain) || "",
-      batas_lamar: form.batas_lamar.trim(),
-    };
-  }
-
   async function save(e) {
     e.preventDefault();
     setSaving(true);
@@ -905,7 +417,7 @@ export default function Admin() {
       return;
     }
     try {
-      const data = buildData();
+      const data = buildCompanyData(form, selected);
       /* merge: true sebagai jaring pengaman — field yang tidak ada di
        * data (mis. field baru yang ditambahkan belakangan) tidak ikut
        * terhapus saat simpan. */
@@ -998,11 +510,6 @@ export default function Admin() {
     setCheckingLink(false);
   }
 
-  /* Jeda antar pemeriksaan massal. Batas di server: 10 permintaan per
-   * 60 detik per alamat IP. Jeda 6,5 detik menjaga laju di bawah
-   * batas itu, berapa pun jumlah perusahaan yang diperiksa. */
-  const BULK_CHECK_DELAY_MS = 6500;
-
   async function checkBulkTargets() {
     const targets = companies
       .filter((c) => c.status === "Ada lowongan")
@@ -1092,90 +599,11 @@ export default function Admin() {
     reader.onload = () => {
       try {
         const rows = parseCsv(String(reader.result || ""));
-        if (rows.length === 0) {
-          setCsvError("File kosong.");
+        const { valid, rejected, error } = validateCsvRows(rows);
+        if (error) {
+          setCsvError(error);
           return;
         }
-        const header = rows[0].map((h) => h.trim());
-        const isFullHeader =
-          header.length === CSV_HEADER.length &&
-          CSV_HEADER.every((h, i) => header[i] === h);
-        const isLegacyHeader =
-          header.length === CSV_HEADER_9.length &&
-          CSV_HEADER_9.every((h, i) => header[i] === h);
-        if (!isFullHeader && !isLegacyHeader) {
-          setCsvError(
-            "Baris pertama harus berisi 13 kolom (no, perusahaan, kategori, link_karir, status, tanggal_cek, catatan, lokasi, posisi, email_hrd, wa_hrd, kontak_lain, batas_lamar) atau 9 kolom lama tanpa 4 kolom terakhir.",
-          );
-          return;
-        }
-        const full = isFullHeader;
-        const width = full ? CSV_HEADER.length : CSV_HEADER_9.length;
-        const valid = [];
-        const rejected = [];
-        rows.slice(1).forEach((cells, idx) => {
-          const lineNo = idx + 2;
-          if (cells.length !== width) {
-            rejected.push({
-              line: lineNo,
-              reason: `jumlah kolom ${cells.length}, harus ${width}.`,
-            });
-            return;
-          }
-          const [noRaw, perusahaan, kategori, link_karir, status, tanggal_cek, catatan, lokasi, posisi] =
-            cells.slice(0, 9).map((c) => c.trim());
-          const no = Number(noRaw);
-          if (!noRaw || !Number.isInteger(no) || no <= 0) {
-            rejected.push({ line: lineNo, reason: "nomor tidak valid." });
-            return;
-          }
-          if (!perusahaan) {
-            rejected.push({ line: lineNo, reason: "nama perusahaan kosong." });
-            return;
-          }
-          if (perusahaan.length >= 200) {
-            rejected.push({
-              line: lineNo,
-              reason: "nama perusahaan terlalu panjang.",
-            });
-            return;
-          }
-          if (!STATUS_ORDER.includes(status)) {
-            rejected.push({
-              line: lineNo,
-              reason: `status "${status}" tidak dikenal.`,
-            });
-            return;
-          }
-          const row = {
-            no,
-            perusahaan,
-            kategori,
-            link_karir,
-            status,
-            tanggal_cek,
-            catatan,
-            lokasi,
-            posisi,
-          };
-          if (full) {
-            const [email_hrd, wa_hrd, kontak_lain, batas_lamar] = cells
-              .slice(9, 13)
-              .map((c) => c.trim());
-            if (batas_lamar && !isValidDateString(batas_lamar)) {
-              rejected.push({
-                line: lineNo,
-                reason: `batas_lamar "${batas_lamar}" bukan tanggal YYYY-MM-DD yang valid.`,
-              });
-              return;
-            }
-            row.email_hrd = email_hrd;
-            row.wa_hrd = wa_hrd;
-            row.kontak_lain = kontak_lain;
-            row.batas_lamar = batas_lamar;
-          }
-          valid.push(row);
-        });
         setCsvValid(valid);
         setCsvRejected(rejected);
       } catch {
@@ -1257,109 +685,28 @@ export default function Admin() {
     setImporting(false);
   }
 
-  function downloadFile(name, content, type) {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
   function exportCsv() {
-    const lines = [CSV_HEADER.join(",")];
-    companies.forEach((c) => {
-      lines.push(
-        CSV_HEADER.map((k) => csvCell(k === "no" ? c.no : c[k] || "")).join(
-          ",",
-        ),
-      );
-    });
-    downloadFile(
-      `karir-perusahaan-${todayStr()}.csv`,
-      lines.join("\n"),
-      "text/csv;charset=utf-8",
-    );
+    exportCompaniesCsv(companies);
   }
 
   function exportJson() {
-    downloadFile(
-      `karir-perusahaan-${todayStr()}.json`,
-      JSON.stringify(companies, null, 2),
-      "application/json;charset=utf-8",
-    );
+    exportCompaniesJson(companies);
   }
 
   if (!authChecked || (user && isAdmin === null)) {
-    return (
-      <div className="wrap">
-        <div className="state">
-          <strong>Memuat…</strong>
-        </div>
-      </div>
-    );
+    return <LoadingGate />;
   }
 
   if (!user) {
     return (
-      <div className="wrap">
-        <div className="page-head">
-          <h1>Admin</h1>
-          <p className="lede">
-            Masuk dengan akun admin yang dibuat di Firebase Console.
-          </p>
-        </div>
-        <form
-          className="filters"
-          style={{ maxWidth: 360 }}
-          onSubmit={handleLogin}
-        >
-          <fieldset>
-            <legend>Email</legend>
-            {/* AKSES-06: label eksplisit sr-only pada semua kontrol
-              * halaman ini — legend memberi konteks, label memberi
-              * nama aksesibel yang pasti (pola yang sama dengan
-              * panel akun). */}
-            <label className="sr-only" htmlFor="admin-login-email">
-              Email
-            </label>
-            <input
-              id="admin-login-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="username"
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Kata sandi</legend>
-            <label className="sr-only" htmlFor="admin-login-password">
-              Kata sandi
-            </label>
-            <input
-              id="admin-login-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </fieldset>
-          {/* AKSES-05: error masuk diumumkan sebagai alert. */}
-          {loginError && (
-            <p className="notice" role="alert">
-              {loginError}
-            </p>
-          )}
-          <button className="btn" type="submit">
-            Masuk
-          </button>
-        </form>
-      </div>
+      <LoginForm
+        email={email}
+        password={password}
+        loginError={loginError}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onSubmit={handleLogin}
+      />
     );
   }
 
@@ -1368,23 +715,10 @@ export default function Admin() {
    * akun seperti ini, jadi pesan ini hanya lapisan tampilan. */
   if (!isAdmin) {
     return (
-      <div className="wrap">
-        <div className="page-head">
-          <h1>Admin</h1>
-          <p className="lede">
-            {adminCheckError
-              ? "Akses akun belum bisa diperiksa. Coba muat ulang halaman ini."
-              : "Akun ini bukan akun admin, jadi halaman ini tidak bisa dibuka. Masuk dengan akun admin untuk mengelola data Karir."}
-          </p>
-        </div>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => signOut(auth)}
-        >
-          Keluar
-        </button>
-      </div>
+      <NotAdmin
+        adminCheckError={adminCheckError}
+        onSignOut={() => signOut(auth)}
+      />
     );
   }
 
@@ -1401,20 +735,12 @@ export default function Admin() {
   );
   const botSignals = aggregateBotSignals(visitorEvents);
 
-  let shown = companies.filter((c) => {
-    const q = filter.trim().toLowerCase();
-    if (q && !`${c.perusahaan} ${c.no}`.toLowerCase().includes(q)) return false;
-    if (statusFilter && c.status !== statusFilter) return false;
-    if (qualityFilter === "noLink" && !hasNoLink(c)) return false;
-    if (qualityFilter === "noLokasi" && !hasNoLokasi(c)) return false;
-    if (qualityFilter === "stale" && !isStale(c)) return false;
-    return true;
+  const shown = filterAndSortCompanies(companies, {
+    filter,
+    statusFilter,
+    sortBy,
+    qualityFilter,
   });
-  shown = [...shown].sort((a, b) =>
-    sortBy === "nama"
-      ? a.perusahaan.localeCompare(b.perusahaan, "id")
-      : a.no - b.no,
-  );
 
   const totalPages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -1457,1020 +783,102 @@ export default function Admin() {
         </p>
       </div>
 
-      <div className="filters">
-        <p className="section-label">Kualitas data</p>
-        <p className="section-note">
-          Ketuk salah satu angka untuk melihat baris yang bermasalah. Ketuk
-          lagi untuk kembali ke semua data.
-        </p>
-        <div className="chip-row">
-          {qualityButtons.map((b) => (
-            <button
-              key={b.key}
-              type="button"
-              className="btn ghost"
-              aria-pressed={qualityFilter === b.key}
-              onClick={() =>
-                setQualityFilter(qualityFilter === b.key ? null : b.key)
-              }
-              style={
-                qualityFilter === b.key
-                  ? { background: "#0a0a0a", color: "#fff" }
-                  : undefined
-              }
-            >
-              <span className="num">{b.count}</span> {b.label}
-            </button>
-          ))}
-        </div>
-        {qualityFilter && (
-          <p className="notice">
-            Menampilkan baris yang bermasalah saja. Ketuk angka yang sama
-            untuk melihat semua data lagi.
-          </p>
-        )}
-      </div>
-
-      <div className="filters" style={{ marginTop: 24 }}>
-        <p className="section-label">Pemakaian kuota baca</p>
-        <p className="section-note">
-          Estimasi baca Firestore hari ini (paket Spark: 50.000 baca per
-          hari, reset pukul 15:00 WIB). Dihitung dari pencacah refill di
-          marker kesegaran; baca marker dan baca detail tidak ikut
-          terhitung, jadi angka sebenarnya sedikit lebih besar.
-        </p>
-        {quota === null && (
-          <p className="notice">Memuat data pemakaian…</p>
-        )}
-        {quota === "missing" && (
-          <p className="notice">
-            Belum ada data pemakaian (marker belum dibuat).
-          </p>
-        )}
-        {quota === "error" && (
-          <p className="notice">
-            Data pemakaian belum bisa dibaca. Periksa aturan Firestore
-            untuk dokumen meta/lastChange.
-          </p>
-        )}
-        {quota && typeof quota === "object" && (
-          <>
-            <div className="stat-row">
-              <span className="stat-num num">
-                {(Number(quota.readsEstimate) || 0).toLocaleString("id-ID")}{" "}
-                dari {QUOTA_DAILY_LIMIT.toLocaleString("id-ID")}
-              </span>
-              <span className="stat-label">
-                baca hari ini (
-                {Math.round(
-                  ((Number(quota.readsEstimate) || 0) / QUOTA_DAILY_LIMIT) *
-                    100,
-                )}
-                % kuota, {Number(quota.refillsToday) || 0} kali refill
-                daftar).
-              </span>
-            </div>
-            <p className="section-note">
-              Revisi data: {Number(quota.rev) || 0} · Terakhir berubah:{" "}
-              {quota.updatedAt
-                ? formatTime(quota.updatedAt)
-                : "tidak tercatat"}
-              .
-            </p>
-          </>
-        )}
-      </div>
+      <QualitySection
+        qualityButtons={qualityButtons}
+        qualityFilter={qualityFilter}
+        onToggle={(key) =>
+          setQualityFilter(qualityFilter === key ? null : key)
+        }
+      />
+      <QuotaSection quota={quota} />
 
       <div className="cari-grid">
-        <div>
-          <div className="filters" style={{ position: "static" }}>
-            <fieldset>
-              <legend>Cari perusahaan</legend>
-              <label className="sr-only" htmlFor="admin-filter">
-                Cari perusahaan
-              </label>
-              <input
-                id="admin-filter"
-                type="text"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Nama atau nomor"
-                autoComplete="off"
-              />
-            </fieldset>
-            <fieldset>
-              <legend>Status</legend>
-              <label className="sr-only" htmlFor="admin-status-filter">
-                Status
-              </label>
-              <select
-                id="admin-status-filter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="">Semua status</option>
-                {STATUS_ORDER.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </fieldset>
-            <fieldset>
-              <legend>Urutan</legend>
-              <label className="sr-only" htmlFor="admin-sort">
-                Urutan
-              </label>
-              <select
-                id="admin-sort"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-              >
-                <option value="no">Nomor</option>
-                <option value="nama">Nama A sampai Z</option>
-              </select>
-            </fieldset>
-            <button className="btn" type="button" onClick={addNew}>
-              Tambah perusahaan
-            </button>
-          </div>
-
-          {loadError && (
-            <p className="notice" role="alert">
-              {loadError}
-            </p>
-          )}
-          {loadingCompanies && (
-            <div className="state" role="status">
-              <strong>Memuat data perusahaan…</strong>
-            </div>
-          )}
-
-          <table className="results-table">
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>Perusahaan</th>
-                <th>Status</th>
-                <th>Tanggal cek</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((c) => (
-                <tr
-                  key={c.no}
-                  onClick={() => pick(c)}
-                  style={{
-                    cursor: "pointer",
-                    background:
-                      selected && Number(selected.no) === Number(c.no)
-                        ? "#f4f4f5"
-                        : undefined,
-                  }}
-                >
-                  <td data-label="No">{c.no}</td>
-                  <td data-label="Perusahaan">{c.perusahaan}</td>
-                  <td data-label="Status">{c.status}</td>
-                  <td data-label="Tanggal cek">{c.tanggal_cek || "-"}</td>
-                </tr>
-              ))}
-              {pageRows.length === 0 && !loadingCompanies && (
-                <tr>
-                  <td colSpan={4}>Tidak ada perusahaan yang cocok.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          <div className="filter-actions" style={{ marginTop: 16 }}>
-            <button
-              className="btn ghost"
-              type="button"
-              disabled={safePage <= 1}
-              onClick={() => setPage(safePage - 1)}
-            >
-              Sebelumnya
-            </button>
-            <span className="result-count">
-              Halaman {safePage} dari {totalPages} · {shown.length} perusahaan
-            </span>
-            <button
-              className="btn ghost"
-              type="button"
-              disabled={safePage >= totalPages}
-              onClick={() => setPage(safePage + 1)}
-            >
-              Berikutnya
-            </button>
-          </div>
-        </div>
-
-        <form className="filters" style={{ position: "static" }} onSubmit={save}>
-          <fieldset>
-            <legend>Nomor</legend>
-            <label className="sr-only" htmlFor="admin-no">
-              Nomor
-            </label>
-            <input
-              id="admin-no"
-              type="number"
-              value={form.no}
-              onChange={(e) => setForm({ ...form, no: e.target.value })}
-              required
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Perusahaan</legend>
-            <label className="sr-only" htmlFor="admin-perusahaan">
-              Perusahaan
-            </label>
-            <input
-              id="admin-perusahaan"
-              type="text"
-              value={form.perusahaan}
-              onChange={(e) => setForm({ ...form, perusahaan: e.target.value })}
-              required
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Kategori</legend>
-            <label className="sr-only" htmlFor="admin-kategori">
-              Kategori
-            </label>
-            <input
-              id="admin-kategori"
-              type="text"
-              value={form.kategori}
-              onChange={(e) => setForm({ ...form, kategori: e.target.value })}
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Link karir</legend>
-            <label className="sr-only" htmlFor="admin-link">
-              Link karir
-            </label>
-            <input
-              id="admin-link"
-              type="url"
-              value={form.link_karir}
-              onChange={(e) => setForm({ ...form, link_karir: e.target.value })}
-              placeholder="https://…"
-            />
-          </fieldset>
-          <div className="filter-actions">
-            <button
-              className="btn ghost"
-              type="button"
-              onClick={checkLink}
-              disabled={checkingLink || !Number(form.no)}
-            >
-              {checkingLink ? "Memeriksa…" : "Cek tautan"}
-            </button>
-            {linkCheck && linkCheck.ok && (
-              <button
-                className="btn ghost"
-                type="button"
-                onClick={() => setForm({ ...form, tanggal_cek: todayStr() })}
-              >
-                Perbarui tanggal cek ke hari ini
-              </button>
-            )}
-          </div>
-          {linkCheck && (
-            <p className="notice" role="status">
-              {linkCheck.ok
-                ? `Tautan bisa dibuka, kode ${linkCheck.status}.`
-                : `Tautan tidak bisa dibuka: ${linkCheck.detail || linkCheck.error || "tidak diketahui."}`}
-            </p>
-          )}
-          <fieldset>
-            <legend>Status</legend>
-            <label className="sr-only" htmlFor="admin-form-status">
-              Status
-            </label>
-            <select
-              id="admin-form-status"
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-            >
-              {STATUS_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </fieldset>
-          <fieldset>
-            <legend>Tanggal cek (YYYY-MM-DD)</legend>
-            <label className="sr-only" htmlFor="admin-tanggal">
-              Tanggal cek
-            </label>
-            <input
-              id="admin-tanggal"
-              type="text"
-              value={form.tanggal_cek}
-              onChange={(e) => setForm({ ...form, tanggal_cek: e.target.value })}
-              placeholder="2026-11-06"
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Batas lamar (YYYY-MM-DD)</legend>
-            <label className="sr-only" htmlFor="admin-batas">
-              Batas lamar
-            </label>
-            <input
-              id="admin-batas"
-              type="date"
-              value={form.batas_lamar}
-              onChange={(e) => setForm({ ...form, batas_lamar: e.target.value })}
-            />
-            <p className="section-note">
-              Tanggal terakhir melamar, bila ada. Kosongkan bila tidak
-              ada batas.
-            </p>
-          </fieldset>
-          <fieldset>
-            <legend>Lokasi</legend>
-            <label className="sr-only" htmlFor="admin-lokasi">
-              Lokasi
-            </label>
-            <input
-              id="admin-lokasi"
-              type="text"
-              value={form.lokasi}
-              onChange={(e) => setForm({ ...form, lokasi: e.target.value })}
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Posisi tercatat</legend>
-            <label className="sr-only" htmlFor="admin-posisi">
-              Posisi tercatat
-            </label>
-            <input
-              id="admin-posisi"
-              type="text"
-              value={form.posisi}
-              onChange={(e) => setForm({ ...form, posisi: e.target.value })}
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Catatan</legend>
-            <label className="sr-only" htmlFor="admin-catatan">
-              Catatan
-            </label>
-            <input
-              id="admin-catatan"
-              type="text"
-              value={form.catatan}
-              onChange={(e) => setForm({ ...form, catatan: e.target.value })}
-            />
-          </fieldset>
-          {message && (
-            <p className="notice" role="status">
-              {message}
-            </p>
-          )}
-          <div className="filter-actions">
-            <button className="btn" type="submit" disabled={saving}>
-              {saving ? "Menyimpan…" : "Simpan"}
-            </button>
-            {selected && (
-              <button
-                className="btn ghost"
-                type="button"
-                onClick={remove}
-                disabled={saving}
-              >
-                Hapus
-              </button>
-            )}
-          </div>
-        </form>
+        <CompaniesPanel
+          filter={filter}
+          statusFilter={statusFilter}
+          sortBy={sortBy}
+          onFilterChange={setFilter}
+          onStatusFilterChange={setStatusFilter}
+          onSortByChange={setSortBy}
+          onAddNew={addNew}
+          loadError={loadError}
+          loadingCompanies={loadingCompanies}
+          pageRows={pageRows}
+          selected={selected}
+          onPick={pick}
+          safePage={safePage}
+          totalPages={totalPages}
+          shownCount={shown.length}
+          onPrevPage={() => setPage(safePage - 1)}
+          onNextPage={() => setPage(safePage + 1)}
+        />
+        <CompanyForm
+          form={form}
+          onField={(field, value) => setForm({ ...form, [field]: value })}
+          selected={selected}
+          message={message}
+          saving={saving}
+          linkCheck={linkCheck}
+          checkingLink={checkingLink}
+          onSave={save}
+          onRemove={remove}
+          onCheckLink={checkLink}
+          onMarkCheckedToday={() =>
+            setForm({ ...form, tanggal_cek: todayStr() })
+          }
+        />
       </div>
 
-      <div className="filters" style={{ marginTop: 24 }}>
-        <p className="section-label">Cek massal tautan perusahaan yang ada lowongan</p>
-        <p className="section-note">
-          Memeriksa satu per satu tautan {targetCompanies.length} perusahaan
-          yang ada lowongan. Tiap pemeriksaan dijeda beberapa
-          detik supaya tidak melewati batas server. Tombol tidak bisa
-          ditekan selama pemeriksaan berjalan.
-        </p>
-        <div className="filter-actions">
-          <button
-            className="btn"
-            type="button"
-            onClick={checkBulkTargets}
-            disabled={bulkRunning || targetCompanies.length === 0}
-          >
-            {bulkRunning
-              ? `Memeriksa ${bulkDone} dari ${targetCompanies.length}…`
-              : `Cek ${targetCompanies.length} tautan target`}
-          </button>
-        </div>
-        {bulkDone > 0 && (
-          <p className="notice">
-            {bulkRunning
-              ? `${bulkDone} dari ${targetCompanies.length} sudah diperiksa.`
-              : `Selesai: ${bulkResults.filter((r) => r.ok).length} bisa dibuka, ${bulkResults.filter((r) => !r.ok).length} gagal, dari ${targetCompanies.length} tautan.`}
-          </p>
-        )}
-        {bulkResults.length > 0 && (
-          <ul className="recheck-list">
-            {bulkResults.map((r) => (
-              <li key={r.no}>
-                {formatTime(r.checkedAt)} · {r.no}. {r.perusahaan} ·{" "}
-                {r.ok
-                  ? `bisa dibuka, kode ${r.status}`
-                  : `gagal: ${r.error}`}
-              </li>
-            ))}
-          </ul>
-        )}
-        {bulkChanges > 0 && (
-          <p className="notice" role="status">
-            Perubahan dicatat di umpan Yang berubah.
-          </p>
-        )}
-      </div>
-
-      <div className="filters" style={{ marginTop: 24 }}>
-        <p className="section-label">Impor dan unduh data</p>
-        <p className="section-note">
-          Impor menerima file CSV 13 kolom (no, perusahaan, kategori,
-          link_karir, status, tanggal_cek, catatan, lokasi, posisi,
-          email_hrd, wa_hrd, kontak_lain, batas_lamar) — sama dengan
-          format CSV repo — atau 9 kolom lama tanpa 4 kolom terakhir.
-          Maksimal 100 baris per impor.
-        </p>
-        <fieldset>
-          <legend>Pilih file CSV</legend>
-          <label className="sr-only" htmlFor="admin-csv">
-            Pilih file CSV
-          </label>
-          <input
-            id="admin-csv"
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => handleCsvFile(e.target.files?.[0] || null)}
-          />
-        </fieldset>
-        {csvFileName && (
-          <p className="notice" role="status">
-            File: {csvFileName}
-          </p>
-        )}
-        {csvError && (
-          <p className="notice" role="alert">
-            {csvError}
-          </p>
-        )}
-        {(csvValid.length > 0 || csvRejected.length > 0) && (
-          <p className="notice" role="status">
-            {csvValid.length} baris valid, {csvRejected.length} baris
-            ditolak
-            {csvRejected.length > 0
-              ? `. Pertama yang ditolak: baris ${csvRejected[0].line}, ${csvRejected[0].reason}`
-              : "."}
-          </p>
-        )}
-        {csvValid.length > MAX_IMPORT && (
-          <p className="notice" role="alert">
-            Terlalu banyak: {csvValid.length} baris valid. Maksimal{" "}
-            {MAX_IMPORT} baris per impor. Bagi file jadi beberapa bagian.
-          </p>
-        )}
-        <div className="filter-actions">
-          <button
-            className="btn"
-            type="button"
-            onClick={importCsv}
-            disabled={
-              importing ||
-              csvValid.length === 0 ||
-              csvValid.length > MAX_IMPORT
-            }
-          >
-            {importing ? "Mengimpor…" : `Impor ${csvValid.length} baris`}
-          </button>
-          <button className="btn ghost" type="button" onClick={exportCsv}>
-            Unduh CSV
-          </button>
-          <button className="btn ghost" type="button" onClick={exportJson}>
-            Unduh JSON
-          </button>
-        </div>
-        {csvMessage && <p className="notice">{csvMessage}</p>}
-      </div>
-
-      <div className="filters" style={{ marginTop: 24 }}>
-        <p className="section-label">Jejak perubahan</p>
-        <p className="section-note">
-          10 perubahan terakhir yang dicatat panel ini. Dimuat hanya bila
-          dibuka, supaya hemat kuota baca.
-        </p>
-        {!auditOpen ? (
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => {
-              setAuditOpen(true);
-              loadAudit();
-            }}
-          >
-            Tampilkan jejak perubahan
-          </button>
-        ) : (
-          <>
-            {auditError && <p className="notice">{auditError}</p>}
-            {auditEntries.length === 0 && !auditError ? (
-              <p className="notice">Belum ada perubahan yang tercatat.</p>
-            ) : (
-              <ul className="recheck-list">
-                {auditEntries.map((a) => (
-                  <li key={a.id}>
-                    {formatTime(a.at)} · {a.by} ·{" "}
-                    {a.action === "delete" ? "Hapus" : "Simpan"} · {a.no}.{" "}
-                    {a.perusahaan}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </div>
-
-      <div className="filters" style={{ marginTop: 24 }}>
-        <p className="section-label">Laporan tautan mati</p>
-        <p className="section-note">
-          Laporan terbaru dari pengunjung yang menemukan tautan karir
-          tidak bisa dibuka. Dimuat hanya bila dibuka, supaya hemat kuota
-          baca.
-        </p>
-        {!reportsOpen ? (
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => {
-              setReportsOpen(true);
-            }}
-          >
-            Tampilkan laporan tautan mati
-          </button>
-        ) : (
-          <SupportReports db={db} />
-        )}
-      </div>
-
-      <div className="filters" style={{ marginTop: 24 }}>
-        <p className="section-label">Pengunjung</p>
-        <p className="section-note">
-          Ringkasan kunjungan 30 hari terakhir. Angka dihitung dari catatan
-          yang masuk, tanpa menyimpan alamat pengunjung. Dimuat hanya bila
-          dibuka, supaya hemat kuota baca.
-        </p>
-        {!visitorsOpen ? (
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => {
-              setVisitorsOpen(true);
-              loadVisitors();
-              loadProfiles();
-            }}
-          >
-            Tampilkan data pengunjung
-          </button>
-        ) : (
-          <>
-        {visitorsError && <p className="notice">{visitorsError}</p>}
-        {loadingVisitors && (
-          <div className="state">
-            <strong>Memuat data pengunjung…</strong>
-          </div>
-        )}
-        {!loadingVisitors &&
-          !visitorsError &&
-          visitorEvents.length === 0 && (
-            <p className="notice">
-              Belum ada data pengunjung. Pencatatan mulai berjalan setelah
-              aturan pengunjung diterbitkan.
-            </p>
-          )}
-        {!loadingVisitors &&
-          !visitorsError &&
-          visitorEvents.length > 0 && (
-            <>
-              <div className="stat-row">
-                <span className="stat-num num">
-                  {visitorSummary.serious.count} dari{" "}
-                  {visitorSummary.serious.total}
-                </span>
-                <span className="stat-label">
-                  kunjungan ({visitorSummary.serious.percent}%) mencari,
-                  membuka detail, lalu menandai lamaran atau mengklik
-                  lamar. Kode pengunjung berubah tiap hari demi privasi,
-                  jadi ini kunjungan unik harian, bukan jumlah orang
-                  yang berbeda.
-                </span>
-              </div>
-
-              <p>
-                <strong>Pengunjung per hari</strong>
-              </p>
-              <table className="results-table">
-                <thead>
-                  <tr>
-                    <th>Hari</th>
-                    <th>Pengunjung</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visitorSummary.daily.map((d) => (
-                    <tr key={d.day}>
-                      <td data-label="Hari">{d.label}</td>
-                      <td data-label="Pengunjung" className="num">
-                        {d.count}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <p>
-                <strong>Halaman paling sering dibuka</strong>
-              </p>
-              {visitorSummary.topPaths.length === 0 ? (
-                <p className="section-note">
-                  Belum ada halaman yang tercatat dibuka.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Halaman</th>
-                      <th>Dibuka</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visitorSummary.topPaths.map((row) => (
-                      <tr key={row.path}>
-                        <td data-label="Halaman">{row.path}</td>
-                        <td data-label="Dibuka" className="num">
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <p>
-                <strong>Kata yang paling sering dicari</strong>
-              </p>
-              {visitorSummary.topSearches.length === 0 ? (
-                <p className="section-note">
-                  Belum ada pencarian yang tercatat.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Kata yang dicari</th>
-                      <th>Dicari</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visitorSummary.topSearches.map((row) => (
-                      <tr key={row.q}>
-                        <td data-label="Kata yang dicari">{row.q}</td>
-                        <td data-label="Dicari" className="num">
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <p>
-                <strong>Pencarian tanpa hasil</strong>
-              </p>
-              <p className="section-note">
-                Kata yang dicari tapi tidak menemukan perusahaan apa pun.
-                Hanya dari event pencarian yang membawa jumlah hasil;
-                event lama tanpa jumlah hasil tidak ikut dihitung.
-              </p>
-              {visitorSummary.noResultSearches.length === 0 ? (
-                <p className="section-note">
-                  Belum ada pencarian tanpa hasil yang tercatat.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Kata yang dicari</th>
-                      <th>Dicari</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visitorSummary.noResultSearches.map((row) => (
-                      <tr key={row.q}>
-                        <td data-label="Kata yang dicari">{row.q}</td>
-                        <td data-label="Dicari" className="num">
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <p>
-                <strong>Perusahaan paling sering dibuka</strong>
-              </p>
-              {visitorSummary.topCompanies.length === 0 ? (
-                <p className="section-note">
-                  Belum ada detail perusahaan yang dibuka.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Perusahaan</th>
-                      <th>Dibuka</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visitorSummary.topCompanies.map((row) => (
-                      <tr key={row.no}>
-                        <td data-label="Perusahaan">
-                          {row.no}. {row.name}
-                        </td>
-                        <td data-label="Dibuka" className="num">
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <p>
-                <strong>Perusahaan paling sering diklik lamar</strong>
-              </p>
-              {visitorSummary.topPortalClicks.length === 0 ? (
-                <p className="section-note">
-                  Belum ada klik lamar yang tercatat.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Perusahaan</th>
-                      <th>Diklik</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visitorSummary.topPortalClicks.map((row) => (
-                      <tr key={row.no}>
-                        <td data-label="Perusahaan">
-                          {row.no}. {row.name}
-                        </td>
-                        <td data-label="Diklik" className="num">
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <p>
-                <strong>Kanal lamar yang diklik</strong>
-              </p>
-              <table className="results-table">
-                <thead>
-                  <tr>
-                    <th>Kanal</th>
-                    <th>Diklik</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td data-label="Kanal">Portal perusahaan</td>
-                    <td data-label="Diklik" className="num">
-                      {visitorSummary.portalChannels.portal}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td data-label="Kanal">WhatsApp</td>
-                    <td data-label="Diklik" className="num">
-                      {visitorSummary.portalChannels.wa}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td data-label="Kanal">Email</td>
-                    <td data-label="Diklik" className="num">
-                      {visitorSummary.portalChannels.email}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <p>
-                <strong>Filter yang paling sering dipakai</strong>
-              </p>
-              {visitorSummary.topFilters.length === 0 ? (
-                <p className="section-note">
-                  Belum ada filter yang tercatat dipakai.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Filter</th>
-                      <th>Dipakai</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visitorSummary.topFilters.map((row) => (
-                      <tr key={row.filter}>
-                        <td data-label="Filter">{row.filter}</td>
-                        <td data-label="Dipakai" className="num">
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <p>
-                <strong>Penanda lamaran</strong>
-              </p>
-              <table className="results-table">
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>Jumlah</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visitorSummary.tracker.map((row) => (
-                    <tr key={row.action}>
-                      <td data-label="Status">{row.action}</td>
-                      <td data-label="Jumlah" className="num">
-                        {row.count}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <p>
-                <strong>Akun paling aktif</strong>
-              </p>
-              <p className="section-note">
-                Akun yang masuk dan paling sering memakai situs. Tamu
-                dihitung terpisah tanpa nama.
-              </p>
-              {profilesError && <p className="notice">{profilesError}</p>}
-              <p className="notice">
-                Yang butuh beneran: {accountActivity.seriousLogin} akun
-                masuk dan {accountActivity.guests.serious} tamu dari{" "}
-                {accountActivity.guests.totalVisitors} tamu, mencari,
-                membuka detail, lalu menandai lamaran atau mengklik
-                lamar.
-              </p>
-              {accountActivity.accounts.length === 0 ? (
-                <p className="section-note">
-                  Belum ada akun yang masuk dan tercatat aktif.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Akun</th>
-                      <th>Pencarian</th>
-                      <th>Dibuka</th>
-                      <th>Ditandai</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {accountActivity.accounts.map((row) => (
-                      <tr key={row.uid}>
-                        <td data-label="Akun">
-                          {row.displayName ? `${row.displayName} · ` : ""}
-                          {row.email ||
-                            `Akun tanpa email tersimpan (${row.uid.slice(0, 8)})`}
-                        </td>
-                        <td data-label="Pencarian" className="num">
-                          {row.searches}
-                        </td>
-                        <td data-label="Dibuka" className="num">
-                          {row.opened}
-                        </td>
-                        <td data-label="Ditandai" className="num">
-                          {row.tracker}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              <p className="section-note">
-                Tamu: {accountActivity.guests.searches} pencarian,{" "}
-                {accountActivity.guests.opened} detail dibuka,{" "}
-                {accountActivity.guests.tracker} lamaran ditandai, dari{" "}
-                {accountActivity.guests.total} aktivitas.
-              </p>
-
-              <p>
-                <strong>Kemungkinan bot</strong>
-              </p>
-              <p className="section-note">
-                Hanya untuk dilihat. Tidak ada yang diblokir otomatis
-                dari sini.
-              </p>
-              <p className="notice">
-                Aktivitas bertanda otomatis: {botSignals.flagged}.
-                {!botSignals.hasFlagField &&
-                  " Penanda dari server belum ada di data ini, jadi angkanya 0."}
-              </p>
-              <p>
-                <strong>Pengunjung paling aktif</strong>
-              </p>
-              {botSignals.top.length === 0 ? (
-                <p className="section-note">
-                  Belum ada aktivitas pengunjung yang tercatat.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Pengunjung</th>
-                      <th>Aktivitas</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {botSignals.top.map((row) => (
-                      <tr key={row.key}>
-                        <td data-label="Pengunjung">
-                          {row.key.slice(0, 12)}
-                        </td>
-                        <td data-label="Aktivitas" className="num">
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              <p>
-                <strong>Tanpa membuka halaman</strong>
-              </p>
-              <p className="section-note">
-                Pengunjung dengan 3 aktivitas atau lebih dan nol halaman
-                yang dibuka: {botSignals.noPageviewTotal}.
-              </p>
-              {botSignals.noPageview.length === 0 ? (
-                <p className="section-note">
-                  Tidak ada pengunjung dengan 3 aktivitas atau lebih tanpa
-                  membuka halaman.
-                </p>
-              ) : (
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Pengunjung</th>
-                      <th>Aktivitas</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {botSignals.noPageview.map((row) => (
-                      <tr key={row.key}>
-                        <td data-label="Pengunjung">
-                          {row.key.slice(0, 12)}
-                        </td>
-                        <td data-label="Aktivitas" className="num">
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </>
-          )}
-        {visitorsCapped && !visitorsError && (
-          <p className="section-note">
-            Angka di atas dihitung dari 300 aktivitas terakhir.
-          </p>
-        )}
-          </>
-        )}
-      </div>
+      <BulkCheckSection
+        targetCompanies={targetCompanies}
+        bulkRunning={bulkRunning}
+        bulkDone={bulkDone}
+        bulkResults={bulkResults}
+        bulkChanges={bulkChanges}
+        onCheck={checkBulkTargets}
+      />
+      <CsvSection
+        csvFileName={csvFileName}
+        csvError={csvError}
+        csvValid={csvValid}
+        csvRejected={csvRejected}
+        csvMessage={csvMessage}
+        importing={importing}
+        onFile={handleCsvFile}
+        onImport={importCsv}
+        onExportCsv={exportCsv}
+        onExportJson={exportJson}
+      />
+      <AuditSection
+        auditOpen={auditOpen}
+        auditEntries={auditEntries}
+        auditError={auditError}
+        onOpen={() => {
+          setAuditOpen(true);
+          loadAudit();
+        }}
+      />
+      <ReportsSection
+        reportsOpen={reportsOpen}
+        onOpen={() => setReportsOpen(true)}
+        db={db}
+      />
+      <VisitorsSection
+        visitorsOpen={visitorsOpen}
+        visitorsError={visitorsError}
+        loadingVisitors={loadingVisitors}
+        visitorEvents={visitorEvents}
+        visitorSummary={visitorSummary}
+        accountActivity={accountActivity}
+        botSignals={botSignals}
+        profilesError={profilesError}
+        visitorsCapped={visitorsCapped}
+        onOpen={() => {
+          setVisitorsOpen(true);
+          loadVisitors();
+          loadProfiles();
+        }}
+      />
     </div>
   );
 }
