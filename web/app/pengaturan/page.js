@@ -1,7 +1,9 @@
 "use client";
 
 /* Pengaturan Karir: lihat dan hapus data lokal yang tersimpan di browser.
- * Tidak ada akun, tidak ada server. Tiga kunci localStorage:
+ * Masuk akun itu pilihan: yang masuk bisa menyimpan tanda lamaran di
+ * akun, yang tidak masuk tetap memakai semua fitur dengan data di
+ * browser saja. Tiga kunci localStorage:
  * "karir-onboarding" (pilihan domisili dan posisi),
  * "karir-lamaran" (lamaran yang dilacak),
  * "karir-recent-search" (pencarian terakhir). */

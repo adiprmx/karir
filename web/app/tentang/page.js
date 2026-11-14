@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Tentang Karir",
   description:
-    "Karir adalah daftar kanal karir resmi perusahaan Indonesia yang dicek langsung di browser. Tanpa akun, tanpa data pribadi.",
+    "Karir adalah daftar kanal karir resmi perusahaan Indonesia yang dicek langsung di browser. Masuk akun itu pilihan, bukan kewajiban.",
 };
 
 const COPY = {

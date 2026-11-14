@@ -22,5 +22,5 @@ Tampilan aplikasi dirombak dari nol oleh Claude. Brief sudah disiapkan (`brief-f
 
 ## Tidak direncanakan
 
-- Akun pengguna. Aplikasi sengaja tanpa akun supaya pengunjung bisa mencari dan melacak lamaran tanpa mendaftar, dan tidak ada data pribadi yang dikumpulkan.
+- Akun wajib. Masuk tetap pilihan, bukan kewajiban — akun pengguna sendiri sudah ada sejak versi 2.8.1, dan semua fitur tetap bisa dipakai tanpa masuk.
 - Payment gateway. Aplikasi tidak memungut pembayaran apa pun.

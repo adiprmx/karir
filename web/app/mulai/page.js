@@ -1,9 +1,10 @@
 "use client";
 
 /* Halaman Mulai: onboarding 3 langkah (domisili, posisi, ringkasan).
- * Bukan pendaftaran, tidak ada akun. Di langkah terakhir pengunjung
- * langsung melihat berapa kanal yang cocok, lalu diantar ke /cari dengan
- * filter terisi. Jawaban tersimpan di browser saja. */
+ * Bukan pendaftaran: tidak perlu masuk akun untuk mengisinya. Di langkah
+ * terakhir pengunjung langsung melihat berapa kanal yang cocok, lalu
+ * diantar ke /cari dengan filter terisi. Jawaban tersimpan di browser
+ * saja. */
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

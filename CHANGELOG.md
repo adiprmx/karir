@@ -2,13 +2,24 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.10.0 — 2026-11-15
+
+Perbaikan menyeluruh hasil audit full-stack 32 tim: keamanan, kebenaran data, dan kejujuran klaim produk.
+
+- Keamanan: peran admin nyata (klaim `admin` Firebase); profil hanya bisa dibaca pemilik atau admin; panel admin digerbang klaim admin; `/api/admin/check-link` kini wajib token admin + pelindung SSRF (tolak URL privat/localhost, validasi tiap hop redirect); rahasia fallback dihapus — API menjawab 503 bila `API_TOKEN_SECRET`/`CRON_SECRET` belum dipasang, dan cron tidak lagi fail-open.
+- Pelacak lamaran: penghapusan kini bertahan — menghapus di satu perangkat ikut menghapus di akun (tombstone + propagasi hapus); klaim "tersimpan di browser saja" diluruskan.
+- Peta: pemetaan kota memakai kata utuh + negasi (Fore Coffee tidak lagi salah petakan di Depok; 4 positif palsu dicabut).
+- Data: kolom baru `batas_lamar` di CSV + seed (17 nilai), tampil di halaman detail dengan penanda hari (WIB); impor kanonis 13 field (`import_canonical.py`, updateMask lengkap); cek konsistensi CSV vs seed (+ vs live di main) di CI; standar verifikasi 3 tingkatan bukti tertulis di `docs/METODE.md`.
+- Kepercayaan: klaim "tanpa akun" diluruskan di semua halaman dan dokumen; Kebijakan Privasi (`/privasi`) + Syarat Penggunaan (`/syarat`) baru, ditaut di footer; peringatan penipuan di halaman detail, FAQ, dan Metode + dokumen `docs/TRUST-SAFETY.md` (aturan label WASPADA).
+- Tes: 241 lolos, 0 gagal. Build sukses; lint 0 error.
+
 ## 2.8.2 — 2026-11-08
 
 Notifikasi lowongan target dan batas laju API yang dibagikan.
 
 - Cron cek ulang harian kini membandingkan daftar target dengan snapshot run sebelumnya (dokumen `meta/targets`): nomor target yang baru muncul dicatat sebagai alert `new-target`, dan perusahaan target yang batas lamarnya 0-3 hari lagi dicatat sebagai alert `deadline` di koleksi `alerts`.
 - Satu pesan Telegram gabungan dikirim per run bila ada alert baru; kegagalan kirim tidak menggagalkan cron. Balasan cron bertambah field `alerts` dan `telegram`.
-- Kolom baru `batas_lamar` ("YYYY-MM-DD", opsional) di dokumen `companies`, diparse dari catatan yang sudah ada; aturan Firestore memvalidasinya sebagai string bila ada.
+- Kolom baru `batas_lamar` ("YYYY-MM-DD", opsional) di dokumen `companies`, diisi lewat skrip operasional di luar repo; aturan Firestore memvalidasinya sebagai string bila ada.
 - Chip "Baru" di umpan Yang berubah, daftar target, dan kartu perusahaan untuk perubahan dalam 48 jam terakhir.
 - Batas laju API pindah ke limiter bersama (`lib/rate-limit.js`): urutan store Redis REST Upstash, Firestore, lalu memori; dipakai `/api/index`, `/api/companies`, `/api/stats`, dan `/api/analytics`. `getClientIp` diperbaiki: `x-real-ip` dulu, lalu elemen terakhir `x-forwarded-for`.
 - Status jujur: Vercel KV belum terpasang karena pembuatan via API gagal saat jaringan egress mati; store yang aktif sementara adalah Firestore. Web push (FCM) ditunda; Telegram dan chip "Baru" sudah mencakup kebutuhan.
@@ -83,7 +94,7 @@ Temuan riset alur web besar diterapkan ke Karir.
 Landing page, onboarding, dan dasbor pribadi — alur pengguna lengkap.
 
 - Beranda jadi landing page: angka kepercayaan (406 dicek, 22 target, 5 tidak cocok, 66 portal mati), cara kerja 3 langkah, fitur (Cari, Lacak lamaran, Peta lowongan), cuplikan FAQ, dan penutup dengan tombol Mulai.
-- Onboarding di /mulai: isi domisili dan posisi, langsung diarahkan ke hasil yang cocok; tersimpan di browser saja, tanpa akun.
+- Onboarding di /mulai: isi domisili dan posisi, langsung diarahkan ke hasil yang cocok; tersimpan di browser saja.
 - Dasbor jadi ruang kerja pribadi: sapaan sesuai pilihan onboarding, langkah berikutnya, ringkasan lamaran, lalu donat dan daftar seperti sebelumnya.
 - Tombol Mulai di header dan tautan Mulai di footer. Alur pengguna tertulis di PRODUCT.md.
 - Sitemap 416 URL (10 halaman + 406 perusahaan).
@@ -92,7 +103,7 @@ Landing page, onboarding, dan dasbor pribadi — alur pengguna lengkap.
 
 Aplikasi web dilengkapi jadi alat berburu kerja yang lengkap.
 
-- Lamaran Saya: lacak lamaran tanpa akun (Ditandai, Sudah dilamar, Dipanggil, Ditolak, lengkap tanggal dan catatan), tersimpan di browser saja, ringkasan jumlah per status di /lamaran.
+- Lamaran Saya: lacak lamaran (Ditandai, Sudah dilamar, Dipanggil, Ditolak, lengkap tanggal dan catatan), tersimpan di browser, ringkasan jumlah per status di /lamaran.
 - Peta lowongan: 22 perusahaan target di peta, titik per kota dengan jumlah, klik untuk melihat daftarnya.
 - Bagikan daftar 22 target lewat WhatsApp dan cetak daftar target (gaya cetak sendiri, tanpa header dan tombol).
 - Pencarian langsung bisa dipilih dengan panah keyboard (Atas/Bawah, Enter, Escape).
@@ -149,7 +160,7 @@ Aplikasi web dirombak total jadi tiga layar dengan konsep yang jelas.
 
 Repo dirombak total dari daftar gudang Bogor menjadi alat cari loker untuk semua orang.
 
-- Aplikasi web baru di `docs/`: cari berdasarkan domisili dan posisi atau perusahaan, dengan rekomendasi berdasarkan skor (posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, syarat tidak cocok +10, portal tidak bisa dibuka −20, tidak dapat diverifikasi −10). Berjalan tanpa server, tanpa akun, tanpa data pribadi, dan tanpa layanan pihak ketiga. Diterbitkan lewat GitHub Pages dari folder `docs/`.
+- Aplikasi web baru di `docs/`: cari berdasarkan domisili dan posisi atau perusahaan, dengan rekomendasi berdasarkan skor (posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, syarat tidak cocok +10, portal tidak bisa dibuka −20, tidak dapat diverifikasi −10). Berjalan tanpa server dan tanpa layanan pihak ketiga. Diterbitkan lewat GitHub Pages dari folder `docs/`.
 - Aturan kejujuran aplikasi: kalimat penyangkalan di data tidak dihitung sebagai kecocokan; peran yang tidak cocok tetap tampil sebagai rekomendasi kanal dengan label belum terverifikasi; pencarian nama perusahaan hanya menampilkan perusahaan itu.
 - PGN masuk sebagai No. 406 (PT Perusahaan Gas Negara Tbk, BUMN): kanal rekrutmennya lewat E-Recruitment Pertamina dan minta login, jadi statusnya Tidak dapat diverifikasi. Total jadi 406 perusahaan.
 - README ditulis ulang untuk cakupan universal, dengan bagian aplikasi web dan penjelasan skor rekomendasi. `docs/METODE.md` diperbarui: cakupan universal, arti status Tidak dapat diverifikasi mencakup portal yang minta login, dan empat baris tanpa tautan dicatat dengan benar.

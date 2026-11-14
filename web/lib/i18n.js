@@ -18,7 +18,7 @@ const DICT = {
     "nav.admin": "Admin",
     "header.count": "{n} perusahaan",
     "footer.note":
-      "Data dicek langsung di browser pada 4 dan 5 November 2026. Lowongan bisa berubah setelah tanggal cek, selalu periksa portal resminya.",
+      "Data dicek berkala langsung di browser; tiap perusahaan mencatat tanggal cek terbarunya. Lowongan bisa berubah setelah tanggal cek, selalu periksa portal resminya.",
     "footer.privacy":
       "Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai. Kalau masuk, yang tersimpan hanya email, kata pencarian, dan tanda lamaran, dan hanya pemilik akun dan admin yang bisa melihatnya. Tanpa masuk, tidak ada nama atau identitas yang tersimpan.",
     "footer.repo": "Repo GitHub",
@@ -30,6 +30,11 @@ const DICT = {
     "footer.map": "Peta",
     "footer.mulai": "Mulai",
     "footer.settings": "Pengaturan",
+    /* --- W-P0-08 (kebijakan privasi + syarat penggunaan): hanya kunci
+     * baru di blok ini, nilai kunci lama tidak diubah. --- */
+    "footer.privacyPolicy": "Kebijakan Privasi",
+    "footer.terms": "Syarat Penggunaan",
+    /* --- akhir W-P0-08 --- */
     "landing.trustLabel": "Angka ringkas",
     "landing.trustChecked": "kanal dicek",
     "landing.trustTarget": "ada lowongan",
@@ -64,7 +69,7 @@ const DICT = {
       "Cari kanal karir berdasarkan domisili dan posisi, diurutkan dari yang paling cocok.",
     "landing.featureTrackTitle": "Lacak lamaran",
     "landing.featureTrackDesc":
-      "Tandai perusahaan yang sudah kamu lamar dan lihat perkembangannya. Tersimpan di browser saja.",
+      "Tandai perusahaan yang sudah kamu lamar dan lihat perkembangannya. Tersimpan di browser, dan tersinkron ke akunmu bila kamu masuk.",
     "landing.featureMapTitle": "Peta lowongan",
     "landing.featureMapDesc":
       "Lihat {n} perusahaan yang ada lowongan di peta, dikelompokkan per kota.",
@@ -74,7 +79,7 @@ const DICT = {
       "Ketik domisili dan posisi di Beranda, lalu lihat kanal yang paling cocok. Buka portal resminya dari hasil, baca syarat lengkapnya, dan lamar lewat kanal resmi.",
     "landing.faq2q": "Apakah Karir gratis?",
     "landing.faq2a":
-      "Ya, gratis. Tidak ada biaya, tidak ada akun, dan tidak ada data pribadi yang diminta.",
+      "Ya, gratis. Tidak ada biaya. Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai.",
     "landing.faq3q": "Bagaimana data dicek?",
     "landing.faq3a":
       "Tiap perusahaan dibuka kanal karir resminya langsung di browser. Tanggal cek dicatat di tiap baris data.",
@@ -225,7 +230,7 @@ const DICT = {
     "nav.admin": "Admin",
     "header.count": "{n} companies",
     "footer.note":
-      "Data checked directly in the browser on 4 and 5 November 2026. Openings can change after the check date, always verify on the official portal.",
+      "Data is checked regularly, directly in the browser; each company records its latest check date. Openings can change after the check date, always verify on the official portal.",
     "footer.privacy":
       "Signing in is a choice, not a requirement. Without signing in, every feature still works. If you sign in, only your email, your searches, and your application marks are saved, and only you and the admin can see them. Without signing in, no name or identity is saved.",
     "footer.repo": "GitHub repo",
@@ -237,6 +242,11 @@ const DICT = {
     "footer.map": "Map",
     "footer.mulai": "Start",
     "footer.settings": "Settings",
+    /* --- W-P0-08 (privacy policy + terms of use): new keys only in
+     * this block, existing key values untouched. --- */
+    "footer.privacyPolicy": "Privacy Policy",
+    "footer.terms": "Terms of Use",
+    /* --- end W-P0-08 --- */
     "landing.trustLabel": "Key numbers",
     "landing.trustChecked": "channels checked",
     "landing.trustTarget": "openings",
@@ -271,7 +281,7 @@ const DICT = {
       "Search career channels by location and role, ranked by best match.",
     "landing.featureTrackTitle": "Track applications",
     "landing.featureTrackDesc":
-      "Mark the companies you applied to and follow their progress. Stored in your browser only.",
+      "Mark the companies you applied to and follow their progress. Saved in your browser, and synced to your account when you sign in.",
     "landing.featureMapTitle": "Openings map",
     "landing.featureMapDesc":
       "See {n} companies with openings on a map, grouped by city.",
@@ -281,7 +291,7 @@ const DICT = {
       "Type your location and role on the home page, then see the best matching channels. Open the official portal from the results, read the full requirements, and apply through the official channel.",
     "landing.faq2q": "Is Karir free?",
     "landing.faq2a":
-      "Yes, free. No fees, no account, and no personal data asked.",
+      "Yes, free. No fees. Signing in is a choice, not a requirement. Without signing in, every feature still works.",
     "landing.faq3q": "How is the data checked?",
     "landing.faq3a":
       "Each company's official career channel is opened directly in the browser. The check date is recorded on every row of data.",

@@ -1,9 +1,10 @@
 "use client";
 
 /* Ruang kerja pribadi di Dasbor: apa yang dicari, langkah berikutnya,
- * dan ringkasan lamaran. Semua data lokal (localStorage), tanpa akun,
- * tanpa server: pilihan dibaca dari "karir-onboarding" dan lamaran dari
- * "karir-lamaran" lewat useTracker(). */
+ * dan ringkasan lamaran. Data dibaca dari browser (localStorage):
+ * pilihan dibaca dari "karir-onboarding" dan lamaran dari
+ * "karir-lamaran" lewat useTracker(). Lamaran yang dilacak tersinkron
+ * ke akun bila pengunjung masuk. */
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTracker, TRACKER_STATUSES } from "@/app/tracker";

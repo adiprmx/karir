@@ -116,6 +116,8 @@ export default async function RootLayout({ children }) {
               <Link href="/changelog">{t(locale, "footer.changelog")}</Link>
               <Link href="/peta">{t(locale, "footer.map")}</Link>
               <Link href="/pengaturan">{t(locale, "footer.settings")}</Link>
+              <Link href="/privasi">{t(locale, "footer.privacyPolicy")}</Link>
+              <Link href="/syarat">{t(locale, "footer.terms")}</Link>
               <a
                 href="https://github.com/adiprmx/karir"
                 target="_blank"

@@ -1,6 +1,6 @@
-/* Pencarian terakhir Karir: tersimpan di browser saja, tanpa akun dan
- * tanpa server. Dipakai landing (chip "Terakhir kamu cari"), halaman
- * Cari, dan Dasbor. Bentuk: {domisili, posisi}. */
+/* Pencarian terakhir Karir: tersimpan di browser saja (localStorage),
+ * tidak tersinkron ke akun. Dipakai landing (chip "Terakhir kamu
+ * cari"), halaman Cari, dan Dasbor. Bentuk: {domisili, posisi}. */
 "use client";
 
 const KEY = "karir-recent-search";

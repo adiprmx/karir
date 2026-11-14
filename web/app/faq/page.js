@@ -1,5 +1,6 @@
 import { getLocale } from "@/lib/i18n";
 import FaqSearch from "@/app/faq/faq-search";
+import { FraudWarning } from "@/app/fraud-warning";
 
 export const metadata = {
   title: "Pertanyaan umum",
@@ -22,11 +23,11 @@ const QA = [
   },
   {
     q: "Apakah Karir gratis?",
-    a: "Ya, gratis. Tidak ada biaya, tidak ada akun, dan tidak ada data pribadi yang diminta.",
+    a: "Ya, gratis. Tidak ada biaya. Masuk akun itu pilihan, bukan kewajiban — tanpa masuk pun semua fitur tetap bisa dipakai.",
   },
   {
-    q: "Kenapa tidak ada akun?",
-    a: "Supaya kamu bisa langsung pakai tanpa daftar dan tanpa menyerahkan data pribadi. Semua data perusahaan bisa dibaca siapa pun.",
+    q: "Apakah harus masuk akun untuk memakai Karir?",
+    a: "Tidak. Kamu bisa langsung pakai tanpa masuk. Yang masuk bisa menyimpan tanda lamaran di akun supaya tidak hilang bila data browser dihapus.",
   },
   {
     q: "Bagaimana data dicek?",
@@ -35,6 +36,10 @@ const QA = [
   {
     q: "Kenapa ada lowongan yang tidak terverifikasi?",
     a: "Kadang kanalnya tidak ditemukan, halamannya kosong, atau lowongannya cuma terlihat setelah login. Itu bukan berarti perusahaan itu tidak membuka lowongan.",
+  },
+  {
+    q: "Bagaimana mengenali lowongan palsu?",
+    a: "Rekrutmen resmi tidak pernah meminta bayaran. Jangan pernah membayar untuk melamar — termasuk uang pendaftaran, seragam, atau pelatihan. Hati-hati juga bila diminta foto KTP atau rekening di awal, dijanjikan gaji jauh di atas wajar, atau dihubungi dari nomor pribadi, bukan kanal resmi perusahaan. Kalau menemukan yang mencurigakan di daftar ini, beri tahu kami lewat issue di repo GitHub Karir.",
   },
   {
     q: "Bagaimana melaporkan tautan mati?",
@@ -63,6 +68,8 @@ export default async function Faq() {
       <section className="dash-section anim-fade-up" aria-label="Tanya jawab">
         <FaqSearch items={QA} />
       </section>
+
+      <FraudWarning locale={locale} />
     </div>
   );
 }

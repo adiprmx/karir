@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { getLocale } from "@/lib/i18n";
 import { CountUp, StatusDot } from "@/app/visual";
 import Visited from "@/app/metode/visited";
+import { FraudWarning } from "@/app/fraud-warning";
 
 export const metadata = {
   title: "Metode pengecekan",
@@ -60,10 +61,10 @@ const NOT_EVIDENCE = [
 
 const NOT_DONE = [
   "Tidak ada lamaran yang dikirim.",
-  "Tidak ada akun yang dibuat.",
+  "Tidak ada akun yang dibuat di situs perusahaan.",
   "Tidak ada login ke situs mana pun.",
   "Tidak ada formulir yang diisi atau dikirim.",
-  "Tidak ada data pribadi yang dimasukkan.",
+  "Tidak ada data pribadi yang dimasukkan ke formulir perusahaan.",
 ];
 
 const SCORE_RULES = [
@@ -186,6 +187,8 @@ export default async function Metode() {
           akan diterima.
         </p>
       </section>
+
+      <FraudWarning locale={locale} />
     </div>
   );
 }

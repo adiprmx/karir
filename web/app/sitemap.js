@@ -18,6 +18,8 @@ const STATIC_PAGES = [
   { path: "/metode", lastModified: "2026-11-06" },
   { path: "/faq", lastModified: "2026-11-06" },
   { path: "/changelog", lastModified: "2026-11-06" },
+  { path: "/privasi", lastModified: "2026-11-15" },
+  { path: "/syarat", lastModified: "2026-11-15" },
 ];
 
 export default async function sitemap() {

@@ -2,8 +2,8 @@
 
 /* Onboarding Karir: 3 langkah singkat yang membantu pengunjung baru
  * menentukan apa yang dicari, lalu mengantarnya ke hasil yang cocok.
- * BUKAN pendaftaran, tidak ada akun, tidak ada server. Semua tersimpan
- * di localStorage browser pengguna saja, dengan kunci
+ * BUKAN pendaftaran: tidak perlu masuk akun untuk mengisinya. Semua
+ * tersimpan di localStorage browser pengguna saja, dengan kunci
  * "karir-onboarding". Bentuk data: {domisili, posisi, selesai: true}.
  * Setiap tulis atau hapus mengirim event "karir-onboarding-change"
  * supaya komponen lain yang memakai useOnboarding ikut update. */

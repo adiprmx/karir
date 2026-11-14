@@ -17,7 +17,7 @@
     "test": "node --test lib/search.test.js lib/analytics.test.js lib/api-token.test.js lib/tracker-sync.test.js lib/index-token.test.js lib/rate-limit.test.js lib/notify.test.js lib/companies-dedup.test.js lib/admin-auth.test.js lib/check.test.js lib/require-env.test.js lib/cities.test.js"
   },
   "type": "module",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "devDependencies": {
     "eslint": "^10.14.0",
     "eslint-config-next": "^16.4.5"

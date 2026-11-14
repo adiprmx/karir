@@ -16,7 +16,7 @@ Status tiap perusahaan netral: yang dicatat hanya apakah portalnya sedang ada lo
 2. Ketik domisili dan posisi yang dicari, lalu baca status tiap perusahaan beserta tanggal ceknya.
 3. Kalau ada yang cocok, buka portal resmi perusahaan itu dari tautan yang tercantum dan lamar di sana. Karir tidak menerima lamaran.
 
-Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) untuk mencari dari domisili dan posisi, lalu mengurutkan hasil dengan skor kecocokan. [Peta](https://karir-adiprmx.vercel.app/peta) menampilkan perusahaan yang ada lowongannya per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) menyimpan tandaan lamaran di browser saja. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode). Pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
+Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) untuk mencari dari domisili dan posisi, lalu mengurutkan hasil dengan skor kecocokan. [Peta](https://karir-adiprmx.vercel.app/peta) menampilkan perusahaan yang ada lowongannya per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) menyimpan tandaan lamaran di browser, dan tersinkron ke akun bila pengunjung masuk. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode). Pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
 
 <h2 align="center">Perusahaan yang ada lowongannya</h2>
 

@@ -11,6 +11,7 @@ import {
 } from "@/app/components";
 import { Icon, Reveal, StatusStamp } from "@/app/visual";
 import { TrackerControl } from "@/app/tracker";
+import { FraudWarning } from "@/app/fraud-warning";
 import { DetailActions } from "./actions";
 import { CompanyLogo } from "@/lib/logos";
 
@@ -163,6 +164,8 @@ export default async function CompanyDetail({ params }) {
           }}
         />
       </div>
+
+      <FraudWarning locale={locale} variant="short" />
 
       {hasChannels && (
         <section className="panel" aria-labelledby="channels-h">

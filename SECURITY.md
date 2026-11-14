@@ -1,6 +1,6 @@
 # Keamanan
 
-Repo ini menyimpan daftar kanal karir dan aplikasi web yang membacanya. Repo ini tidak menyimpan kata sandi pengguna, data pembayaran, atau data pribadi pengunjung. Satu-satunya akun yang ada adalah akun admin Firebase, yang dibuat pemilik repo di Firebase Console.
+Repo ini menyimpan daftar kanal karir dan aplikasi web yang membacanya. Repo ini tidak menyimpan kata sandi pengguna atau data pembayaran. Pengunjung bisa memilih masuk dengan akun Firebase (email dan kata sandi dikelola Firebase, bukan repo ini); dari akun yang masuk, yang tersimpan hanya email, nama tampilan, dan tanda lamaran, dan hanya pemilik akun dan admin yang bisa melihatnya. Akun admin Firebase dibuat pemilik repo di Firebase Console.
 
 ## Melaporkan celah
 

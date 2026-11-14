@@ -16,6 +16,16 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.10.0",
+    date: "15 November 2026",
+    points: [
+      "Keamanan diperketat: hanya admin yang bisa mengubah data perusahaan; profil akun hanya bisa dibaca pemiliknya dan admin.",
+      "Menghapus lamaran kini bertahan di semua perangkat bila kamu masuk akun; peta tidak lagi salah menempatkan perusahaan.",
+      "Batas lamar kini tercatat rapi dan tampil di halaman perusahaan, lengkap dengan hitung hari.",
+      "Klaim soal akun diluruskan di semua halaman; Kebijakan Privasi dan Syarat Penggunaan baru diterbitkan; ada peringatan penipuan di halaman perusahaan.",
+    ],
+  },
+  {
     version: "2.9.0",
     date: "14 November 2026",
     points: [
@@ -101,7 +111,7 @@ const VERSIONS = [
     version: "2.3.0",
     date: "6 November 2026",
     points: [
-      "Lamaran Saya: lacak lamaran tanpa akun, tersimpan di browser saja, lengkap tanggal dan catatan.",
+      "Lamaran Saya: lacak lamaran, tersimpan di browser, lengkap tanggal dan catatan.",
       "Peta lowongan: 22 perusahaan target di peta, titik per kota dengan jumlah, klik untuk melihat daftarnya.",
       "Bagikan daftar target lewat WhatsApp dan cetak daftar target.",
       "Pencarian langsung bisa dipilih dengan panah keyboard.",
