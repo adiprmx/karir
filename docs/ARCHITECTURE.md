@@ -2,7 +2,7 @@
 
 ## Alur data
 
-Sumber data adalah `data/daftar-link-karir.csv`: 406 perusahaan, 9 kolom, masing-masing kanal karirnya dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026. File itu sumber kebenaran untuk isi data. Aplikasi live tidak membaca CSV; aplikasi membaca Firestore.
+Sumber data adalah `data/daftar-link-karir.csv`: 610 perusahaan, 12 kolom, masing-masing kanal karirnya dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026. File itu sumber kebenaran untuk isi data. Aplikasi live tidak membaca CSV; aplikasi membaca Firestore.
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,7 @@ Proyek `karir-9d53a`, region asia-southeast1, paket Spark. Empat koleksi:
 
 | Koleksi | Isi | Baca | Tulis |
 | --- | --- | --- | --- |
-| `companies` | 406 dokumen, satu per perusahaan | Terbuka | Admin login, dokumen harus lolos validasi (9 kolom wajib, `no` angka, status salah satu dari 6 nilai) |
+| `companies` | 610 dokumen, satu per perusahaan | Terbuka | Admin login, dokumen harus lolos validasi (9 kolom wajib, `no` angka, status salah satu dari 6 nilai) |
 | `changes` | Perubahan status dari cek ulang harian | Terbuka | Admin login, 6 kolom wajib, `from` dan `to` salah satu dari 6 status; tidak bisa diubah atau dihapus |
 | `audit_logs` | Jejak perubahan data oleh admin | Admin login | Admin login; tidak bisa diubah atau dihapus |
 | `reports` | Laporan tautan mati dari pengunjung | Admin login | Siapa pun, bentuk divalidasi (`no` angka, `alasan` 1 sampai 499 karakter); tidak bisa diubah atau dihapus |
@@ -47,7 +47,7 @@ Tulis hanya lewat dua jalur.
 
 Admin di `/admin` login dengan Firebase Auth (Email/Password) lewat SDK di browser (`lib/firebase.js`), lalu menulis langsung ke Firestore. Aturan Firestore yang memvalidasi tulisannya. Setiap perubahan dicatat di `audit_logs`.
 
-Cron harian (`GET /api/cron/recheck`, dijadwalkan Vercel Cron tiap 18:00 UTC, 01:00 WIB, lihat `web/vercel.json`) menulis lewat REST API memakai access token dari service account (`FIREBASE_SERVICE_ACCOUNT`, string JSON di env Vercel). Token dibuat dari JWT RS256 yang ditandatangani `node:crypto`, tanpa dependensi baru. Anggaran waktu 50 detik, cek paralel batch 5. Antrean dimulai dari perusahaan berstatus target (22 Ada lowongan target dan 5 tidak cocok), lalu portal yang sedang berstatus mati supaya ada jalan pulih. Bila waktu habis, sisanya dicatat terpotong dan menunggu hari berikut.
+Cron harian (`GET /api/cron/recheck`, dijadwalkan Vercel Cron tiap 18:00 UTC, 01:00 WIB, lihat `web/vercel.json`) menulis lewat REST API memakai access token dari service account (`FIREBASE_SERVICE_ACCOUNT`, string JSON di env Vercel). Token dibuat dari JWT RS256 yang ditandatangani `node:crypto`, tanpa dependensi baru. Anggaran waktu 50 detik, cek paralel batch 5. Antrean dimulai dari perusahaan berstatus target (52 Ada lowongan target dan 40 tidak cocok), lalu portal yang sedang berstatus mati supaya ada jalan pulih. Bila waktu habis, sisanya dicatat terpotong dan menunggu hari berikut.
 
 Cek tautan hanya membuktikan portal bisa dibuka, bukan lowongannya masih ada. Karena itu pemetaan statusnya hati-hati: target yang portanya mati jadi `Portal tidak bisa dibuka` dan tercatat di `changes`; target yang portalnya hidup hanya diperbarui tanggal ceknya; portal mati yang hidup lagi jadi `Tidak dapat diverifikasi` sampai dicek ulang manusia.
 

@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import seed from "@/data/companies.json";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -33,7 +34,7 @@ export default async function Image() {
           Lowongan yang dicek, bukan yang dicopas.
         </div>
         <div style={{ fontSize: 28, color: "#52525b", marginTop: 24 }}>
-          406 kanal karir resmi
+          {`${seed.length} kanal karir resmi`}
         </div>
       </div>
     ),

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="624" viewBox="0 0 640 624" role="img" aria-label="Alur Karir: kanal karir resmi, diperiksa di browser, data CSV dan XLSX, Firestore 406 dokumen, aplikasi web dan API, pengunjung cari loker">
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="624" viewBox="0 0 640 624" role="img" aria-label="Alur Karir: kanal karir resmi, diperiksa di browser, data CSV dan XLSX, Firestore 610 dokumen, aplikasi web dan API, pengunjung cari loker">
   <title>Alur Karir — dari kanal resmi ke pengunjung</title>
   <style>
     text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
@@ -19,7 +19,7 @@
     <rect x="24" y="16" width="72" height="72" rx="12" fill="#ffffff" stroke="#111111" stroke-width="2.5"/>
     <circle cx="54" cy="46" r="17" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="66" y1="58" x2="80" y2="72" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     <text x="120" y="48" font-size="26" font-weight="700" fill="#111111">Kanal karir resmi</text>
-    <text x="120" y="76" font-size="20" font-weight="400" fill="#525252">406 kanal perusahaan dibuka satu per satu</text>
+    <text x="120" y="76" font-size="20" font-weight="400" fill="#525252">610 kanal perusahaan dibuka satu per satu</text>
   </g>
   <g class="arrow a0">
     <line x1="60" y1="92" x2="60" y2="108" stroke="#a3a3a3" stroke-width="3"/>
@@ -48,7 +48,7 @@
   <g class="step s3">
     <rect x="24" y="328" width="72" height="72" rx="12" fill="#ffffff" stroke="#111111" stroke-width="2.5"/>
     <path d="M 40 348 A 20 8 0 0 0 80 348 L 80 380 A 20 8 0 0 1 40 380 Z" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M 40 348 A 20 8 0 0 0 80 348" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M 40 364 A 20 8 0 0 0 80 364" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="120" y="360" font-size="26" font-weight="700" fill="#111111">Firestore · 406 dokumen</text>
+    <text x="120" y="360" font-size="26" font-weight="700" fill="#111111">Firestore · 610 dokumen</text>
     <text x="120" y="388" font-size="20" font-weight="400" fill="#525252">Data tersimpan sebagai dokumen</text>
   </g>
   <g class="arrow a3">

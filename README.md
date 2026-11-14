@@ -2,7 +2,7 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Daftar ini berisi 406 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser pada 4 dan 5 November 2026. Hasilnya: 9 perusahaan masih memiliki lowongan untuk peran target. 22 perusahaan target dicek ulang pada 7 November 2026.</p>
+<p align="center">Daftar ini berisi 610 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 52 perusahaan masih memiliki lowongan untuk peran target.</p>
 
 Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, Crew Store.
 
@@ -16,32 +16,26 @@ Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Pa
 2. Ketik domisili dan posisi yang dicari, lalu baca status tiap perusahaan beserta tanggal ceknya.
 3. Kalau ada yang cocok, buka portal resmi perusahaan itu dari tautan yang tercantum dan lamar di sana. Karir tidak menerima lamaran.
 
-Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) untuk mencari dari domisili dan posisi, lalu mengurutkan hasil dengan skor kecocokan. [Peta](https://karir-adiprmx.vercel.app/peta) menampilkan 22 target per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) menyimpan tandaan lamaran di browser saja. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode). Pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
+Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) untuk mencari dari domisili dan posisi, lalu mengurutkan hasil dengan skor kecocokan. [Peta](https://karir-adiprmx.vercel.app/peta) menampilkan target per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) menyimpan tandaan lamaran di browser saja. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode). Pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
 
-<h2 align="center">22 perusahaan target yang dicek ulang</h2>
+<h2 align="center">Perusahaan target yang dicek ulang</h2>
 
-Klik logo untuk membuka halaman perusahaan.
+Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [Dasbor](https://karir-adiprmx.vercel.app/dasbor).
 
 <table>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/115"><img src="https://www.google.com/s2/favicons?domain=superindo.jobseeker.software&sz=64" width="48" height="48" alt="Super Indo"><br>Super Indo</a><br>DC Staff Gudang</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/150"><img src="https://www.google.com/s2/favicons?domain=www.yamaha-motor.co.id&sz=64" width="48" height="48" alt="Yamaha"><br>Yamaha</a><br>Operator Produksi</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/162"><img src="https://www.google.com/s2/favicons?domain=careers.ey.com&sz=64" width="48" height="48" alt="EY"><br>EY</a><br>Office Boy</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/190"><img src="https://www.google.com/s2/favicons?domain=rotio.id&sz=64" width="48" height="48" alt="Roti O"><br>Roti O</a><br>Pelaksana Gudang</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/200"><img src="https://www.google.com/s2/favicons?domain=richeesefactory.com&sz=64" width="48" height="48" alt="Richeese Factory"><br>Richeese Factory</a><br>Crew Outlet</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/212"><img src="assets/logos/novell.png" height="48" alt="PT Novell Pharmaceutical Laboratories"><br>Novell</a><br>Helper</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/230"><img src="https://www.google.com/s2/favicons?domain=apotek-k24.com&sz=64" width="48" height="48" alt="Apotek K-24"><br>Apotek K-24</a><br>Helper Gudang</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/235"><img src="https://www.google.com/s2/favicons?domain=www.mrdiy.com&sz=64" width="48" height="48" alt="MR DIY Indonesia"><br>MR DIY Indonesia</a><br>Store Crew</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/240"><img src="https://www.google.com/s2/favicons?domain=issworld.com&sz=64" width="48" height="48" alt="ISS Indonesia"><br>ISS Indonesia</a><br>Cleaning Services</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/246"><img src="https://www.google.com/s2/favicons?domain=career.ganeshaoperation.com&sz=64" width="48" height="48" alt="Ganesha Operation"><br>Ganesha Operation</a><br>Office Boy</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/263"><img src="https://www.google.com/s2/favicons?domain=staffinc.co&sz=64" width="48" height="48" alt="Staffinc"><br>Staffinc</a><br>Warehouse Staff</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/266"><img src="https://www.google.com/s2/favicons?domain=pintarnya.com&sz=64" width="48" height="48" alt="Pintarnya"><br>Pintarnya</a><br>Office Boy</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/277"><img src="https://www.google.com/s2/favicons?domain=www.lionair.co.id&sz=64" width="48" height="48" alt="Lion Air Group"><br>Lion Air Group</a><br>Cleaning &amp; Gardening</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/287"><img src="https://www.google.com/s2/favicons?domain=herminahospitals.com&sz=64" width="48" height="48" alt="Hermina Hospitals"><br>Hermina Hospitals</a><br>Gudang Umum</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/293"><img src="https://www.google.com/s2/favicons?domain=careers.shopee.co.id&sz=64" width="48" height="48" alt="Shopee Indonesia / SPX Express"><br>Shopee Indonesia / SPX Express</a><br>Shift Lead - Warehouse</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/299"><img src="assets/logos/angkasa-pura-supports.png" height="48" alt="Angkasa Pura Supports"><br>Angkasa Pura Supports</a><br>Cleaning Service</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/301"><span style="display:inline-block;width:72px;height:48px;background:#004894;border-radius:8px;line-height:48px;text-align:center;"><img src="assets/logos/basf.svg" width="63" alt="BASF" style="vertical-align:middle;"></span><br>BASF</a><br>Production Operator</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/330"><img src="https://www.google.com/s2/favicons?domain=fore.coffee&sz=64" width="48" height="48" alt="Fore Coffee"><br>Fore Coffee</a><br>Barista</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/342"><img src="https://www.google.com/s2/favicons?domain=ranchmarket.jobseeker.software&sz=64" width="48" height="48" alt="Ranch Market &amp; Farmers Market"><br>Ranch Market &amp; Farmers Market</a><br>Operational Cashier</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/364"><img src="https://www.google.com/s2/favicons?domain=ocs.com&sz=64" width="48" height="48" alt="OCS Group Indonesia"><br>OCS Group Indonesia</a><br>Cleaner</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/376"><img src="https://www.google.com/s2/favicons?domain=careers.accor.com&sz=64" width="48" height="48" alt="Accor"><br>Accor</a><br>Receiving &amp; Storekeeper</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/386"><img src="https://www.google.com/s2/favicons?domain=www.dexagroupcareer.com&sz=64" width="48" height="48" alt="PT Dexa Medica (Dexa Group)"><br>PT Dexa Medica (Dexa Group)</a><br>Production Staff</td></tr>
+<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/150"><img src="https://www.google.com/s2/favicons?domain=www.yamaha-motor.co.id&sz=64" width="48" height="48" alt="Yamaha"><br>Yamaha</a><br>Operator Produksi</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/162"><img src="https://www.google.com/s2/favicons?domain=careers.ey.com&sz=64" width="48" height="48" alt="EY"><br>EY</a><br>Office Boy</td></tr>
+<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/190"><img src="https://www.google.com/s2/favicons?domain=rotio.id&sz=64" width="48" height="48" alt="Roti O"><br>Roti O</a><br>Pelaksana Gudang</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/200"><img src="https://www.google.com/s2/favicons?domain=richeesefactory.com&sz=64" width="48" height="48" alt="Richeese Factory"><br>Richeese Factory</a><br>Crew Outlet</td></tr>
+<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/230"><img src="https://www.google.com/s2/favicons?domain=apotek-k24.com&sz=64" width="48" height="48" alt="Apotek K-24"><br>Apotek K-24</a><br>Staff Gudang</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/235"><img src="https://www.google.com/s2/favicons?domain=www.mrdiy.com&sz=64" width="48" height="48" alt="MR DIY Indonesia"><br>MR DIY Indonesia</a><br>Store Crew</td></tr>
+<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/263"><img src="https://www.google.com/s2/favicons?domain=staffinc.co&sz=64" width="48" height="48" alt="Staffinc"><br>Staffinc</a><br>Warehouse Staff</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/299"><img src="assets/logos/angkasa-pura-supports.png" height="48" alt="Angkasa Pura Supports"><br>Angkasa Pura Supports</a><br>Cleaning Service</td></tr>
+<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/330"><img src="https://www.google.com/s2/favicons?domain=fore.coffee&sz=64" width="48" height="48" alt="Fore Coffee"><br>Fore Coffee</a><br>Barista</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/342"><img src="https://www.google.com/s2/favicons?domain=ranchmarket.jobseeker.software&sz=64" width="48" height="48" alt="Ranch Market &amp; Farmers Market"><br>Ranch Market &amp; Farmers Market</a><br>Operational Cashier</td></tr>
 </table>
 
-<h2 align="center">Hasil cek 406 kanal</h2>
+<h2 align="center">Hasil cek 610 kanal</h2>
 
-9 dari 406 kanal ada lowongan target. 22 perusahaan target dicek ulang pada 7 November 2026.
+52 dari 610 kanal ada lowongan target.
 
 <p align="center">
-  <img src="assets/status-bar.svg" alt="Sebaran status 406 perusahaan" width="100%">
+  <img src="assets/status-bar.svg" alt="Sebaran status 610 perusahaan" width="100%">
 </p>
 
 | Status | Jumlah |
@@ -77,7 +71,7 @@ Data mentah tersedia dalam dua format: [daftar-link-karir.csv](data/daftar-link-
 | --- | --- | --- |
 | Next.js 15 + React 19 | Dipakai | Web dan API |
 | Vercel | Dipakai | Hosting |
-| Firestore | Dipakai | 406 dokumen |
+| Firestore | Dipakai | 610 dokumen |
 | Firebase Auth | Dipakai | Login admin saja |
 | Leaflet | Dipakai | Peta lowongan |
 | Supabase | Tidak dipakai | Mentok 2 proyek |

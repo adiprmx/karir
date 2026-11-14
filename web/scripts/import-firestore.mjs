@@ -1,4 +1,4 @@
-/* Impor 406 perusahaan ke Firestore (proyek karir-9d53a, koleksi companies).
+/* Impor perusahaan dari CSV ke Firestore (proyek karir-9d53a, koleksi companies).
  * Memakai endpoint create per dokumen (POST .../documents/companies
  * ?documentId={no}), BUKAN batchWrite — batchWrite dengan `update`
  * ditolak aturan saat ini (403), sementara create per dokumen lolos.

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import localFont from "next/font/local";
 import "./globals.css";
 import { getStats } from "@/lib/companies";
+import seed from "@/data/companies.json";
 import { getLocale, t } from "@/lib/i18n";
 import SiteNav from "./site-nav";
 import AnalyticsTrack from "./analytics-track";
@@ -18,27 +19,30 @@ const jakarta = localFont({
   display: "swap",
 });
 
+/* Jumlah kanal di deskripsi metadata ikut seed repo, bukan angka yang
+ * dikode keras — data bertambah lewat hunting harian. */
+const TOTAL_KANAL = seed.length;
+const DESKRIPSI_PANJANG = `${TOTAL_KANAL} kanal karir resmi perusahaan Indonesia, dicek langsung di browser. Cari berdasarkan domisili dan posisi.`;
+const DESKRIPSI_SINGKAT = `${TOTAL_KANAL} kanal karir resmi perusahaan Indonesia, dicek langsung di browser.`;
+
 export const metadata = {
   metadataBase: new URL("https://karir-adiprmx.vercel.app"),
   title: {
     default: "Karir — Cari Kanal Lowongan Kerja",
     template: "%s — Karir",
   },
-  description:
-    "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser. Cari berdasarkan domisili dan posisi.",
+  description: DESKRIPSI_PANJANG,
   openGraph: {
     type: "website",
     locale: "id_ID",
     siteName: "Karir",
     title: "Karir — Cari Kanal Lowongan Kerja",
-    description:
-      "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser. Cari berdasarkan domisili dan posisi.",
+    description: DESKRIPSI_PANJANG,
   },
   twitter: {
     card: "summary",
     title: "Karir — Cari Kanal Lowongan Kerja",
-    description:
-      "406 kanal karir resmi perusahaan Indonesia, dicek langsung di browser.",
+    description: DESKRIPSI_SINGKAT,
   },
 };
 

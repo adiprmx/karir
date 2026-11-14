@@ -23,7 +23,7 @@ Contoh: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang`
 
 ```json
 {
-  "total": 406,
+  "total": 610,
   "mode": "semua",
   "limit": 20,
   "offset": 0,
@@ -85,7 +85,7 @@ Angka ringkas data. Contoh: `GET /api/stats`
 
 ```json
 {
-  "total": 406,
+  "total": 610,
   "byStatus": {
     "Ada lowongan target": 9,
     "Ada lowongan target (tidak cocok)": 7,
@@ -177,7 +177,7 @@ Contoh: `POST /api/admin/check-link` dengan body `{ "no": 212 }`
 
 ## GET /api/cron/recheck
 
-Cek ulang harian 22 portal target. Dijalankan Vercel Cron tiap 18:00 UTC (01:00 WIB). Antrean dimulai dari perusahaan berstatus target, lalu portal yang sedang berstatus mati supaya ada jalan pulih. Anggaran waktu 50 detik; bila habis, sisanya dicatat terpotong.
+Cek ulang harian portal target. Dijalankan Vercel Cron tiap 18:00 UTC (01:00 WIB). Antrean dimulai dari perusahaan berstatus target, lalu portal yang sedang berstatus mati supaya ada jalan pulih. Anggaran waktu 50 detik; bila habis, sisanya dicatat terpotong.
 
 Bila `CRON_SECRET` terisi di env Vercel, request wajib membawa header `Authorization: Bearer <CRON_SECRET>`, kalau tidak jawabannya 401 `{ "error": "Tidak diizinkan." }`.
 
@@ -205,7 +205,7 @@ Setelah cek selesai, cron membandingkan daftar target sekarang dengan snapshot r
 
 | Koleksi | Isi | Aturan tulis |
 | --- | --- | --- |
-| `companies` | 406 dokumen perusahaan; kolom `batas_lamar` ("YYYY-MM-DD", opsional) menyimpan tanggal batas lamar yang diparse dari catatan yang sudah ada | Admin login, 9 kolom wajib, `batas_lamar` harus string bila ada |
+| `companies` | 610 dokumen perusahaan; kolom `batas_lamar` ("YYYY-MM-DD", opsional) menyimpan tanggal batas lamar yang diparse dari catatan yang sudah ada | Admin login, 9 kolom wajib, `batas_lamar` harus string bila ada |
 | `changes` | Umpan perubahan status | Admin login; entri tidak bisa diubah atau dihapus |
 | `alerts` | Alert notifikasi (`new-target` atau `deadline`) dengan field `type`, `companyNo`, `perusahaan`, `sent`, `createdAt` | Admin login; entri tidak bisa diubah atau dihapus |
 | `meta` | Snapshot internal cron (`meta/targets`: daftar nomor target run sebelumnya) | Tidak ada akses klien; hanya service account |

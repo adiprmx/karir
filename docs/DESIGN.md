@@ -7,7 +7,7 @@ membuka dari HP. Isinya konten dan keputusan ("kanal mana yang layak
 dibuka?"), jadi temanya terang, dengan tema gelap sebagai pilihan.
 Motif identitas: **stempel cek**. Janji produk ini adalah "dicek, bukan
 dicopas", jadi status terverifikasi tampil sebagai stempel yang jatuh sekali,
-dan 406 kanal tampil sebagai 406 kotak yang menyala sesuai pencarianmu.
+dan 610 kanal tampil sebagai 610 kotak yang menyala sesuai pencarianmu.
 
 ## Token
 
@@ -30,7 +30,7 @@ dan 406 kanal tampil sebagai 406 kotak yang menyala sesuai pencarianmu.
 
 - HP: bilah atas tipis + tab bawah 5 tujuan (Beranda, Cari, Peta, Lamaran,
   Menu). Layar lebar: navigasi di bilah atas, tab bawah hilang.
-- Beranda: pencarian (hero) → 22 lowongan terverifikasi → bukti (angka besar,
+- Beranda: pencarian (hero) → 52 lowongan terverifikasi → bukti (angka besar,
   dua kolom tak simetris) → perubahan → FAQ. Tanpa blok CTA penutup.
 - Cari: bilah isian menempel di atas (HP) / panel filter di kiri (desktop).
 - Detail: judul, arti status, tombol portal, lalu dua panel (hasil cek,
@@ -40,7 +40,7 @@ dan 406 kanal tampil sebagai 406 kotak yang menyala sesuai pencarianmu.
 
 1. Halaman masuk: opacity + geser 6px, 0,38 dtk.
 2. Seksi masuk saat di-scroll: sekali, lalu observer dilepas.
-3. Kotak 406 kanal menyapu masuk diagonal sekali; saat mengetik, yang cocok
+3. Kotak 610 kanal menyapu masuk diagonal sekali; saat mengetik, yang cocok
    menyala dan sisanya meredup.
 4. Stempel hijau jatuh sekali saat muncul.
 5. Hasil Cari: kartu yang sudah ada meluncur ke posisi baru (FLIP, 340 ms).
