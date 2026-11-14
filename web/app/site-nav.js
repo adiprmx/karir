@@ -140,6 +140,8 @@ export default function SiteNav({ labels, locale }) {
               type="button"
               className="btn small ghost"
               onClick={() => setMenu(true)}
+              aria-haspopup="dialog"
+              aria-expanded={menu}
               aria-label={
                 authUser ? `Akun ${authUser.email}` : "Masuk atau daftar"
               }

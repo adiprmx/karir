@@ -1,5 +1,14 @@
-import { getCategoriesOrSeed, STATUS_ORDER } from "@/lib/companies";
+import {
+  getCategoriesOrSeed,
+  getCompaniesWithSource,
+  STATUS_ORDER,
+} from "@/lib/companies";
 import { CITIES } from "@/lib/cities";
+import {
+  SEARCH_PAGE_SIZE,
+  matchedCompanyNos,
+  runSearch,
+} from "@/lib/search";
 import { getLocale, t } from "@/lib/i18n";
 import SearchApp from "./search-app";
 
@@ -14,7 +23,11 @@ export async function generateMetadata() {
 export default async function Cari({ searchParams }) {
   const params = await searchParams;
   const pick = (k) => (typeof params[k] === "string" ? params[k] : "");
-  const [categories, locale] = await Promise.all([getCategoriesOrSeed(), getLocale()]);
+  const [{ companies, source }, categories, locale] = await Promise.all([
+    getCompaniesWithSource(),
+    getCategoriesOrSeed(),
+    getLocale(),
+  ]);
   const labels = {
     title: t(locale, "search.title"),
     sortNote: t(locale, "search.sortNote"),
@@ -48,6 +61,9 @@ export default async function Cari({ searchParams }) {
     mark: t(locale, "search.mark"),
     unmark: t(locale, "search.unmark"),
     open: t(locale, "search.open"),
+    newTab: t(locale, "common.newTab"),
+    submit: t(locale, "search.submit"),
+    noJsFilters: t(locale, "search.noJsFilters"),
     resultsLabel: t(locale, "search.resultsLabel"),
     groupCompanies: t(locale, "search.groupCompanies"),
     groupRoles: t(locale, "search.groupRoles"),
@@ -59,16 +75,49 @@ export default async function Cari({ searchParams }) {
    * (daftar lib/cities.js); nilai asing diabaikan jadi tanpa filter. */
   const kota = pick("kota");
   const initialKota = CITIES.some((c) => c.name === kota) ? kota : "";
+  const initial = {
+    domisili: pick("domisili"),
+    posisi: pick("posisi"),
+    kategori: pick("kategori"),
+    kota: initialKota,
+    status: pick("status"),
+    urutan: pick("urutan") === "nama" ? "nama" : "relevansi",
+  };
+  /* AKSES-02: hasil awal di-render di server dari query alamat, dengan
+   * runSearch yang SAMA dengan jalur klien (mode nama S5, filter kota,
+   * urutan) — tanpa JavaScript pun halaman menampilkan hasil, bukan
+   * macet di "Memuat...". Hanya potongan pertama yang dikirim
+   * (SEARCH_PAGE_SIZE); hitungan memakai seluruh hasil supaya jujur.
+   * getCompaniesWithSource memakai resolveCompanies yang sama dengan
+   * getCategoriesOrSeed di atas, jadi tidak ada baca Firestore
+   * tambahan untuk halaman ini. */
+  const { results, mode, groups, query } = runSearch(companies, initial);
+  const flat = (tokenGroups) => [...new Set(tokenGroups.flat())];
+  const initialResults = {
+    results: results.slice(0, SEARCH_PAGE_SIZE),
+    total: results.length,
+    mode,
+    matchedNos: matchedCompanyNos(results, query),
+    hasD: query.domisiliTokens.length > 0,
+    hasP: query.posisiTokens.length > 0,
+    terms: {
+      pos: flat(query.posisiTokens),
+      loc: flat(query.domisiliTokens),
+    },
+    groupCounts:
+      mode === "perusahaan"
+        ? {
+            companies: groups.companies.length,
+            roles: groups.roles.length,
+          }
+        : null,
+    anyPositionMatch: results.some((e) => e.positionMatched),
+    source,
+  };
   return (
     <SearchApp
-      initial={{
-        domisili: pick("domisili"),
-        posisi: pick("posisi"),
-        kategori: pick("kategori"),
-        kota: initialKota,
-        status: pick("status"),
-        urutan: pick("urutan") === "nama" ? "nama" : "relevansi",
-      }}
+      initial={initial}
+      initialResults={initialResults}
       categories={categories}
       statuses={STATUS_ORDER}
       labels={labels}

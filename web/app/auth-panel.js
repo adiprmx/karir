@@ -196,7 +196,8 @@ export default function AuthPanel() {
 
   if (user) {
     return (
-      <div className="filters" style={{ marginTop: 16 }}>
+      /* AKSES-12: seluruh panel ini teks Indonesia kode-keras. */
+      <div className="filters" style={{ marginTop: 16 }} lang="id">
         <p className="section-label">Akun</p>
         <p>
           Masuk sebagai <strong>{user.email}</strong>
@@ -235,8 +236,18 @@ export default function AuthPanel() {
         {user.emailVerified && (
           <p className="section-note">Email sudah terverifikasi.</p>
         )}
-        {info && <p className="notice">{info}</p>}
-        {error && <p className="notice">{error}</p>}
+        {/* AKSES-05: hasil aksi akun diumumkan — info sebagai status,
+          * error sebagai alert. */}
+        {info && (
+          <p className="notice" role="status">
+            {info}
+          </p>
+        )}
+        {error && (
+          <p className="notice" role="alert" id="akun-error">
+            {error}
+          </p>
+        )}
         <div className="filter-actions">
           <button
             className="btn ghost small"
@@ -252,7 +263,7 @@ export default function AuthPanel() {
   }
 
   return (
-    <div className="filters" style={{ marginTop: 16 }}>
+    <div className="filters" style={{ marginTop: 16 }} lang="id">
       <p className="section-label">Akun</p>
       <p className="section-note">
         Masuk itu pilihan. Tanpa masuk pun semua fitur tetap bisa dipakai,
@@ -298,30 +309,48 @@ export default function AuthPanel() {
         {mode === "daftar" && (
           <fieldset>
             <legend>Nama tampilan (boleh kosong)</legend>
+            {/* AKSES-06: legend memberi konteks, tetapi label eksplisit
+              * memberi nama aksesibel yang pasti pada tiap isian.
+              * Label disembunyikan visual (sr-only) karena legend
+              * sudah tampil di layar. */}
+            <label className="sr-only" htmlFor="akun-nama">
+              Nama tampilan
+            </label>
             <input
+              id="akun-nama"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="nickname"
               maxLength={100}
               placeholder="Nama yang tampil di akun"
+              aria-describedby={error ? "akun-error" : undefined}
             />
           </fieldset>
         )}
         <fieldset>
           <legend>Email</legend>
+          <label className="sr-only" htmlFor="akun-email">
+            Email
+          </label>
           <input
+            id="akun-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="username"
             placeholder="nama@email.com"
+            aria-describedby={error ? "akun-error" : undefined}
           />
         </fieldset>
         <fieldset>
           <legend>Kata sandi</legend>
+          <label className="sr-only" htmlFor="akun-password">
+            Kata sandi
+          </label>
           <input
+            id="akun-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -329,10 +358,19 @@ export default function AuthPanel() {
             autoComplete={mode === "daftar" ? "new-password" : "current-password"}
             minLength={6}
             placeholder="Minimal 6 huruf"
+            aria-describedby={error ? "akun-error" : undefined}
           />
         </fieldset>
-        {error && <p className="notice">{error}</p>}
-        {info && <p className="notice">{info}</p>}
+        {error && (
+          <p className="notice" role="alert" id="akun-error">
+            {error}
+          </p>
+        )}
+        {info && (
+          <p className="notice" role="status">
+            {info}
+          </p>
+        )}
         <div className="filter-actions">
           <button className="btn" type="submit" disabled={busy}>
             {busy ? "Tunggu…" : mode === "daftar" ? "Buat akun" : "Masuk"}

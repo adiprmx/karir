@@ -97,7 +97,9 @@ export function CompanyCard({
             href={c.link_karir}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={`${labels.open || "Buka portal"}: ${c.perusahaan}`}
+            /* AKSES-13: beri tahu pembaca layar bahwa tautan membuka
+             * tab baru. */
+            aria-label={`${labels.open || "Buka portal"}: ${c.perusahaan} ${labels.newTab || "(membuka tab baru)"}`}
             title={labels.open || "Buka portal"}
           >
             <Icon name="ext" size={18} />

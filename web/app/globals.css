@@ -10,7 +10,10 @@
   --ink: #15140f;
   --muted: #5f5c51;
   --line: #dcd7c9;
-  --line-strong: #b4ae9b;
+  /* UX-06: border komponen butuh >= 3:1 (WCAG 1.4.11). Nilai lama
+   * #b4ae9b hanya 1,97:1 di --paper; #8a8471 mencapai 3,31:1 di
+   * --paper dan 3,68:1 di --surface. Dikunci test lib/a11y.test.js. */
+  --line-strong: #8a8471;
   --ok: #0b7a43;
   --ok-bg: #dcf1e3;
   --warn: #8f5200;
@@ -31,7 +34,9 @@
   --ink: #f2efe6;
   --muted: #a9a597;
   --line: #2f2d26;
-  --line-strong: #4d4a3f;
+  /* UX-06 (gelap): nilai lama #4d4a3f hanya 1,96:1 di --surface;
+   * #756f61 mencapai 3,49:1 di --surface dan 3,76:1 di --paper. */
+  --line-strong: #756f61;
   --ok: #4cd484;
   --ok-bg: #12301f;
   --warn: #f2b84b;
@@ -45,7 +50,8 @@
   --ink: #15140f;
   --muted: #5f5c51;
   --line: #dcd7c9;
-  --line-strong: #b4ae9b;
+  /* UX-06: sama dengan :root terang (lihat komentar di sana). */
+  --line-strong: #8a8471;
   --ok: #0b7a43;
   --ok-bg: #dcf1e3;
   --warn: #8f5200;
@@ -74,6 +80,10 @@ body {
   font-variant-numeric: tabular-nums;
   padding-bottom: calc(var(--tab) + env(safe-area-inset-bottom));
   overflow-wrap: break-word;
+  /* UX-04: jaring pengaman bila ada elemen yang meluber di HP kecil.
+   * `clip` (bukan `hidden`) supaya position: sticky di halaman tetap
+   * jalan; browser lama yang tidak kenal `clip` mengabaikannya. */
+  overflow-x: clip;
 }
 @media (min-width: 900px) {
   body {
@@ -254,6 +264,9 @@ mark {
     margin-inline: calc(clamp(16px, 4vw, 32px) * -1);
     padding-inline: clamp(16px, 4vw, 32px);
     padding-bottom: 4px;
+    /* UX-16: isyarat geser, sama seperti .chips-scroll. */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
   }
   .photo-strip::-webkit-scrollbar {
     display: none;
@@ -321,8 +334,11 @@ mark {
   border-color: var(--ink);
   background: transparent;
 }
+/* UX-05: target sentuh minimal 44px (standar owner; lantai proyek
+ * 40px). Berlaku untuk .btn.small, .icon-btn, .chip-btn, .locale a,
+ * dan .foot-links a. */
 .btn.small {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   font-size: 14px;
 }
@@ -338,8 +354,8 @@ mark {
 .icon-btn {
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--r-s);
   border: 1.5px solid var(--line-strong);
   background: var(--surface);
@@ -403,8 +419,11 @@ textarea {
   border-radius: var(--r-s);
   background: var(--surface);
 }
+/* AKSES-07: placeholder memakai --muted penuh. Campuran 75% hanya
+ * 3,68:1 di tema terang (gagal 4,5:1); --muted penuh 6,59:1 terang
+ * dan 7,06:1 gelap. Dikunci test lib/a11y.test.js. */
 input::placeholder {
-  color: color-mix(in srgb, var(--muted) 75%, transparent);
+  color: var(--muted);
 }
 input:focus,
 select:focus {
@@ -430,7 +449,7 @@ select:focus {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   border-radius: 999px;
   border: 1.5px solid var(--line-strong);
@@ -475,6 +494,15 @@ select:focus {
 .chips-scroll > * {
   scroll-snap-align: start;
   flex: none;
+}
+/* UX-16: isyarat visual bahwa deretan ini bisa digeser — tepi kanan
+ * memudar supaya pengguna tahu ada konten di luar layar. (Deretan
+ * chip/tab sudah bisa dijangkau keyboard lewat Tab ke tombolnya;
+ * yang butuh difokuskan hanya .photo-strip, lihat page.js.) */
+.chips-scroll,
+.tabs-scroll {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
 }
 .chips-wrap {
   display: flex;
@@ -629,7 +657,7 @@ select:focus {
 }
 .locale a {
   padding: 0 11px;
-  min-height: 37px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   font-size: 13px;
@@ -640,6 +668,17 @@ select:focus {
 .locale a[aria-current="true"] {
   background: var(--ink);
   color: var(--paper);
+}
+/* UX-04: topbar HP 360px meluber (merek ±94 + celah 20 + tombol Masuk
+ * ±97 + celah 10 + saklar bahasa ±83 + celah 10 + tombol tema 44 =
+ * ±358px di ruang 328px). Saklar bahasa di topbar disembunyikan di
+ * bawah 900px — saklar yang sama ada di Menu — sehingga isi topbar
+ * tinggal ±265px, dan ±316px saat label akun 12 karakter. Angka dari
+ * aritmetika kode, belum dikonfirmasi visual 360px. */
+@media (max-width: 899px) {
+  .topbar-end .locale {
+    display: none;
+  }
 }
 @media (min-width: 900px) {
   .topnav {
@@ -846,7 +885,7 @@ select:focus {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 36px;
+  min-height: 44px;
   font-weight: 600;
 }
 
@@ -885,6 +924,35 @@ select:focus {
   font-weight: 800;
   white-space: nowrap;
 }
+/* AKSES-08: tombol tutup toast (44px, bisa difokus keyboard). */
+.toast-close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: -12px -12px -12px 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+/* AKSES-02: pesan tanpa-JavaScript di layout (hanya tampil bila JS
+ * nonaktif, lewat <noscript>). */
+.noscript-note {
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--warn-bg);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -893,12 +961,21 @@ select:focus {
 }
 
 /* ---------- Animasi masuk, rangka muat ---------- */
+/* FE-03: konten .reveal TAMPIL secara default; hanya saat JavaScript
+ * jalan (komponen Reveal menambahkan kelas `js` ke <html>) konten
+ * disembunyikan dulu lalu dimunculkan. Bila bundle gagal dimuat
+ * sebagian atau hydration gagal, kelas `js` tidak pernah ada dan
+ * konten tetap terlihat — bukan hilang diam-diam dengan opacity 0. */
 .reveal {
-  opacity: 0;
-  transform: translateY(12px);
+  opacity: 1;
+  transform: none;
   transition: opacity 0.55s var(--ease), transform 0.55s var(--ease);
 }
-.reveal.revealed {
+.js .reveal {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.js .reveal.revealed {
   opacity: 1;
   transform: none;
 }
@@ -1000,6 +1077,14 @@ select:focus {
   .roles-row {
     flex-wrap: wrap;
     overflow: visible;
+  }
+}
+/* UX-16: isyarat geser untuk deretan peran (hanya di bawah 640px,
+ * karena di atas itu deretannya membungkus, bukan bergeser). */
+@media (max-width: 639px) {
+  .roles-row {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
   }
 }
 .recent {
@@ -1824,7 +1909,7 @@ select:focus {
   transform-origin: left;
   transition: transform 0.9s var(--ease);
 }
-.reveal:not(.revealed) .seg-bar {
+.js .reveal:not(.revealed) .seg-bar {
   transform: scaleX(0);
 }
 .s-ok {
@@ -1896,7 +1981,7 @@ select:focus {
   transform-origin: left;
   transition: transform 0.9s var(--ease);
 }
-.reveal:not(.revealed) .bar-fill {
+.js .reveal:not(.revealed) .bar-fill {
   transform: scaleX(0);
 }
 .fold {
@@ -2026,6 +2111,13 @@ select:focus {
 .karir-map.leaflet-container {
   font-family: inherit;
 }
+/* UX-14: tombol zoom bawaan Leaflet (±30px) dibesarkan ke 40px
+ * supaya mencapai lantai sentuh proyek. */
+.karir-map .leaflet-control-zoom a {
+  width: 40px !important;
+  height: 40px !important;
+  line-height: 40px !important;
+}
 :root[data-theme="dark"] .karir-map .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9);
 }
@@ -2033,11 +2125,13 @@ select:focus {
   background: transparent;
   border: 0;
 }
+/* UX-14: penanda peta 40px (dulu 36px) supaya mencapai lantai
+ * sentuh proyek; ukuran ikon di map-client.js disamakan (40x40). */
 .karir-marker span {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #15140f;
   color: #fff;
@@ -2313,6 +2407,7 @@ select:focus {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+  .js .reveal,
   .reveal {
     opacity: 1;
     transform: none;

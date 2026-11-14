@@ -62,6 +62,17 @@ const DICT = {
     "detail.copyWa": "Salin nomor WhatsApp",
     "detail.copyEmail": "Salin alamat email",
     /* --- akhir T1f --- */
+    /* --- T13 (aksesibilitas: tautan tab baru, toast, pesan tanpa-JS,
+     * hitungan hasil target): hanya kunci baru di blok ini, nilai
+     * kunci lama tidak diubah. --- */
+    "common.newTab": "(membuka tab baru)",
+    "common.toastClose": "Tutup pemberitahuan",
+    "common.noJs":
+      "JavaScript tidak aktif di browser ini. Pencarian dari Beranda tetap bisa dipakai, tetapi Lamaran, Mulai, dan Pengaturan butuh JavaScript.",
+    "home.targetsShown": "Menampilkan {n} perusahaan",
+    "search.noJsFilters":
+      "Filter status, urutan, dan tombol lainnya butuh JavaScript.",
+    /* --- akhir T13 --- */
     "landing.trustLabel": "Angka ringkas",
     "landing.trustChecked": "kanal dicek",
     "landing.trustTarget": "ada lowongan",
@@ -304,6 +315,17 @@ const DICT = {
     "detail.copyWa": "Copy WhatsApp number",
     "detail.copyEmail": "Copy email address",
     /* --- end T1f --- */
+    /* --- T13 (accessibility: new-tab links, toast, no-JS message,
+     * target result count): new keys only in this block, existing
+     * key values untouched. --- */
+    "common.newTab": "(opens in a new tab)",
+    "common.toastClose": "Dismiss notification",
+    "common.noJs":
+      "JavaScript is off in this browser. Search from the home page still works, but Applications, Start, and Settings need JavaScript.",
+    "home.targetsShown": "Showing {n} companies",
+    "search.noJsFilters":
+      "Status and sort filters and other buttons need JavaScript.",
+    /* --- end T13 --- */
     "landing.trustLabel": "Key numbers",
     "landing.trustChecked": "channels checked",
     "landing.trustTarget": "openings",

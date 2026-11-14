@@ -83,6 +83,9 @@ export default function Pengaturan() {
   const [visitorId, setVisitorId] = useState(null);
   const [optedOut, setOptedOut] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
+  /* AKSES-04: konfirmasi dua langkah per baris (null = tidak ada yang
+   * dikonfirmasi) — pola yang sama dengan "Hapus semua data". */
+  const [confirmKey, setConfirmKey] = useState(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [accountMsg, setAccountMsg] = useState("");
   const [, setVerifyChecked] = useState(0);
@@ -173,6 +176,32 @@ export default function Pengaturan() {
     }
     setVisitorId(null);
     showToast("Nomor pengunjung dihapus.");
+  }
+
+  /* AKSES-04 + AKSES-05: aksi hapus yang dikonfirmasi (dipanggil
+   * tombol "Ya, hapus" di tiap baris). Dua aksi yang sebelumnya
+   * diam — hapus pilihan dan hapus pencarian — ikut diumumkan
+   * lewat toast, seperti dua aksi lainnya. */
+  function clearChoicesConfirmed() {
+    clearChoices();
+    setConfirmKey(null);
+    showToast("Pilihan dihapus.");
+  }
+
+  function clearRecentConfirmed() {
+    clearRecentSearch();
+    setConfirmKey(null);
+    showToast("Pencarian terakhir dihapus.");
+  }
+
+  function clearTrackedConfirmed() {
+    clearAllTrackedEverywhere();
+    setConfirmKey(null);
+  }
+
+  function clearVisitorConfirmed() {
+    clearVisitor();
+    setConfirmKey(null);
   }
 
   /* Toggle opt-out analitik (ANALITIK-11): bila aktif, tidak ada
@@ -282,25 +311,65 @@ export default function Pengaturan() {
   }
 
   return (
-    <div className="wrap narrow">
+    /* AKSES-12: seluruh halaman ini teks Indonesia kode-keras. */
+    <div className="wrap narrow" lang="id">
       <div className="page-head">
         <h1>Pengaturan</h1>
         <p className="lede">Yang tersimpan di browser ini, dan cara menghapusnya.</p>
       </div>
+      {/* AKSES-02: pesan jujur tanpa JavaScript — halaman ini membaca
+        * dan menghapus data dari browser, jadi tidak bisa jalan
+        * tanpa JavaScript. */}
+      <noscript>
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          Halaman ini butuh JavaScript untuk menampilkan dan mengelola
+          pengaturanmu. Aktifkan JavaScript, lalu muat ulang halaman ini.
+        </p>
+      </noscript>
 
       {!loaded ? (
-        <div className="skeleton" style={{ height: 200 }} />
+        /* AKSES-16: status muat diumumkan ke pembaca layar. */
+        <div
+          className="skeleton"
+          style={{ height: 200 }}
+          role="status"
+          aria-label="Memuat pengaturan"
+        />
       ) : (
         <section className="panel settings" aria-label="Data di browser">
           <Row
             title="Pilihanmu"
             action={
-              onboarding && (
-                <button type="button" className="btn ghost small" onClick={clearChoices}>
+              onboarding &&
+              (confirmKey === "pilihan" ? (
+                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn small warn-btn"
+                    onClick={clearChoicesConfirmed}
+                  >
+                    Ya, hapus
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost small"
+                    onClick={() => setConfirmKey(null)}
+                  >
+                    Batal
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn ghost small"
+                  aria-label="Hapus pilihan domisili dan posisi"
+                  onClick={() => setConfirmKey("pilihan")}
+                >
                   <Icon name="trash" size={16} />
                   Hapus
                 </button>
-              )
+              ))
             }
           >
             {onboarding ? (
@@ -314,16 +383,35 @@ export default function Pengaturan() {
           <Row
             title="Lamaran yang dilacak"
             action={
-              trackedCount > 0 && (
+              trackedCount > 0 &&
+              (confirmKey === "lamaran" ? (
+                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn small warn-btn"
+                    onClick={clearTrackedConfirmed}
+                  >
+                    Ya, hapus
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost small"
+                    onClick={() => setConfirmKey(null)}
+                  >
+                    Batal
+                  </button>
+                </span>
+              ) : (
                 <button
                   type="button"
                   className="btn ghost small"
-                  onClick={clearAllTrackedEverywhere}
+                  aria-label="Hapus semua lamaran yang dilacak"
+                  onClick={() => setConfirmKey("lamaran")}
                 >
                   <Icon name="trash" size={16} />
                   Hapus semua
                 </button>
-              )
+              ))
             }
           >
             {trackedCount === 0 ? (
@@ -336,12 +424,35 @@ export default function Pengaturan() {
             title="Pencarian terakhir"
             action={
               recent &&
-              recentParts.length > 0 && (
-                <button type="button" className="btn ghost small" onClick={clearRecentSearch}>
+              recentParts.length > 0 &&
+              (confirmKey === "pencarian" ? (
+                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn small warn-btn"
+                    onClick={clearRecentConfirmed}
+                  >
+                    Ya, hapus
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost small"
+                    onClick={() => setConfirmKey(null)}
+                  >
+                    Batal
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn ghost small"
+                  aria-label="Hapus pencarian terakhir"
+                  onClick={() => setConfirmKey("pencarian")}
+                >
                   <Icon name="trash" size={16} />
                   Hapus
                 </button>
-              )
+              ))
             }
           >
             {recent && recentParts.length > 0 ? (
@@ -355,12 +466,35 @@ export default function Pengaturan() {
           <Row
             title="Nomor pengunjung"
             action={
-              visitorId && (
-                <button type="button" className="btn ghost small" onClick={clearVisitor}>
+              visitorId &&
+              (confirmKey === "pengunjung" ? (
+                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn small warn-btn"
+                    onClick={clearVisitorConfirmed}
+                  >
+                    Ya, hapus
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost small"
+                    onClick={() => setConfirmKey(null)}
+                  >
+                    Batal
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn ghost small"
+                  aria-label="Hapus nomor pengunjung"
+                  onClick={() => setConfirmKey("pengunjung")}
+                >
                   <Icon name="trash" size={16} />
                   Hapus
                 </button>
-              )
+              ))
             }
           >
             {visitorId ? (
@@ -446,7 +580,12 @@ export default function Pengaturan() {
                 </div>
               </Row>
             )}
-            {accountMsg && <p className="notice">{accountMsg}</p>}
+            {/* AKSES-16: hasil kirim ulang/periksa verifikasi diumumkan. */}
+            {accountMsg && (
+              <p className="notice" role="status">
+                {accountMsg}
+              </p>
+            )}
             <Row
               title="Tutup akun"
               action={
@@ -457,6 +596,9 @@ export default function Pengaturan() {
                   rel="noopener noreferrer"
                 >
                   Minta di GitHub
+                  {/* AKSES-13: beri tahu pembaca layar bahwa tautan
+                    * membuka tab baru. */}
+                  <span className="sr-only"> (membuka tab baru)</span>
                 </a>
               }
             >

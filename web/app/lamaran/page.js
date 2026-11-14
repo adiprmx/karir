@@ -7,13 +7,14 @@
  * terjadi, bukan hanya saat masuk); menghapus lamaran menghapus
  * salinan akunnya juga (lihat lib/tracker-sync.js). Status bisa
  * diganti langsung dari kartu. */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   TRACKER_STATUSES,
   syncStatusMessage,
   useTracker,
 } from "@/app/tracker";
+import { rovingIndex } from "@/lib/a11y";
 import { useCompanyIndex } from "@/app/company-index";
 import { Icon, Reveal, showToast } from "@/app/visual";
 import { CompanyLogo } from "@/lib/logos";
@@ -66,8 +67,28 @@ export default function Lamaran() {
   const count = (s) => tracked.filter((e) => e.status === s).length;
   const shown = tab === "Semua" ? tracked : tracked.filter((e) => e.status === tab);
 
+  /* UX-15: navigasi panah di tablist (pola ARIA tab lengkap: panah
+   * memindah pilihan + fokus, roving tabindex, tabpanel di bawah). */
+  const tablistRef = useRef(null);
+  const tabs = ["Semua", ...TRACKER_STATUSES];
+  function onTabKeyDown(e) {
+    const next = rovingIndex(tabs.indexOf(tab), tabs.length, e.key);
+    if (next === null) return;
+    e.preventDefault();
+    setTab(tabs[next]);
+    tablistRef.current?.querySelectorAll('[role="tab"]')[next]?.focus();
+  }
+
   function changeStatus(e, status) {
     save(e.no, { status, tanggal: e.tanggal, catatan: e.catatan || "" });
+    /* AKSES-05: ganti status diumumkan lewat toast (pola yang sama
+     * dengan halaman detail) — sebelumnya menyimpan diam-diam. */
+    const c = byNo.get(Number(e.no));
+    showToast(
+      c
+        ? `Status ${c.perusahaan} diubah menjadi ${status}.`
+        : `Status lamaran diubah menjadi ${status}.`,
+    );
   }
 
   /* Hapus lamaran: remove() di app/tracker.js sudah mengurus
@@ -102,7 +123,8 @@ export default function Lamaran() {
   const lastSynced = lastSyncedAt ? formatSyncTime(lastSyncedAt) : "";
 
   return (
-    <div className="wrap">
+    /* AKSES-12: seluruh halaman ini teks Indonesia kode-keras. */
+    <div className="wrap" lang="id">
       <div className="page-head">
         <h1>Lamaran Saya</h1>
         <p className="lede">
@@ -112,6 +134,15 @@ export default function Lamaran() {
             : "Tersimpan di perangkat ini saja. Masuk dari menu untuk menyimpan ke akun juga."}
         </p>
       </div>
+      {/* AKSES-02: pesan jujur tanpa JavaScript — halaman ini membaca
+        * data dari browser, jadi tidak bisa di-render server. */}
+      <noscript>
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          Halaman ini butuh JavaScript untuk menampilkan lamaranmu.
+          Aktifkan JavaScript, lalu muat ulang halaman ini.
+        </p>
+      </noscript>
 
       {syncState === "tertunda" && (
         <p className="note-line">
@@ -153,13 +184,24 @@ export default function Lamaran() {
       )}
 
       <Reveal>
-        <div className="tabs-scroll" role="tablist" aria-label="Saring lamaran">
-          {["Semua", ...TRACKER_STATUSES].map((s) => (
+        <div
+          className="tabs-scroll"
+          role="tablist"
+          aria-label="Saring lamaran"
+          ref={tablistRef}
+          onKeyDown={onTabKeyDown}
+        >
+          {/* id tab memakai indeks, bukan nama status — nama seperti
+            * "Sudah dilamar" mengandung spasi dan tidak sah sebagai id. */}
+          {tabs.map((s, i) => (
             <button
               key={s}
               type="button"
               role="tab"
+              id={`lamaran-tab-${i}`}
               aria-selected={tab === s}
+              aria-controls="lamaran-panel"
+              tabIndex={tab === s ? 0 : -1}
               className="tab-pill"
               onClick={() => setTab(s)}
             >
@@ -172,12 +214,22 @@ export default function Lamaran() {
         </div>
       </Reveal>
 
-      <section aria-label="Daftar lamaran" style={{ marginTop: 20 }}>
+      <section
+        role="tabpanel"
+        id="lamaran-panel"
+        aria-labelledby={`lamaran-tab-${tabs.indexOf(tab)}`}
+        style={{ marginTop: 20 }}
+      >
         {!loaded || (tracked.length > 0 && state === "loading") ? (
-          <div className="co-list" aria-hidden="true">
-            <div className="skeleton" style={{ height: 112 }} />
-            <div className="skeleton" style={{ height: 112 }} />
-          </div>
+          <>
+            {/* AKSES-16: status muat diumumkan; skeleton-nya sendiri
+              * tetap aria-hidden karena hanya hiasan. */}
+            <p className="sr-only" role="status">Memuat lamaran…</p>
+            <div className="co-list" aria-hidden="true">
+              <div className="skeleton" style={{ height: 112 }} />
+              <div className="skeleton" style={{ height: 112 }} />
+            </div>
+          </>
         ) : tracked.length === 0 ? (
           <div className="state">
             <strong>Belum ada lamaran yang dilacak.</strong>
@@ -223,7 +275,7 @@ export default function Lamaran() {
                         href={c.link_karir}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label={`Buka portal karir ${c.perusahaan}`}
+                        aria-label={`Buka portal karir ${c.perusahaan} (membuka tab baru)`}
                       >
                         <Icon name="ext" size={18} />
                       </a>

@@ -3,8 +3,10 @@
 /* Komponen UI bersama Karir: ikon, animasi masuk, angka naik, stempel
  * status, sheet, toast, dan penyorot kata kunci. Semua gerak mati bila
  * pengguna memakai prefers-reduced-motion. */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
+import { toastDurationMs } from "@/lib/a11y";
 
 export function reducedMotion() {
   return (
@@ -96,10 +98,27 @@ export function Icon({ name, size = 20, filled = false, className }) {
 
 /* ---------- Animasi masuk ---------- */
 
-/* Muncul saat masuk viewport: sekali saja, lalu observer dilepas. */
-export function Reveal({ children, delay = 0, className, as: Tag = "div" }) {
+/* Muncul saat masuk viewport: sekali saja, lalu observer dilepas.
+ * FE-03: konten tampil secara default di CSS; kelas `js` di <html>
+ * (ditambahkan di bawah, sebelum cat pertama) yang mengaktifkan
+ * keadaan tersembunyi — bila JavaScript gagal sebagian, kelas itu
+ * tidak ada dan konten tetap terlihat. Properti lang/tabIndex/role/
+ * label diteruskan ke elemen (UX-16 strip foto, AKSES-12 Dasbor). */
+export function Reveal({
+  children,
+  delay = 0,
+  className,
+  as: Tag = "div",
+  lang,
+  tabIndex,
+  role,
+  label,
+}) {
   const ref = useRef(null);
   const [shown, setShown] = useState(false);
+  useLayoutEffect(() => {
+    document.documentElement.classList.add("js");
+  }, []);
   useEffect(() => {
     if (reducedMotion()) {
       /* Tampilkan langsung dijadwalkan sebagai microtask: setState di
@@ -129,6 +148,10 @@ export function Reveal({ children, delay = 0, className, as: Tag = "div" }) {
     <Tag
       ref={ref}
       className={cls}
+      lang={lang}
+      tabIndex={tabIndex}
+      role={role}
+      aria-label={label}
       style={delay ? { transitionDelay: `${delay}ms` } : undefined}
     >
       {children}
@@ -228,27 +251,99 @@ export function PrintButton({ label }) {
 
 /* ---------- Sheet (panel dari bawah di HP) ---------- */
 
+/* Selektor elemen yang bisa difokus keyboard, untuk jebakan fokus. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function focusableIn(root) {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll(FOCUSABLE)).filter(
+    (el) => el.getClientRects().length > 0,
+  );
+}
+
+/* Sheet: dialog modal. Perilaku fokusnya satu sistem dengan fokus
+ * pindah rute (template.js): saat dibuka, fokus masuk ke panel dan
+ * DIJEBAK di dalamnya (UX-07) sampai sheet ditutup; saat ditutup,
+ * fokus kembali ke pemicunya. Konten di balik sheet dibuat `inert`
+ * selama terbuka, supaya pembaca layar pun tidak bisa menjelajah ke
+ * belakangnya. Sheet di-portal ke <body> supaya inert latar bekerja
+ * di mana pun Sheet diletakkan (menu di navigasi, filter di /cari).
+ * onClose dibaca lewat ref supaya efek tidak jalan ulang tiap render
+ * pemanggil yang mengoper onClose inline. */
 export function Sheet({ open, onClose, title, children }) {
   const panel = useRef(null);
+  const back = useRef(null);
+  const onCloseRef = useRef(onClose);
+  /* Simpan onClose terbaru tanpa me-render ulang effect fokus:
+   * pemanggil yang mengirim arrow inline (search-app) membuat
+   * identitas onClose berubah tiap render. Penulisan ref dilakukan
+   * di effect, bukan saat render (aturan react-hooks/refs). */
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    /* Portal hanya setelah mount klien, supaya render server dan
+     * render pertama klien sama (null) — tanpa portal saat SSR. */
+    queueMicrotask(() => setMounted(true));
+  }, []);
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement;
     panel.current?.focus();
     const onKey = (e) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !panel.current) return;
+      const items = focusableIn(panel.current);
+      if (items.length === 0) {
+        e.preventDefault();
+        panel.current.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const inside = panel.current.contains(active);
+      if (e.shiftKey) {
+        if (active === first || !inside) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !inside) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKey);
+    const inerted = [];
+    for (const child of document.body.children) {
+      if (child === panel.current || child === back.current) continue;
+      /* Toast dikecualikan supaya pengumumannya tetap terdengar
+       * selama sheet terbuka (tautannya tetap tak terjangkau Tab
+       * karena jebakan fokus di atas). */
+      if (child.classList && child.classList.contains("toast-wrap")) continue;
+      if (child.hasAttribute("inert")) continue;
+      child.setAttribute("inert", "");
+      inerted.push(child);
+    }
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = overflow;
+      for (const el of inerted) el.removeAttribute("inert");
       if (prev && prev.focus) prev.focus();
     };
-  }, [open, onClose]);
-  return (
+  }, [open]);
+  if (!mounted) return null;
+  return createPortal(
     <>
       <div
+        ref={back}
         className={`sheet-back${open ? " open" : ""}`}
         onClick={onClose}
         aria-hidden="true"
@@ -275,7 +370,8 @@ export function Sheet({ open, onClose, title, children }) {
         </div>
         {children}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -288,14 +384,20 @@ export function showToast(message, href, label) {
   );
 }
 
-export function ToastHost() {
+/* AKSES-08: toast yang berisi tautan bertahan 9 detik (bukan 3,6)
+ * supaya pengguna keyboard sempat mencapai tautannya; semua toast
+ * bisa ditutup manual lewat tombol tutup yang bisa difokus. */
+export function ToastHost({ closeLabel }) {
   const [toast, setToast] = useState(null);
   useEffect(() => {
     let id;
     const on = (e) => {
       setToast({ ...e.detail, k: Date.now() });
       clearTimeout(id);
-      id = setTimeout(() => setToast(null), 3600);
+      id = setTimeout(
+        () => setToast(null),
+        toastDurationMs(Boolean(e.detail.href)),
+      );
     };
     window.addEventListener("karir-toast", on);
     return () => {
@@ -309,6 +411,14 @@ export function ToastHost() {
         <div className="toast" key={toast.k}>
           <span>{toast.message}</span>
           {toast.href && <Link href={toast.href}>{toast.label}</Link>}
+          <button
+            type="button"
+            className="toast-close"
+            onClick={() => setToast(null)}
+            aria-label={closeLabel || "Tutup pemberitahuan"}
+          >
+            <Icon name="x" size={18} />
+          </button>
         </div>
       )}
     </div>

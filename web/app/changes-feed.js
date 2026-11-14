@@ -47,8 +47,15 @@ export default function ChangesFeed({ labels }) {
 
   if (failed) return <p className="empty-line">{labels.error}</p>;
   if (changes === null) {
+    /* AKSES-16: aria-label pada <div> generik diabaikan pembaca layar;
+     * role="status" membuatnya diumumkan sebagai status muat. */
     return (
-      <div className="skeleton" style={{ height: 72 }} aria-label={labels.loading} />
+      <div
+        className="skeleton"
+        style={{ height: 72 }}
+        role="status"
+        aria-label={labels.loading}
+      />
     );
   }
   /* Umpan rusak (API 200 + daftar kosong + degraded): bedakan dari

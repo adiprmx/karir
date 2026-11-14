@@ -78,6 +78,14 @@ export default function TargetFilter({ targets, labels }) {
     active === "Semua" ? targets : targets.filter((c) => groupOf(c) === active);
   return (
     <div>
+      {/* AKSES-11: hitungan hasil diumumkan saat chip kelompok ditekan
+        * (pola yang sama dengan hitungan /cari). */}
+      <p className="sr-only" aria-live="polite">
+        {(labels.shown || "Menampilkan {n} perusahaan").replace(
+          "{n}",
+          String(shown.length),
+        )}
+      </p>
       <div className="chips-scroll" role="group" aria-label={labels.filter}>
         {GROUPS.filter((g) => g === "Semua" || counts[g] > 0).map((g) => (
           <button

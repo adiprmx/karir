@@ -18,7 +18,8 @@ export default function FaqSearch({ items }) {
     : items;
 
   return (
-    <>
+    /* AKSES-12: seluruh blok ini teks Indonesia kode-keras. */
+    <div lang="id">
       <Reveal>
         <label htmlFor="faq-search">Cari pertanyaan</label>
         <input
@@ -30,6 +31,13 @@ export default function FaqSearch({ items }) {
           autoComplete="off"
         />
       </Reveal>
+      {/* AKSES-11: hitungan hasil diumumkan saat mengetik (pola yang
+        * sama dengan hitungan /cari); hanya tampil saat menyaring. */}
+      {needle && (
+        <p className="result-count" aria-live="polite">
+          {shown.length} dari {items.length} pertanyaan
+        </p>
+      )}
       {shown.length === 0 ? (
         <Reveal delay={80}>
           <p>
@@ -56,6 +64,6 @@ export default function FaqSearch({ items }) {
           </Reveal>
         ))
       )}
-    </>
+    </div>
   );
 }

@@ -2,6 +2,18 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.15.0 — 2026-11-15
+
+Aksesibilitas (T13, Fase 4): manajemen fokus, ketahanan tanpa JavaScript, umpan balik pembaca layar, kontras, dan target sentuh.
+
+- Fokus: template memindahkan fokus ke h1 halaman saat rute berubah (bukan muat pertama); Sheet di-portal ke body dengan jebakan fokus, latar inert, dan pemulihan fokus ke pemicu.
+- Tanpa JavaScript: /cari me-render hasil awal di server dari query URL (runSearch yang sama, mode S5 + filter kota); formulir GET asli + tombol Cari noscript; pesan jujur di /lamaran, /mulai, /pengaturan; konten .reveal tampil secara default (kelas .js hanya ditambah JS saat mount).
+- Pembaca layar: live region peta dipindah ke h2 kota; toast ganti status lamaran; role status/alert pada pesan akun, laporan, admin, dan skeleton muat; label di semua isian akun + admin (16 kontrol); keterangan tab baru di semua tautan target _blank; lang="id" pada blok Indonesia kode-keras; h2 sr-only "Hasil pencarian" di /cari.
+- Sentuh + kontras: target sentuh 44px (.btn.small, .icon-btn, .chip-btn, .locale a, .foot-links a); border --line-strong 3,31-3,76:1 (target 3:1); placeholder memakai --muted penuh (6,59:1 terang, 7,06:1 gelap).
+- Topbar HP: saklar bahasa disembunyikan di bawah 900px (ada di Menu) + overflow-x clip; aritmetika 360px sekitar 265px dalam ruang 328px — perlu konfirmasi visual.
+- Pola ARIA: tab Lamaran + radiogroup pelacak lengkap (roving tabindex, panah/Home/End); strip foto bisa difokus keyboard; peta role region, marker 40px berlabel, flyTo menghormati reduced-motion, zoom Leaflet 40px.
+- Tes: 544 lolos (523 + 21 a11y baru). Build sukses; lint 0 error.
+
 ## 2.14.0 — 2026-11-15
 
 Susulan analitik (T1-followup): UID terverifikasi di event, agregasi admin, pengirim event baru, opt-out, dan cek angka README.

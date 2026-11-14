@@ -20,13 +20,13 @@ import {
 } from "react";
 import { useCompanyIndex, rank } from "@/app/company-index";
 import { matchCity } from "@/lib/cities";
+import { SEARCH_PAGE_SIZE as PAGE_SIZE } from "@/lib/search";
+import { sameSearchQuery } from "@/lib/a11y";
 import { saveRecentSearch } from "@/app/recent";
 import { trackEvent } from "@/app/analytics-track";
 import { CompanyCard, CardSkeletons } from "@/app/company-card";
 import { useTracker } from "@/app/tracker";
 import { Icon, Sheet, reducedMotion, showToast } from "@/app/visual";
-
-const PAGE_SIZE = 20;
 
 function fill(template, vars) {
   let s = template;
@@ -48,13 +48,21 @@ function searchUrl(state) {
   return s ? `/cari?${s}` : "/cari";
 }
 
+/* AKSES-02: dua dropdown di instans DESKTOP (idp "d") dikaitkan ke
+ * formulir pencarian lewat atribut form + name, supaya pencarian
+ * tanpa JavaScript tetap membawa filter kategori/kota saat tombol
+ * Cari (noscript) ditekan. Instans sheet HP tidak dikaitkan —
+ * dua kontrol bernama sama akan mengirim nilai ganda. */
 function FilterControls({ idp, state, set, categories, cities, statuses, labels }) {
+  const formAttr = idp === "d" ? "cari-form" : undefined;
   return (
     <div className="filter-controls">
       <div className="field">
         <label htmlFor={`${idp}-kategori`}>{labels.category}</label>
         <select
           id={`${idp}-kategori`}
+          name="kategori"
+          form={formAttr}
           value={state.kategori}
           onChange={(e) => set({ kategori: e.target.value })}
         >
@@ -70,6 +78,8 @@ function FilterControls({ idp, state, set, categories, cities, statuses, labels 
         <label htmlFor={`${idp}-kota`}>{labels.city}</label>
         <select
           id={`${idp}-kota`}
+          name="kota"
+          form={formAttr}
           value={state.kota}
           onChange={(e) => set({ kota: e.target.value })}
         >
@@ -128,7 +138,26 @@ function FilterControls({ idp, state, set, categories, cities, statuses, labels 
   );
 }
 
-export default function SearchApp({ initial, categories, statuses, labels }) {
+/* AKSES-02: hasil awal server (cari/page.js) diubah ke bentuk yang
+ * sama dengan rank() klien, ditambah `total` (hitungan seluruh hasil
+ * — `results` hanya potongan pertama) dan hitungan kelompok dari
+ * server. Tanpa JavaScript, bentuk inilah yang tampil selamanya. */
+function adaptInitialResults(ir) {
+  return {
+    results: ir.results,
+    mode: ir.mode,
+    matched: new Set(ir.matchedNos),
+    hasD: ir.hasD,
+    hasP: ir.hasP,
+    terms: ir.terms,
+    total: ir.total,
+    groupCounts: ir.groupCounts,
+    anyPositionMatch: ir.anyPositionMatch,
+    source: ir.source,
+  };
+}
+
+export default function SearchApp({ initial, initialResults, categories, statuses, labels }) {
   const [state, setState] = useState(initial);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [sheet, setSheet] = useState(false);
@@ -147,10 +176,18 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
   }, []);
 
   const dq = useDeferredValue(state);
-  const r = useMemo(
-    () => (index ? rank(index, dq) : null),
-    [index, dq],
-  );
+  /* AKSES-02: selama pengguna belum mengubah apa pun dan indeks klien
+   * belum siap, tampilkan hasil awal server — bukan "Memuat...".
+   * Begitu pengguna mengubah state (atau indeks tiba), hasil dihitung
+   * ulang dari indeks klien seperti biasa; perilaku dengan JS aktif
+   * tidak berubah kecuali jendela muat yang kini menampilkan hasil. */
+  const r = useMemo(() => {
+    if (index) return rank(index, dq);
+    if (initialResults && sameSearchQuery(dq, initial)) {
+      return adaptInitialResults(initialResults);
+    }
+    return null;
+  }, [index, dq, initial, initialResults]);
 
   /* Kota yang ada di data (dari indeks yang sudah dimuat), supaya
    * dropdown kota hanya menawarkan kota yang benar-benar punya
@@ -272,16 +309,25 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
   const filterCount =
     activeFilters.length + (state.urutan !== "relevansi" ? 1 : 0);
 
+  /* `total` adalah hitungan seluruh hasil; `r.results` hanya
+   * potongan pertama bila r berasal dari hasil awal server. */
+  const total = r ? (r.total ?? r.results.length) : 0;
   const queryHasPosisi = r ? r.hasP : false;
-  const anyPositionMatch =
-    r && (r.mode === "perusahaan" || r.results.some((e) => e.positionMatched));
+  const anyPositionMatch = r
+    ? (r.anyPositionMatch ??
+      (r.mode === "perusahaan" ||
+        r.results.some((e) => e.positionMatched)))
+    : false;
   /* Kelompok hasil mode nama (S5): hitungan memakai seluruh hasil,
    * bukan hanya potongan yang tampil, supaya judul kelompok jujur. */
   const grouped = r ? r.mode === "perusahaan" : false;
   const companyCount = grouped
-    ? r.results.filter((e) => e.nameMatched).length
+    ? (r.groupCounts?.companies ??
+      r.results.filter((e) => e.nameMatched).length)
     : 0;
-  const roleCount = grouped ? r.results.length - companyCount : 0;
+  const roleCount = grouped
+    ? (r.groupCounts?.roles ?? r.results.length - companyCount)
+    : 0;
 
   const reset = () => {
     setState({
@@ -358,9 +404,16 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
         </aside>
 
         <div className="cari-main">
+          {/* AKSES-02: formulir GET asli (method + action + name) —
+            tanpa JavaScript, kirim formulir memuat ulang /cari dengan
+            query di alamat dan server me-render hasilnya. Dengan JS,
+            onSubmit mencegah kirim dan pencarian tetap langsung. */}
           <form
+            id="cari-form"
             className="searchrow"
             role="search"
+            method="get"
+            action="/cari"
             onSubmit={(e) => e.preventDefault()}
           >
             <div className="field">
@@ -369,6 +422,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
                 <Icon name="pin" size={18} />
                 <input
                   id="cari-domisili"
+                  name="domisili"
                   type="text"
                   enterKeyHint="search"
                   value={state.domisili}
@@ -384,6 +438,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
                 <Icon name="search" size={18} />
                 <input
                   id="cari-posisi"
+                  name="posisi"
                   type="text"
                   enterKeyHint="search"
                   value={state.posisi}
@@ -398,12 +453,26 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
               className="btn ghost filter-btn"
               onClick={() => setSheet(true)}
               aria-haspopup="dialog"
+              aria-expanded={sheet}
             >
               <Icon name="sliders" size={18} />
               <span>{labels.filters}</span>
               {filterCount > 0 && <span className="badge-n num">{filterCount}</span>}
             </button>
+            {/* AKSES-02 + AKSES-09: tombol kirim hanya tampil tanpa
+              * JavaScript (dengan JS, pencarian langsung saat mengetik). */}
+            <noscript>
+              <button type="submit" className="btn">
+                {labels.submit}
+              </button>
+            </noscript>
           </form>
+          <noscript>
+            <p className="note-line">
+              <Icon name="info" size={16} />
+              {labels.noJsFilters}
+            </p>
+          </noscript>
 
           {activeFilters.length > 0 && (
             <div className="chips-wrap active-filters">
@@ -423,7 +492,10 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
           )}
 
           <section aria-label={labels.resultsLabel}>
-            {loadState === "error" ? (
+            {/* AKSES-02: layar gagal hanya bila tidak ada hasil sama
+              * sekali — bila indeks klien gagal tetapi hasil awal
+              * server ada, hasil itu tetap tampil. */}
+            {loadState === "error" && !r ? (
               <div className="state">
                 <strong>{labels.error}</strong>
                 <button type="button" className="btn" onClick={start}>
@@ -432,15 +504,20 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
               </div>
             ) : !r ? (
               <>
-                <p className="result-count">{labels.loading}</p>
+                {/* AKSES-16: status muat diumumkan ke pembaca layar. */}
+                <p className="result-count" role="status">{labels.loading}</p>
                 <CardSkeletons n={6} />
               </>
             ) : (
               <>
+                {/* AKSES-15: h2 sebelum kartu h3 supaya hierarki
+                  * heading tidak lompat h1 ke h3 (judul kelompok S5
+                  * hanya ada di mode nama; h2 ini ada di semua mode). */}
+                <h2 className="sr-only">{labels.resultsLabel}</h2>
                 <p className="result-count" aria-live="polite">
                   {fill(labels.showing, {
                     a: shown.length,
-                    b: r.results.length,
+                    b: total,
                   })}
                   {r.matched.size > 0 && (
                     <> {fill(labels.matchCount, { m: r.matched.size })}</>
@@ -454,7 +531,8 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
                   <Icon name="share" size={16} />
                   {labels.share}
                 </button>
-                {meta?.source === "seed" && (
+                {(meta?.source === "seed" ||
+                  (!index && r.source === "seed")) && (
                   <p className="note-line">
                     <Icon name="info" size={16} />
                     {labels.seedNote}
@@ -466,7 +544,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
                     {labels.noPositionMatch}
                   </p>
                 )}
-                {r.results.length === 0 ? (
+                {total === 0 ? (
                   <div className="state">
                     <strong>{labels.empty}</strong>
                     <p>{labels.emptyHint}</p>
@@ -495,7 +573,7 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
                     ))}
                   </div>
                 )}
-                {r.results.length > limit && (
+                {total > limit && (
                   <div className="load-more">
                     <button
                       type="button"

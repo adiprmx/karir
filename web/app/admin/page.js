@@ -1319,7 +1319,15 @@ export default function Admin() {
         >
           <fieldset>
             <legend>Email</legend>
+            {/* AKSES-06: label eksplisit sr-only pada semua kontrol
+              * halaman ini — legend memberi konteks, label memberi
+              * nama aksesibel yang pasti (pola yang sama dengan
+              * panel akun). */}
+            <label className="sr-only" htmlFor="admin-login-email">
+              Email
+            </label>
             <input
+              id="admin-login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -1329,7 +1337,11 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Kata sandi</legend>
+            <label className="sr-only" htmlFor="admin-login-password">
+              Kata sandi
+            </label>
             <input
+              id="admin-login-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -1337,7 +1349,12 @@ export default function Admin() {
               autoComplete="current-password"
             />
           </fieldset>
-          {loginError && <p className="notice">{loginError}</p>}
+          {/* AKSES-05: error masuk diumumkan sebagai alert. */}
+          {loginError && (
+            <p className="notice" role="alert">
+              {loginError}
+            </p>
+          )}
           <button className="btn" type="submit">
             Masuk
           </button>
@@ -1529,7 +1546,11 @@ export default function Admin() {
           <div className="filters" style={{ position: "static" }}>
             <fieldset>
               <legend>Cari perusahaan</legend>
+              <label className="sr-only" htmlFor="admin-filter">
+                Cari perusahaan
+              </label>
               <input
+                id="admin-filter"
                 type="text"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
@@ -1539,7 +1560,11 @@ export default function Admin() {
             </fieldset>
             <fieldset>
               <legend>Status</legend>
+              <label className="sr-only" htmlFor="admin-status-filter">
+                Status
+              </label>
               <select
+                id="admin-status-filter"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -1553,7 +1578,11 @@ export default function Admin() {
             </fieldset>
             <fieldset>
               <legend>Urutan</legend>
+              <label className="sr-only" htmlFor="admin-sort">
+                Urutan
+              </label>
               <select
+                id="admin-sort"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
               >
@@ -1566,9 +1595,13 @@ export default function Admin() {
             </button>
           </div>
 
-          {loadError && <p className="notice">{loadError}</p>}
+          {loadError && (
+            <p className="notice" role="alert">
+              {loadError}
+            </p>
+          )}
           {loadingCompanies && (
-            <div className="state">
+            <div className="state" role="status">
               <strong>Memuat data perusahaan…</strong>
             </div>
           )}
@@ -1635,7 +1668,11 @@ export default function Admin() {
         <form className="filters" style={{ position: "static" }} onSubmit={save}>
           <fieldset>
             <legend>Nomor</legend>
+            <label className="sr-only" htmlFor="admin-no">
+              Nomor
+            </label>
             <input
+              id="admin-no"
               type="number"
               value={form.no}
               onChange={(e) => setForm({ ...form, no: e.target.value })}
@@ -1644,7 +1681,11 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Perusahaan</legend>
+            <label className="sr-only" htmlFor="admin-perusahaan">
+              Perusahaan
+            </label>
             <input
+              id="admin-perusahaan"
               type="text"
               value={form.perusahaan}
               onChange={(e) => setForm({ ...form, perusahaan: e.target.value })}
@@ -1653,7 +1694,11 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Kategori</legend>
+            <label className="sr-only" htmlFor="admin-kategori">
+              Kategori
+            </label>
             <input
+              id="admin-kategori"
               type="text"
               value={form.kategori}
               onChange={(e) => setForm({ ...form, kategori: e.target.value })}
@@ -1661,7 +1706,11 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Link karir</legend>
+            <label className="sr-only" htmlFor="admin-link">
+              Link karir
+            </label>
             <input
+              id="admin-link"
               type="url"
               value={form.link_karir}
               onChange={(e) => setForm({ ...form, link_karir: e.target.value })}
@@ -1688,7 +1737,7 @@ export default function Admin() {
             )}
           </div>
           {linkCheck && (
-            <p className="notice">
+            <p className="notice" role="status">
               {linkCheck.ok
                 ? `Tautan bisa dibuka, kode ${linkCheck.status}.`
                 : `Tautan tidak bisa dibuka: ${linkCheck.detail || linkCheck.error || "tidak diketahui."}`}
@@ -1696,7 +1745,11 @@ export default function Admin() {
           )}
           <fieldset>
             <legend>Status</legend>
+            <label className="sr-only" htmlFor="admin-form-status">
+              Status
+            </label>
             <select
+              id="admin-form-status"
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value })}
             >
@@ -1709,7 +1762,11 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Tanggal cek (YYYY-MM-DD)</legend>
+            <label className="sr-only" htmlFor="admin-tanggal">
+              Tanggal cek
+            </label>
             <input
+              id="admin-tanggal"
               type="text"
               value={form.tanggal_cek}
               onChange={(e) => setForm({ ...form, tanggal_cek: e.target.value })}
@@ -1718,7 +1775,11 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Batas lamar (YYYY-MM-DD)</legend>
+            <label className="sr-only" htmlFor="admin-batas">
+              Batas lamar
+            </label>
             <input
+              id="admin-batas"
               type="date"
               value={form.batas_lamar}
               onChange={(e) => setForm({ ...form, batas_lamar: e.target.value })}
@@ -1730,7 +1791,11 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Lokasi</legend>
+            <label className="sr-only" htmlFor="admin-lokasi">
+              Lokasi
+            </label>
             <input
+              id="admin-lokasi"
               type="text"
               value={form.lokasi}
               onChange={(e) => setForm({ ...form, lokasi: e.target.value })}
@@ -1738,7 +1803,11 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Posisi tercatat</legend>
+            <label className="sr-only" htmlFor="admin-posisi">
+              Posisi tercatat
+            </label>
             <input
+              id="admin-posisi"
               type="text"
               value={form.posisi}
               onChange={(e) => setForm({ ...form, posisi: e.target.value })}
@@ -1746,13 +1815,21 @@ export default function Admin() {
           </fieldset>
           <fieldset>
             <legend>Catatan</legend>
+            <label className="sr-only" htmlFor="admin-catatan">
+              Catatan
+            </label>
             <input
+              id="admin-catatan"
               type="text"
               value={form.catatan}
               onChange={(e) => setForm({ ...form, catatan: e.target.value })}
             />
           </fieldset>
-          {message && <p className="notice">{message}</p>}
+          {message && (
+            <p className="notice" role="status">
+              {message}
+            </p>
+          )}
           <div className="filter-actions">
             <button className="btn" type="submit" disabled={saving}>
               {saving ? "Menyimpan…" : "Simpan"}
@@ -1811,7 +1888,9 @@ export default function Admin() {
           </ul>
         )}
         {bulkChanges > 0 && (
-          <p className="notice">Perubahan dicatat di umpan Yang berubah.</p>
+          <p className="notice" role="status">
+            Perubahan dicatat di umpan Yang berubah.
+          </p>
         )}
       </div>
 
@@ -1826,16 +1905,28 @@ export default function Admin() {
         </p>
         <fieldset>
           <legend>Pilih file CSV</legend>
+          <label className="sr-only" htmlFor="admin-csv">
+            Pilih file CSV
+          </label>
           <input
+            id="admin-csv"
             type="file"
             accept=".csv,text/csv"
             onChange={(e) => handleCsvFile(e.target.files?.[0] || null)}
           />
         </fieldset>
-        {csvFileName && <p className="notice">File: {csvFileName}</p>}
-        {csvError && <p className="notice">{csvError}</p>}
+        {csvFileName && (
+          <p className="notice" role="status">
+            File: {csvFileName}
+          </p>
+        )}
+        {csvError && (
+          <p className="notice" role="alert">
+            {csvError}
+          </p>
+        )}
         {(csvValid.length > 0 || csvRejected.length > 0) && (
-          <p className="notice">
+          <p className="notice" role="status">
             {csvValid.length} baris valid, {csvRejected.length} baris
             ditolak
             {csvRejected.length > 0
@@ -1844,7 +1935,7 @@ export default function Admin() {
           </p>
         )}
         {csvValid.length > MAX_IMPORT && (
-          <p className="notice">
+          <p className="notice" role="alert">
             Terlalu banyak: {csvValid.length} baris valid. Maksimal{" "}
             {MAX_IMPORT} baris per impor. Bagi file jadi beberapa bagian.
           </p>

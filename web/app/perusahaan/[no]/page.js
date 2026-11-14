@@ -33,7 +33,7 @@ function shortDescription(company) {
 /* Render teks bebas (kontak_lain, catatan) dengan URL dan alamat email
  * yang bisa diklik. Potongan dibuat helper murni linkifySegments; di
  * sini hanya dipetakan ke elemen React biasa, tanpa HTML mentah. */
-function LinkedText({ text }) {
+function LinkedText({ text, newTab }) {
   return linkifySegments(text).map((seg, i) =>
     seg.href ? (
       <a
@@ -44,6 +44,11 @@ function LinkedText({ text }) {
           : { target: "_blank", rel: "noopener noreferrer" })}
       >
         {seg.text}
+        {/* AKSES-13: tautan web di teks bebas membuka tab baru —
+          * beri tahu pembaca layar (tautan mailto: tidak). */}
+        {!seg.href.startsWith("mailto:") && (
+          <span className="sr-only"> {newTab}</span>
+        )}
       </a>
     ) : (
       seg.text
@@ -167,6 +172,7 @@ export default async function CompanyDetail({ params }) {
               >
                 {t(locale, "detail.tryPortalAnyway")}
                 <Icon name="ext" size={18} />
+                <span className="sr-only"> {t(locale, "common.newTab")}</span>
               </a>
             </>
           ) : (
@@ -178,6 +184,7 @@ export default async function CompanyDetail({ params }) {
             >
               {t(locale, "detail.portalBtn")}
               <Icon name="ext" size={18} />
+              <span className="sr-only"> {t(locale, "common.newTab")}</span>
             </a>
           )
         ) : (
@@ -196,6 +203,7 @@ export default async function CompanyDetail({ params }) {
             reportHint: t(locale, "detail.reportHint"),
             reportSent: t(locale, "detail.reportSent"),
             loading: t(locale, "common.loading"),
+            newTab: t(locale, "common.newTab"),
           }}
         />
       </div>
@@ -251,6 +259,10 @@ export default async function CompanyDetail({ params }) {
                             rel="noopener noreferrer"
                           >
                             {number}
+                            <span className="sr-only">
+                              {" "}
+                              {t(locale, "common.newTab")}
+                            </span>
                           </a>
                         ) : (
                           number
@@ -277,7 +289,10 @@ export default async function CompanyDetail({ params }) {
               <div>
                 <dt>{t(locale, "detail.otherChannels")}</dt>
                 <dd>
-                  <LinkedText text={company.kontak_lain} />
+                  <LinkedText
+                    text={company.kontak_lain}
+                    newTab={t(locale, "common.newTab")}
+                  />
                 </dd>
               </div>
             )}
@@ -324,7 +339,10 @@ export default async function CompanyDetail({ params }) {
                 <dt>{t(locale, "detail.notes")}</dt>
                 <dd>
                   {company.catatan ? (
-                    <LinkedText text={company.catatan} />
+                    <LinkedText
+                      text={company.catatan}
+                      newTab={t(locale, "common.newTab")}
+                    />
                   ) : (
                     t(locale, "detail.noNotes")
                   )}

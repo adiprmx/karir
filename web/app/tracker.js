@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon, showToast } from "@/app/visual";
 import { trackEvent } from "@/app/analytics-track";
 import { TOMBSTONE_KEY, TRACKER_STATUSES } from "@/lib/tracker-sync";
+import { rovingIndex } from "@/lib/a11y";
 
 export const TRACKER_KEY = "karir-lamaran";
 export { TRACKER_STATUSES };
@@ -664,20 +665,46 @@ export function TrackerControl({ company }) {
   }
 
   const idx = entry ? TRACKER_STATUSES.indexOf(entry.status) : -1;
+  /* UX-15: navigasi panah di radiogroup (pola ARIA radio lengkap:
+   * panah memindah pilihan + fokus sekaligus — aktivasi otomatis,
+   * sama dengan klik — dan roving tabindex menjaga satu tab stop). */
+  const radioGroupRef = useRef(null);
+  function onRadioKeyDown(e) {
+    const next = rovingIndex(
+      idx < 0 ? 0 : idx,
+      TRACKER_STATUSES.length,
+      e.key,
+    );
+    if (next === null) return;
+    e.preventDefault();
+    commit({ status: TRACKER_STATUSES[next] });
+    radioGroupRef.current
+      ?.querySelectorAll('[role="radio"]')[next]
+      ?.focus();
+  }
 
   return (
-    <section className="panel" aria-labelledby="lamaran-h" id="lamaran">
+    /* AKSES-12: seluruh seksi ini teks Indonesia kode-keras. */
+    <section className="panel" aria-labelledby="lamaran-h" id="lamaran" lang="id">
       <h2 id="lamaran-h" className="panel-title">
         Lamaran saya
       </h2>
       {!loaded ? (
-        <div className="skeleton" style={{ height: 52 }} />
+        /* AKSES-16: status muat diumumkan ke pembaca layar. */
+        <div
+          className="skeleton"
+          style={{ height: 52 }}
+          role="status"
+          aria-label="Memuat pelacak lamaran"
+        />
       ) : (
         <>
           <div
             className={`seg${idx < 0 ? " seg-none" : ""}`}
             role="radiogroup"
             aria-label="Status lamaran"
+            ref={radioGroupRef}
+            onKeyDown={onRadioKeyDown}
             style={{ "--n": TRACKER_STATUSES.length, "--k": Math.max(0, idx) }}
           >
             <span className="seg-thumb" aria-hidden="true" />
@@ -687,6 +714,7 @@ export function TrackerControl({ company }) {
                 type="button"
                 role="radio"
                 aria-checked={i === idx}
+                tabIndex={i === (idx < 0 ? 0 : idx) ? 0 : -1}
                 className="seg-opt"
                 onClick={() => commit({ status: s })}
               >

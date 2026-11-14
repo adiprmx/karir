@@ -16,6 +16,16 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.15.0",
+    date: "15 November 2026",
+    points: [
+      "Halaman Cari kini menampilkan hasil walau JavaScript gagal dimuat, dan halaman lain menjelaskan dengan jujur bila butuh JavaScript.",
+      "Navigasi keyboard dan pembaca layar diperbaiki: fokus pindah ke judul halaman baru, menu dan filter menjebak fokus di dalamnya.",
+      "Tombol dan tautan kini lebih besar dan mudah disentuh; batas isian dan teks petunjuk lebih jelas dibaca.",
+      "Peta kini mengumumkan nama kota saja saat ganti kota, bukan seluruh daftar perusahaan.",
+    ],
+  },
+  {
     version: "2.14.0",
     date: "15 November 2026",
     points: [

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import "leaflet/dist/leaflet.css";
 import { CompanyLogo } from "@/lib/logos";
-import { Icon } from "@/app/visual";
+import { Icon, reducedMotion } from "@/app/visual";
+import { mapFlyDurationMs } from "@/lib/a11y";
 
 /* Peta Leaflet + daftar kota. Memilih kota (ketuk titik di peta atau chip
  * kota) menggeser peta ke sana dan menampilkan perusahaannya di bawah.
@@ -38,14 +39,27 @@ export default function MapClient({ groups, other }) {
           const icon = L.divIcon({
             className: "karir-marker",
             html: `<span>${g.companies.length}</span>`,
-            iconSize: [36, 36],
-            iconAnchor: [18, 18],
+            /* UX-14: penanda 40px (dulu 36px); CSS .karir-marker
+             * disamakan. */
+            iconSize: [40, 40],
+            iconAnchor: [20, 20],
           });
           const m = L.marker([g.city.lat, g.city.lng], {
             icon,
             title: `${g.city.name}: ${g.companies.length}`,
             keyboard: true,
           }).addTo(map);
+          /* AKSES-14: atribut title tidak diumumkan secara andal
+           * sebagai nama aksesibel — beri aria-label + peran tombol
+           * pada elemen penanda (isi penanda hanya angka). */
+          const node = m.getElement();
+          if (node) {
+            node.setAttribute("role", "button");
+            node.setAttribute(
+              "aria-label",
+              `${g.city.name}, ${g.companies.length} perusahaan ada lowongan`,
+            );
+          }
           m.on("click", () => setSelected(g.city.name));
           markers.current.set(g.city.name, m);
         }
@@ -81,13 +95,22 @@ export default function MapClient({ groups, other }) {
   function choose(g) {
     setSelected(g.city.name);
     const map = mapRef.current;
-    if (map) map.flyTo([g.city.lat, g.city.lng], Math.max(map.getZoom(), 11), { duration: 0.8 });
+    if (!map) return;
+    /* AKSES-14: pengguna yang meminta reduced-motion tidak mendapat
+     * animasi terbang — peta langsung pindah (setView). */
+    const zoom = Math.max(map.getZoom(), 11);
+    if (mapFlyDurationMs(reducedMotion()) === 0) {
+      map.setView([g.city.lat, g.city.lng], zoom);
+    } else {
+      map.flyTo([g.city.lat, g.city.lng], zoom, { duration: 0.8 });
+    }
   }
 
   const current = groups.find((g) => g.city.name === selected);
 
   return (
-    <>
+    /* AKSES-12: seluruh blok ini teks Indonesia kode-keras. */
+    <div lang="id">
       <div className="chips-scroll" role="group" aria-label="Pilih kota">
         {groups.map((g) => (
           <button
@@ -103,10 +126,13 @@ export default function MapClient({ groups, other }) {
         ))}
       </div>
 
+      {/* UX-14: role="application" mengalihkan mode pembaca layar
+        * dan tidak disarankan untuk peta; role="region" + label
+        * sudah cukup, apalagi chip kota adalah alternatif lengkap. */}
       <div
         ref={el}
         className="karir-map"
-        role="application"
+        role="region"
         aria-label="Peta perusahaan yang ada lowongan"
       />
       {failed && (
@@ -117,8 +143,11 @@ export default function MapClient({ groups, other }) {
       )}
 
       {current && (
-        <section className="panel city-panel" key={current.city.name} aria-live="polite">
-          <h2 className="panel-title">
+        <section className="panel city-panel" key={current.city.name}>
+          {/* AKSES-03: live region hanya judul + hitungan. Sebelumnya
+            * aria-live membungkus seluruh daftar perusahaan, sehingga
+            * tiap ganti kota pembaca layar membacakan puluhan nama. */}
+          <h2 className="panel-title" aria-live="polite">
             {current.city.name}{" "}
             <span className="num sub">({current.companies.length})</span>
           </h2>
@@ -160,6 +189,6 @@ export default function MapClient({ groups, other }) {
           </ul>
         </details>
       )}
-    </>
+    </div>
   );
 }

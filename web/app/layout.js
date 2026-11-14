@@ -103,13 +103,20 @@ export default async function RootLayout({ children }) {
         <a className="skip" href="#main">
           {locale === "en" ? "Skip to content" : "Lewati ke isi"}
         </a>
+        {/* AKSES-02: pesan jujur bila JavaScript nonaktif — halaman
+          * yang butuh JS disebut namanya, bukan sekadar halaman kosong. */}
+        <noscript>
+          <p className="noscript-note">{t(locale, "common.noJs")}</p>
+        </noscript>
         <Suspense fallback={null}>
           <SiteNav labels={labels} locale={locale} />
         </Suspense>
         <Suspense fallback={null}>
           <AnalyticsTrack />
         </Suspense>
-        <main id="main">{children}</main>
+        {/* tabIndex -1: target skip link dan cadangan fokus pindah
+          * rute (AKSES-01); tidak menambah tab stop. */}
+        <main id="main" tabIndex={-1}>{children}</main>
         <footer className="foot">
           <div className="wrap foot-inner">
             <p className="foot-note">{t(locale, "footer.note")}</p>
@@ -130,12 +137,15 @@ export default async function RootLayout({ children }) {
                 rel="noopener noreferrer"
               >
                 {t(locale, "footer.repo")}
+                {/* AKSES-13: beri tahu pembaca layar bahwa tautan
+                  * membuka tab baru. */}
+                <span className="sr-only"> {t(locale, "common.newTab")}</span>
                 <Icon name="ext" size={13} />
               </a>
             </nav>
           </div>
         </footer>
-        <ToastHost />
+        <ToastHost closeLabel={t(locale, "common.toastClose")} />
       </body>
     </html>
   );

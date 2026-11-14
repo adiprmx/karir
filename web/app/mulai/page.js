@@ -5,7 +5,7 @@
  * terakhir pengunjung langsung melihat berapa kanal yang cocok, lalu
  * diantar ke /cari dengan filter terisi. Jawaban tersimpan di browser
  * saja. */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { hasOnboardingChoice, useOnboarding } from "@/app/onboarding";
@@ -44,6 +44,36 @@ export default function Mulai() {
   const [posisi, setPosisi] = useState("");
   const [step, setStep] = useState(1);
   const [editing, setEditing] = useState(false);
+  /* AKSES-10: target fokus saat langkah berganti (id isian langkah
+   * 1/2, atau wiz-body untuk ringkasan langkah 3). Hanya diisi oleh
+   * aksi pengguna (Lanjut/Kembali/Enter) — bukan saat muat pertama. */
+  const stepFocusTarget = useRef(null);
+  const wizBodyRef = useRef(null);
+
+  useEffect(() => {
+    if (!stepFocusTarget.current) return;
+    const id = stepFocusTarget.current;
+    stepFocusTarget.current = null;
+    const el =
+      id === "wiz-body"
+        ? wizBodyRef.current
+        : document.getElementById(id);
+    el?.focus();
+  }, [step]);
+
+  function goToStep(next) {
+    stepFocusTarget.current =
+      next === 1 ? "mulai-domisili" : next === 2 ? "mulai-posisi" : "wiz-body";
+    setStep(next);
+  }
+
+  /* AKSES-10: Enter di isian mengirim formulir — sama dengan menekan
+   * Lanjut (langkah 1-2) atau tombol hasil (langkah 3). */
+  function handleWizardSubmit(e) {
+    e.preventDefault();
+    if (step < 3) goToStep(step + 1);
+    else finishOnboarding();
+  }
 
   /* Isi formulir dari data tersimpan begitu data selesai dibaca.
    * Penyesuaian state saat render (pola resmi React untuk state yang
@@ -98,6 +128,11 @@ export default function Mulai() {
     setPosisi(data ? data.posisi || "" : "");
     setStep(1);
     setEditing(true);
+    /* Tombol yang ditekan ikut hilang bersama ringkasan — pindahkan
+     * fokus ke isian pertama supaya tidak jatuh ke <body>. */
+    requestAnimationFrame(() =>
+      document.getElementById("mulai-domisili")?.focus(),
+    );
   }
 
   function onClear() {
@@ -106,12 +141,16 @@ export default function Mulai() {
     setPosisi("");
     setStep(1);
     setEditing(false);
+    requestAnimationFrame(() =>
+      document.getElementById("mulai-domisili")?.focus(),
+    );
   }
 
   const showSummary = loaded && hasOnboardingChoice(data) && !editing;
 
   return (
-    <div className="wrap narrow">
+    /* AKSES-12: seluruh halaman ini teks Indonesia kode-keras. */
+    <div className="wrap narrow" lang="id">
       <div className="page-head">
         <h1>Mulai</h1>
         <p className="lede">
@@ -119,6 +158,15 @@ export default function Mulai() {
           di bawah ini, lalu lihat kanal yang paling cocok denganmu.
         </p>
       </div>
+      {/* AKSES-02: pesan jujur tanpa JavaScript — wizard ini membaca
+        * data dari browser dan tidak bisa di-render server. */}
+      <noscript>
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          Halaman ini butuh JavaScript untuk menampilkan langkah-langkahnya.
+          Aktifkan JavaScript, lalu muat ulang halaman ini.
+        </p>
+      </noscript>
 
       {showSummary ? (
         <section className="panel" aria-label="Pilihanmu saat ini">
@@ -160,7 +208,10 @@ export default function Mulai() {
             Langkah {step} dari 3
           </p>
 
-          <div className="wiz-body" key={step}>
+          {/* AKSES-10: langkah wizard di dalam <form> supaya Enter di
+            * isian melanjutkan langkah (dulu tidak terjadi apa-apa). */}
+          <form onSubmit={handleWizardSubmit}>
+          <div className="wiz-body" key={step} ref={wizBodyRef} tabIndex={-1}>
             {step === 1 && (
               <>
                 <div className="field">
@@ -173,6 +224,7 @@ export default function Mulai() {
                       value={domisili}
                       placeholder="mis. Bogor, Depok, Cibinong"
                       autoComplete="off"
+                      enterKeyHint="next"
                       onChange={(e) => setDomisili(e.target.value)}
                     />
                   </div>
@@ -204,6 +256,7 @@ export default function Mulai() {
                       value={posisi}
                       placeholder="mis. Helper Gudang, Cleaning Service"
                       autoComplete="off"
+                      enterKeyHint="next"
                       onChange={(e) => setPosisi(e.target.value)}
                     />
                   </div>
@@ -262,7 +315,7 @@ export default function Mulai() {
 
           <div className="wiz-nav">
             {step > 1 ? (
-              <button type="button" className="btn ghost" onClick={() => setStep(step - 1)}>
+              <button type="button" className="btn ghost" onClick={() => goToStep(step - 1)}>
                 <Icon name="back" size={18} />
                 Kembali
               </button>
@@ -272,17 +325,18 @@ export default function Mulai() {
               </Link>
             )}
             {step < 3 ? (
-              <button type="button" className="btn" onClick={() => setStep(step + 1)}>
+              <button type="submit" className="btn">
                 Lanjut
                 <Icon name="arrow" size={18} />
               </button>
             ) : (
-              <button type="button" className="btn" onClick={finishOnboarding}>
+              <button type="submit" className="btn">
                 Lihat lowongan yang cocok
                 <Icon name="arrow" size={18} />
               </button>
             )}
           </div>
+          </form>
           <p className="hint">
             Pilihanmu tersimpan di browser ini saja, tidak dikirim ke mana pun.
           </p>

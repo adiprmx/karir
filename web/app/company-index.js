@@ -5,7 +5,7 @@
  * memakai lib/search.js yang sama dengan server, jadi hasilnya sama,
  * tetapi tanpa menunggu jaringan tiap kali mengetik. */
 import { useCallback, useEffect, useState } from "react";
-import { runSearch } from "@/lib/search";
+import { matchedCompanyNos, runSearch } from "@/lib/search";
 import { createIndexFetcher } from "@/lib/index-token";
 
 let cached = null;
@@ -85,14 +85,9 @@ export function rank(index, params) {
   const { results, mode, query } = runSearch(index, params);
   const hasD = query.domisiliTokens.length > 0;
   const hasP = query.posisiTokens.length > 0;
-  const matched = new Set();
-  if (hasD || hasP) {
-    for (const e of results) {
-      const okP = !hasP || e.positionMatched || e.nameMatched;
-      const okD = !hasD || e.reasons.includes("Lokasi cocok");
-      if (okP && okD) matched.add(e.company.no);
-    }
-  }
+  /* Aturan "cocok" yang sama dipakai hasil awal server /cari
+   * (AKSES-02) lewat matchedCompanyNos — jangan ditulis ulang. */
+  const matched = new Set(matchedCompanyNos(results, query));
   const flat = (groups) => [...new Set(groups.flat())];
   return {
     results,

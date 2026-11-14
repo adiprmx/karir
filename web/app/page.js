@@ -89,6 +89,7 @@ export default async function Beranda() {
     mark: t(locale, "search.mark"),
     unmark: t(locale, "search.unmark"),
     open: t(locale, "search.open"),
+    newTab: t(locale, "common.newTab"),
   };
 
   return (
@@ -121,7 +122,20 @@ export default async function Beranda() {
         />
       </section>
 
-      <Reveal className="photo-strip">
+      {/* UX-16: strip foto bisa difokus keyboard di HP (di sana ketiga
+        * foto bergeser horizontal; tanpa fokus, foto 2-3 tidak
+        * terjangkau keyboard). Di desktop stripnya grid tanpa geser,
+        * tetapi satu tab stop tambahan dapat diterima. */}
+      <Reveal
+        className="photo-strip"
+        tabIndex={0}
+        role="region"
+        label={
+          locale === "en"
+            ? "Photos of the work: warehouse, production, cleaning"
+            : "Foto pekerjaan: gudang, produksi, cleaning"
+        }
+      >
         <figure>
           <img
             src="https://images.unsplash.com/photo-1553413077-190dd305871c?q=80&w=800&auto=format&fit=crop"
@@ -169,6 +183,8 @@ export default async function Beranda() {
             mark: t(locale, "search.mark"),
             unmark: t(locale, "search.unmark"),
             open: t(locale, "search.open"),
+            newTab: t(locale, "common.newTab"),
+            shown: t(locale, "home.targetsShown"),
           }}
         />
         <div className="actions-row no-print">
@@ -180,6 +196,9 @@ export default async function Beranda() {
           >
             <Icon name="share" size={16} />
             {t(locale, "home.shareTargets")}
+            {/* AKSES-13: beri tahu pembaca layar bahwa tautan membuka
+              * tab baru (WhatsApp). */}
+            <span className="sr-only"> {t(locale, "common.newTab")}</span>
           </a>
           <PrintButton label={t(locale, "home.printTargets")} />
         </div>

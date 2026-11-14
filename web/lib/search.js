@@ -18,6 +18,11 @@
 
 import { matchCity } from "./cities.js";
 
+/* Jumlah hasil per halaman /cari (T13, AKSES-02): server mengirim
+ * potongan pertama ini sebagai hasil awal, klien memakai angka yang
+ * sama untuk limit awal — satu konstanta supaya tidak menyimpang. */
+export const SEARCH_PAGE_SIZE = 20;
+
 export function normalizeText(value) {
   if (!value) return "";
   return String(value)
@@ -235,6 +240,24 @@ export function compareByScore(a, b) {
 
 export function compareByName(a, b) {
   return a.company.perusahaan.localeCompare(b.company.perusahaan, "id");
+}
+
+/* Nomor perusahaan yang memenuhi SEMUA isian yang diketik (posisi
+ * DAN domisili) — dipakai rank() klien (company-index.js) dan hasil
+ * awal server /cari (cari/page.js, AKSES-02) supaya hitungan
+ * "cocok" sama di kedua jalur. `scored` adalah hasil runSearch,
+ * `query` adalah objek query yang dikembalikannya. */
+export function matchedCompanyNos(scored, query) {
+  const hasD = query.domisiliTokens.length > 0;
+  const hasP = query.posisiTokens.length > 0;
+  if (!hasD && !hasP) return [];
+  const out = [];
+  for (const e of scored) {
+    const okP = !hasP || e.positionMatched || e.nameMatched;
+    const okD = !hasD || e.reasons.includes("Lokasi cocok");
+    if (okP && okD) out.push(e.company.no);
+  }
+  return out;
 }
 
 export function countBy(list, key) {

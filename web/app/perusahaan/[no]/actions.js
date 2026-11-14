@@ -122,6 +122,9 @@ export function DetailActions({ company, url, labels }) {
           rel="noopener noreferrer"
         >
           WhatsApp
+          {/* AKSES-13: beri tahu pembaca layar bahwa tautan membuka
+            * tab baru. */}
+          <span className="sr-only"> {labels.newTab}</span>
         </a>
       </div>
 
@@ -141,9 +144,15 @@ export function DetailActions({ company, url, labels }) {
               autoComplete="off"
             />
           </div>
-          {sent && <p className="note-line ok">{labels.reportSent}</p>}
+          {/* AKSES-05: hasil laporan diumumkan — terkirim sebagai
+            * status, gagal sebagai alert. */}
+          {sent && (
+            <p className="note-line ok" role="status">
+              {labels.reportSent}
+            </p>
+          )}
           {reportError && (
-            <p className="note-line">
+            <p className="note-line" role="alert">
               Laporan gagal terkirim. Periksa koneksi lalu coba lagi.
             </p>
           )}

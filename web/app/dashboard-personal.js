@@ -62,7 +62,9 @@ export default function DashboardPersonal() {
 
   if (!loaded || !ready) {
     return (
-      <section className="panel" aria-label="Dasbor saya">
+      /* AKSES-16: aria-busy memberi tahu pembaca layar bahwa seksi
+       * ini sedang dimuat (pola yang sama dengan loading.js). */
+      <section className="panel" aria-label="Dasbor saya" aria-busy="true" lang="id">
         <div className="skeleton" style={{ height: 28, width: "60%" }} />
         <div className="skeleton" style={{ height: 80, marginTop: 16 }} />
       </section>
@@ -121,7 +123,8 @@ export default function DashboardPersonal() {
     : "/cari";
 
   return (
-    <Reveal className="panel mine" as="section">
+    /* AKSES-12: seluruh seksi ini teks Indonesia kode-keras. */
+    <Reveal className="panel mine" as="section" lang="id">
       <div className="mine-top">
         <div>
           <p className="kicker">Dasbor saya</p>
