@@ -9,14 +9,36 @@
 
 ## Audience and job
 
-Indonesian job seekers. They open the app, type where they live and what position they want, and get the official career channels worth opening. They must be able to tell within seconds whether a result is a verified vacancy or just a channel to check.
+Pencari kerja di Indonesia. Mereka membuka aplikasi, mengetik domisili dan posisi yang dicari, lalu membuka kanal karir resmi yang layak dibuka. Dalam hitungan detik mereka harus bisa membedakan hasil yang lowongannya terverifikasi dari kanal yang sekadar layak dicek.
+
+Segmen pengguna (disusun dari peran dan wilayah yang datanya dicek; semuanya asumsi sampai divalidasi, lihat `docs/riset-pengguna.md`):
+
+- Pencari kerja pertama kali. Baru lulus atau baru pertama kali melamar. Butuh dipandu: alur `/mulai`, penjelasan tiap status, dan peringatan soal lowongan palsu.
+- Pencari kerja yang sudah biasa melamar. Tahu posisi yang dicari. Butuh kecepatan: ketik, lihat hasil, buka portal, tandai.
+- Pencari kerja yang melamar ke banyak tempat sekaligus. Butuh pelacak: tandai tiap perusahaan, catat tanggal dan status, lihat semuanya di satu halaman.
+- Pencari kerja di wilayah fokus daftar ini: Bogor, Depok, Cibinong, Citayam, Bojonggede, Citeureup, Gunung Putri, dan Jabodetabek. Domisili dipakai untuk mengurutkan hasil, bukan menyaringnya; lowongan di luar wilayah itu tetap tercatat.
+
+Peran yang datanya paling sering dicek: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, dan Crew Store. Semua peran setara; tidak ada peran yang diutamakan di atas yang lain.
+
+## Prioritas dan keputusan
+
+Pemilik repo yang memutuskan apa yang dikerjakan dan urutannya. Kriteria urutannya, dari yang didahulukan:
+
+1. Kebenaran data dan keamanan pengguna. Data yang salah atau menyesatkan diperbaiki dulu; begitu juga celah yang membahayakan pengguna atau data.
+2. Fitur inti yang dipakai setiap hari: cari, halaman detail, dan pelacak lamaran.
+3. Kemudahan berkontribusi dan meminta bantuan: template issue, panduan kontribusi, dan jalur laporan yang jelas.
+4. Poles dan perluasan: perbaikan tampilan, fitur baru, dan perluasan cakupan data.
+
+Setiap keputusan dicatat beserta alasannya di CHANGELOG (untuk rilis) atau di dokumen yang bersangkutan, mengikuti praktik yang sudah ada di entri changelog 2.0.0 sampai 2.8.2. Keputusan yang dibalik dicatat juga: dokumen yang memuat keputusan lama diperbarui di perubahan yang sama, supaya tidak ada dokumen yang memuat keputusan yang sudah tidak berlaku.
+
+Tanggal target hanya ditulis setelah pemilik menetapkannya. Pekerjaan yang belum punya tanggal ditulis apa adanya, tanpa tanggal tebakan.
 
 ## Alur pengguna (satu garis lurus, tanpa cabang buntu)
 
 1. Buka situs. Landing page langsung menjelaskan ini apa: 610 kanal karir resmi yang dicek langsung di browser, 288 di antaranya ada lowongan. Kolom pencarian ada di layar pertama, jadi pengunjung bisa langsung ketik domisili dan posisi tanpa daftar atau login.
 2. Pengunjung baru tekan "Mulai" (tombol di header). Isi dua hal: domisili dan posisi yang dicari. Jawabannya hanya tersimpan di browsernya sendiri (localStorage, tidak dikirim ke mana pun), lalu ia langsung diarahkan ke hasil yang cocok. Bisa dilewati.
 3. Cari (/cari). Hasil diurutkan pakai skor: posisi cocok paling berat (+50), lalu lokasi cocok (+30), lalu status ada lowongan (+20). Klik satu perusahaan, masuk ke halaman detailnya.
-4. Detail perusahaan (/perusahaan/[no]). Status, lokasi, posisi, catatan hasil cek, dan tanggal dicek. Tombol "Buka portal karir" mengarah ke situs resmi perusahaan itu. Di bawahnya ada "Lamaran saya": tandai sebagai Ditandai, Sudah dilamar, Dipanggil, atau Ditolak, lengkap tanggal dan catatan (tersimpan di browser, dan tersinkron ke akun bila pengunjung masuk).
+4. Detail perusahaan (/perusahaan/[no]). Status, lokasi, posisi, catatan hasil cek, dan tanggal dicek. Tombol "Buka portal karir" mengarah ke situs resmi perusahaan itu. Di bawahnya ada kanal melamar lain bila ada: email atau WhatsApp HRD yang ditemukan di situs resmi perusahaan. Di bawahnya ada "Lamaran saya": tandai sebagai Ditandai, Sudah dilamar, Dipanggil, atau Ditolak, lengkap tanggal dan catatan (tersimpan di browser, dan tersinkron ke akun bila pengunjung masuk).
 5. Lamaran Saya (/lamaran). Semua perusahaan yang ditandai terkumpul di satu halaman, dengan hitungan per status. Di sinilah pengguna mengelola proses lamarannya.
 6. Peta (/peta). perusahaan yang ada lowongannya di peta per kota. Klik satu titik, keluar daftar perusahaan di kota itu.
 7. Dasbor (/dasbor). Ruang kerja pribadi: sapaan sesuai domisili dan posisi dari langkah 2, daftar langkah berikutnya (isi pilihan, tandai lamaran pertama, periksa portal resmi), ringkasan lamaran, lalu grafik sebaran status dan daftar perusahaan yang ada lowongannya. Cap "Terakhir dicek ulang" menunjukkan seberapa segar datanya.

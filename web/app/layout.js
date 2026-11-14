@@ -32,6 +32,9 @@ export const metadata = {
     template: "%s — Karir",
   },
   description: DESKRIPSI_PANJANG,
+  /* Favicon: pakai ikon SVG yang sudah ada di public/ (FE-09). Tanpa
+   * field ini browser meminta /favicon.ico dan mendapat 404. */
+  icons: { icon: "/icon.svg" },
   openGraph: {
     type: "website",
     locale: "id_ID",
@@ -40,7 +43,9 @@ export const metadata = {
     description: DESKRIPSI_PANJANG,
   },
   twitter: {
-    card: "summary",
+    /* Gambar OG berukuran 1200x630, jadi pakai kartu gambar besar
+     * (SEO-08): kartu "summary" menampilkan gambar kecil di X. */
+    card: "summary_large_image",
     title: "Karir — Cari Kanal Lowongan Kerja",
     description: DESKRIPSI_SINGKAT,
   },
@@ -113,6 +118,7 @@ export default async function RootLayout({ children }) {
               <Link href="/tentang">{t(locale, "footer.about")}</Link>
               <Link href="/metode">{t(locale, "footer.method")}</Link>
               <Link href="/faq">{t(locale, "footer.faq")}</Link>
+              <Link href="/dukungan">{t(locale, "footer.support")}</Link>
               <Link href="/changelog">{t(locale, "footer.changelog")}</Link>
               <Link href="/peta">{t(locale, "footer.map")}</Link>
               <Link href="/pengaturan">{t(locale, "footer.settings")}</Link>

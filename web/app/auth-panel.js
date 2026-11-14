@@ -6,43 +6,22 @@
  * akun, supaya lamaran tidak hilang bila ganti perangkat.
  *
  * Firebase Auth diimpor malas (dynamic import) supaya halaman yang
- * tidak memakai akun tidak memuat SDK auth. Masuk dengan Google
- * memakai jendela timbul; bila provider Google belum diaktifkan di
- * Firebase Console, pesannya jelas begitu, bukan klaim sudah aktif.
- * Email dan kata sandi sudah aktif. Pesan error memakai bahasa
- * sehari-hari. Email tidak pernah ditulis ke event pengunjung. */
+ * tidak memakai akun tidak memuat SDK auth. Masuk memakai email dan
+ * kata sandi. Masuk dengan Google tidak tersedia: provider Google
+ * tidak aktif di Firebase Auth proyek ini, jadi tombolnya dihapus
+ * (mengaktifkannya butuh pemilik mengaktifkan provider Google di
+ * Firebase Console). Pesan error memakai bahasa sehari-hari. Email
+ * tidak pernah ditulis ke event pengunjung. */
 import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { clearAnalyticsUid, setAnalyticsUid } from "@/lib/analytics";
+import {
+  authErrorMessage,
+  sendPasswordReset,
+  sendVerificationEmail,
+} from "@/lib/account-data";
 
-/* Terjemahan kode error Firebase Auth ke bahasa sehari-hari. */
-export function authErrorMessage(code) {
-  switch (code) {
-    case "auth/invalid-email":
-      return "Alamat email tidak dikenal. Periksa lagi tulisannya.";
-    case "auth/user-not-found":
-    case "auth/wrong-password":
-    case "auth/invalid-credential":
-      return "Email atau kata sandi salah.";
-    case "auth/email-already-in-use":
-      return "Email ini sudah dipakai. Coba masuk, atau pakai email lain.";
-    case "auth/weak-password":
-      return "Kata sandi terlalu pendek, minimal 6 huruf.";
-    case "auth/too-many-requests":
-      return "Terlalu sering mencoba. Tunggu sebentar lalu coba lagi.";
-    case "auth/network-request-failed":
-      return "Tidak ada koneksi. Periksa internet lalu coba lagi.";
-    case "auth/popup-blocked":
-      return "Jendela masuk diblokir browser. Izinkan jendela timbul untuk situs ini lalu coba lagi.";
-    case "auth/popup-closed-by-user":
-      return "Jendela masuk ditutup sebelum selesai. Coba lagi.";
-    case "auth/operation-not-allowed":
-    case "auth/provider-not-enabled":
-      return "Masuk dengan Google belum diaktifkan. Coba masuk dengan email.";
-    default:
-      return "Tidak bisa masuk sekarang. Coba lagi sebentar lagi.";
-  }
-}
+export { authErrorMessage };
 
 /* Mengikuti status masuk pengguna. Dipakai panel ini dan navigasi
  * untuk menampilkan siapa yang sedang masuk. */
@@ -99,17 +78,25 @@ export default function AuthPanel() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  /* Hanya pemicunya yang dipakai: menaikkan angka ini memaksa
+   * render ulang supaya status terverifikasi yang baru terbaca. */
+  const [, setVerifyChecked] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
     setError("");
+    setInfo("");
     setBusy(true);
     try {
       const {
         createUserWithEmailAndPassword,
         signInWithEmailAndPassword,
+        sendEmailVerification,
         updateProfile,
       } = await import("firebase/auth");
       if (mode === "daftar") {
@@ -122,6 +109,10 @@ export default function AuthPanel() {
         if (displayName) {
           await updateProfile(cred.user, { displayName }).catch(() => {});
         }
+        /* Email verifikasi dikirim sekali saat daftar; gagal kirim
+         * tidak menggagalkan pendaftaran, tombol kirim ulang di
+         * tampilan akun menutupinya. */
+        await sendEmailVerification(cred.user).catch(() => {});
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       }
@@ -132,19 +123,64 @@ export default function AuthPanel() {
     setBusy(false);
   }
 
-  async function signInGoogle() {
-    setError("");
-    setBusy(true);
-    try {
-      const { GoogleAuthProvider, signInWithPopup } =
-        await import("firebase/auth");
-      await signInWithPopup(auth, new GoogleAuthProvider());
-    } catch (err) {
-      if (err && err.code !== "auth/cancelled-popup-request") {
-        setError(authErrorMessage(err && err.code));
-      }
+  /* Lupa kata sandi: kirim tautan reset ke email yang tertulis.
+   * Pesannya sama untuk email terdaftar maupun tidak, supaya
+   * keberadaan email tidak bocor. */
+  async function forgotPassword() {
+    const address = email.trim();
+    if (!address) {
+      setError("Tulis email dulu di kolom di atas, baru minta tautan.");
+      setInfo("");
+      return;
     }
-    setBusy(false);
+    setError("");
+    setInfo("");
+    setResetBusy(true);
+    const result = await sendPasswordReset(address);
+    if (result.sent) {
+      setInfo(result.message);
+    } else {
+      setError(result.message);
+    }
+    setResetBusy(false);
+  }
+
+  async function resendVerification() {
+    if (!user) return;
+    setError("");
+    setInfo("");
+    setVerifyBusy(true);
+    const result = await sendVerificationEmail(user);
+    if (result.ok) {
+      setInfo(result.message);
+    } else {
+      setError(result.message);
+    }
+    setVerifyBusy(false);
+  }
+
+  /* Muat ulang status akun dari server, supaya tanda terverifikasi
+   * muncul setelah pengguna mengetuk tautan di emailnya. */
+  async function recheckVerification() {
+    if (!user) return;
+    setError("");
+    setInfo("");
+    setVerifyBusy(true);
+    try {
+      await user.reload();
+      setVerifyChecked((n) => n + 1);
+      if (user.emailVerified) {
+        setInfo("Email sudah terverifikasi.");
+      } else {
+        setInfo(
+          "Email masih belum terverifikasi. Ketuk tautan di email yang " +
+            "dikirim, lalu periksa lagi.",
+        );
+      }
+    } catch {
+      setError("Status verifikasi belum bisa diperiksa. Coba lagi sebentar lagi.");
+    }
+    setVerifyBusy(false);
   }
 
   async function signOutUser() {
@@ -170,6 +206,37 @@ export default function AuthPanel() {
           Lamaran di perangkat ini ikut tersimpan ke akun. Semua fitur
           tetap bisa dipakai tanpa masuk.
         </p>
+        {!user.emailVerified && (
+          <>
+            <p className="notice">
+              Email ini belum terverifikasi. Ketuk tautan di email
+              verifikasi supaya akun ini dikenali sebagai milikmu.
+            </p>
+            <div className="filter-actions">
+              <button
+                className="btn ghost small"
+                type="button"
+                onClick={resendVerification}
+                disabled={verifyBusy}
+              >
+                {verifyBusy ? "Mengirim…" : "Kirim ulang email verifikasi"}
+              </button>
+              <button
+                className="btn ghost small"
+                type="button"
+                onClick={recheckVerification}
+                disabled={verifyBusy}
+              >
+                Periksa lagi
+              </button>
+            </div>
+          </>
+        )}
+        {user.emailVerified && (
+          <p className="section-note">Email sudah terverifikasi.</p>
+        )}
+        {info && <p className="notice">{info}</p>}
+        {error && <p className="notice">{error}</p>}
         <div className="filter-actions">
           <button
             className="btn ghost small"
@@ -199,6 +266,7 @@ export default function AuthPanel() {
           onClick={() => {
             setMode("masuk");
             setError("");
+            setInfo("");
           }}
           style={
             mode === "masuk"
@@ -215,6 +283,7 @@ export default function AuthPanel() {
           onClick={() => {
             setMode("daftar");
             setError("");
+            setInfo("");
           }}
           style={
             mode === "daftar"
@@ -263,25 +332,23 @@ export default function AuthPanel() {
           />
         </fieldset>
         {error && <p className="notice">{error}</p>}
+        {info && <p className="notice">{info}</p>}
         <div className="filter-actions">
           <button className="btn" type="submit" disabled={busy}>
             {busy ? "Tunggu…" : mode === "daftar" ? "Buat akun" : "Masuk"}
           </button>
+          {mode === "masuk" && (
+            <button
+              className="btn ghost small"
+              type="button"
+              onClick={forgotPassword}
+              disabled={busy || resetBusy}
+            >
+              {resetBusy ? "Mengirim…" : "Lupa kata sandi?"}
+            </button>
+          )}
         </div>
       </form>
-      <div className="filter-actions">
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={signInGoogle}
-          disabled={busy}
-        >
-          Masuk dengan Google
-        </button>
-      </div>
-      <p className="hint">
-        Masuk dengan Google butuh diaktifkan dulu di Firebase Console.
-      </p>
     </div>
   );
 }

@@ -23,7 +23,7 @@ const QA = [
   },
   {
     q: "Apakah Karir gratis?",
-    a: "Ya, gratis. Tidak ada biaya. Masuk akun itu pilihan, bukan kewajiban — tanpa masuk pun semua fitur tetap bisa dipakai.",
+    a: "Ya, gratis. Tidak ada biaya. Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai.",
   },
   {
     q: "Apakah harus masuk akun untuk memakai Karir?",
@@ -39,15 +39,23 @@ const QA = [
   },
   {
     q: "Bagaimana mengenali lowongan palsu?",
-    a: "Rekrutmen resmi tidak pernah meminta bayaran. Jangan pernah membayar untuk melamar — termasuk uang pendaftaran, seragam, atau pelatihan. Hati-hati juga bila diminta foto KTP atau rekening di awal, dijanjikan gaji jauh di atas wajar, atau dihubungi dari nomor pribadi, bukan kanal resmi perusahaan. Kalau menemukan yang mencurigakan di daftar ini, beri tahu kami lewat issue di repo GitHub Karir.",
+    a: "Rekrutmen resmi tidak pernah meminta bayaran. Jangan pernah membayar untuk melamar, termasuk uang pendaftaran, seragam, atau pelatihan. Hati-hati juga bila diminta foto KTP atau rekening di awal, dijanjikan gaji jauh di atas wajar, atau dihubungi dari nomor pribadi, bukan kanal resmi perusahaan. Kalau menemukan yang mencurigakan di daftar ini, beri tahu kami lewat halaman Dukungan.",
   },
   {
     q: "Bagaimana melaporkan tautan mati?",
-    a: "Buka halaman perusahaannya, lalu pakai tombol Laporkan tautan mati. Kamu juga bisa buka issue di repo GitHub Karir.",
+    a: "Buka halaman perusahaannya, lalu buka bagian Ada yang salah? Laporkan tautan mati. Cara lain melapor dan yang terjadi setelah melapor ada di halaman Dukungan.",
+  },
+  {
+    q: "Apakah laporan saya dibalas?",
+    a: "Tidak ada balasan perorangan, karena laporan tidak meminta nama atau kontak. Bila tautan diperbaiki dan status perusahaan berubah, perubahannya tercatat di bagian Yang berubah di Beranda.",
   },
   {
     q: "Bagaimana berkontribusi?",
-    a: "Usulkan perusahaan baru atau koreksi lewat issue dan pull request di repo GitHub. Sertakan tautan halaman resmi yang kamu buka langsung sebagai bukti.",
+    a: "Usulkan perusahaan baru atau koreksi lewat issue dan pull request di repo GitHub. Sertakan tautan halaman resmi yang kamu buka langsung sebagai bukti. Cara lengkapnya ada di halaman Dukungan.",
+  },
+  {
+    q: "Ke mana bertanya bila jawaban tidak ada di sini?",
+    a: "Buka halaman Dukungan. Di sana ada cara melaporkan masalah, mengoreksi data, dan mengajukan pertanyaan lewat issue GitHub.",
   },
   {
     q: "Kenapa skor bukan janji lowongan?",

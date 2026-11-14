@@ -6,28 +6,42 @@ export const dynamic = "force-dynamic";
 
 const BASE = "https://karir-adiprmx.vercel.app";
 
-const STATIC_PAGES = [
-  { path: "", lastModified: "2026-11-06" },
-  { path: "/cari", lastModified: "2026-11-06" },
-  { path: "/dasbor", lastModified: "2026-11-06" },
-  { path: "/lamaran", lastModified: "2026-11-06" },
-  { path: "/peta", lastModified: "2026-11-06" },
-  { path: "/mulai", lastModified: "2026-11-06" },
-  { path: "/pengaturan", lastModified: "2026-11-06" },
-  { path: "/tentang", lastModified: "2026-11-06" },
-  { path: "/metode", lastModified: "2026-11-06" },
-  { path: "/faq", lastModified: "2026-11-06" },
-  { path: "/changelog", lastModified: "2026-11-06" },
-  { path: "/privasi", lastModified: "2026-11-15" },
-  { path: "/syarat", lastModified: "2026-11-15" },
+/* Halaman statis yang layak diindeks (SEO-03/FE-10). /lamaran dan
+ * /pengaturan TIDAK masuk: isinya data personal pengunjung, tanpa
+ * nilai pencarian — /pengaturan juga memakai meta noindex. /mulai
+ * dan /dasbor tetap masuk sampai koordinator memutuskan (SEO-03). */
+const STATIC_PATHS = [
+  "",
+  "/cari",
+  "/dasbor",
+  "/peta",
+  "/mulai",
+  "/tentang",
+  "/metode",
+  "/faq",
+  "/dukungan",
+  "/changelog",
+  "/privasi",
+  "/syarat",
 ];
+
+const FALLBACK_DATE = new Date("2026-11-05");
 
 export default async function sitemap() {
   const companies = await getCompaniesOrSeed();
+  /* Tanggal halaman statis mengikuti cek data terbaru (tanggal_cek
+   * terbesar di seed) — isi halaman statis berubah saat data dicek
+   * ulang. Tanpa tanggal yang sah, pakai tanggal cadangan. */
+  let latestCheck = FALLBACK_DATE;
+  for (const c of companies) {
+    if (!c.tanggal_cek) continue;
+    const d = new Date(c.tanggal_cek);
+    if (!Number.isNaN(d.getTime()) && d > latestCheck) latestCheck = d;
+  }
   return [
-    ...STATIC_PAGES.map((p) => ({
-      url: `${BASE}${p.path}`,
-      lastModified: new Date(p.lastModified),
+    ...STATIC_PATHS.map((path) => ({
+      url: `${BASE}${path}`,
+      lastModified: latestCheck,
     })),
     ...companies.map((c) => ({
       url: `${BASE}/perusahaan/${c.no}`,

@@ -6,7 +6,7 @@ import { CountUp } from "@/app/visual";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Tentang Karir",
+  title: "Tentang",
   description:
     "Karir adalah daftar kanal karir resmi perusahaan Indonesia yang dicek langsung di browser. Masuk akun itu pilihan, bukan kewajiban.",
 };

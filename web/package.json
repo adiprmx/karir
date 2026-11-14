@@ -7,6 +7,9 @@
     "react-dom": "^19.0.0"
   },
   "description": "Karir: alat cari kanal lowongan kerja. Next.js + Firestore.",
+  "engines": {
+    "node": "24.x"
+  },
   "name": "karir-web",
   "private": true,
   "scripts": {
@@ -14,10 +17,10 @@
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start",
-    "test": "node --test lib/search.test.js lib/analytics.test.js lib/api-token.test.js lib/tracker-sync.test.js lib/index-token.test.js lib/rate-limit.test.js lib/notify.test.js lib/companies-dedup.test.js lib/companies-seed.test.js lib/admin-auth.test.js lib/check.test.js lib/require-env.test.js lib/cities.test.js"
+    "test": "node --test lib/search.test.js lib/analytics.test.js lib/api-token.test.js lib/tracker-sync.test.js lib/index-token.test.js lib/rate-limit.test.js lib/notify.test.js lib/companies-dedup.test.js lib/companies-seed.test.js lib/admin-auth.test.js lib/check.test.js lib/require-env.test.js lib/cities.test.js lib/account-data.test.js app/admin/support-reports.test.js app/onboarding.test.js app/components.test.js"
   },
   "type": "module",
-  "version": "2.10.0",
+  "version": "2.11.0",
   "devDependencies": {
     "eslint": "^10.14.0",
     "eslint-config-next": "^16.4.5"

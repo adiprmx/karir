@@ -21,7 +21,17 @@
  * perusahaan di subkoleksi user_trackers/{uid}/items/{companyNo}.
  * mergeTrackers menerima peta atau larik, jadi kedua bentuk bisa
  * digabung. Modul ini murni di tingkat atas: Firebase diimpor malas
- * di dalam fungsi, supaya tes unit dan halaman tamu tidak memuat SDK. */
+ * di dalam fungsi, supaya tes unit dan halaman tamu tidak memuat SDK.
+ *
+ * T3 (LAM-03/04/05, AKUN-02/06): perubahan setelah masuk dikirim ke
+ * akun saat terjadi (pushTracker, debounce di app/tracker.js), bukan
+ * hanya saat masuk; bentrok diselesaikan dengan updatedAt (waktu
+ * ubah), bukan tanggal lamaran; penanda hapus dipisah per akun
+ * supaya tidak menghapus lamaran akun lain di perangkat bersama;
+ * semua kegagalan mengembalikan `code` (offline/sibuk/ditolak/sesi/
+ * gagal) supaya antarmuka bisa menjelaskan tanpa istilah teknis.
+ * Fungsi yang menyentuh Firestore menerima klien suntik sebagai
+ * argumen terakhir (untuk tes dengan mock, tanpa jaringan). */
 
 export const TRACKER_STATUSES = [
   "Ditandai",
@@ -40,12 +50,29 @@ const MAX_CATATAN = 200;
  * Tombstone dibersihkan setelah penghapusan di akun terkonfirmasi. */
 export const TOMBSTONE_KEY = "karir-lamaran-dihapus";
 
+/* Kunci penanda hapus untuk satu akun (AKUN-06): penanda hapus
+ * milik satu akun tidak boleh menghapus lamaran akun lain di
+ * perangkat bersama. Tanpa uid, kembalikan kunci global lama
+ * (dipakai sebelum T3). Kunci global TIDAK pernah diterapkan ke
+ * akun mana pun sejak T3: penanda lama tidak bisa dipastikan
+ * milik akun yang sedang masuk, jadi menerapkannya berisiko
+ * menghapus data orang lain; penanda itu dibiarkan tidak terpakai
+ * dan penghapusan lama yang belum terkirim perlu diulang sekali
+ * oleh pemiliknya. */
+export function tombstoneKeyFor(uid) {
+  return typeof uid === "string" && uid
+    ? `${TOMBSTONE_KEY}:${uid}`
+    : TOMBSTONE_KEY;
+}
+
 /* Baca tombstone dari localStorage. Kembalikan peta kosong bila
- * tidak ada, rusak, atau di luar browser (mis. saat tes unit). */
-export function readTombstones() {
+ * tidak ada, rusak, atau di luar browser (mis. saat tes unit).
+ * Bila uid diisi, baca kunci akun itu; tanpa uid, baca kunci
+ * global lama. */
+export function readTombstones(uid) {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(TOMBSTONE_KEY);
+    const raw = window.localStorage.getItem(tombstoneKeyFor(uid));
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -62,12 +89,13 @@ export function readTombstones() {
 }
 
 /* Tulis peta tombstone ke localStorage. Kembalikan false bila
- * browser menolak menyimpan atau di luar browser. */
-export function writeTombstones(tombstones) {
+ * browser menolak menyimpan atau di luar browser. Bila uid diisi,
+ * tulis ke kunci akun itu. */
+export function writeTombstones(tombstones, uid) {
   if (typeof window === "undefined") return false;
   try {
     window.localStorage.setItem(
-      TOMBSTONE_KEY,
+      tombstoneKeyFor(uid),
       JSON.stringify(tombstones || {}),
     );
     return true;
@@ -77,17 +105,18 @@ export function writeTombstones(tombstones) {
 }
 
 /* Catat penanda hapus untuk satu perusahaan (waktu sekarang).
- * Kembalikan peta tombstone terbaru; nomor tidak sah diabaikan. */
-export function recordTombstone(companyNo) {
+ * Kembalikan peta tombstone terbaru; nomor tidak sah diabaikan.
+ * Bila uid diisi, catat di kunci akun itu. */
+export function recordTombstone(companyNo, uid) {
   const no = Number(companyNo);
   if (!Number.isInteger(no) || no < 1 || no > MAX_COMPANY_NO) {
-    return readTombstones();
+    return readTombstones(uid);
   }
   const next = {
-    ...readTombstones(),
+    ...readTombstones(uid),
     [String(no)]: new Date().toISOString(),
   };
-  writeTombstones(next);
+  writeTombstones(next, uid);
   return next;
 }
 
@@ -162,7 +191,18 @@ function normalizeEntry(raw) {
       : "";
   const catatan =
     typeof raw.catatan === "string" ? raw.catatan.slice(0, MAX_CATATAN) : "";
-  return { companyNo: no, status: raw.status, tanggal, catatan };
+  const entry = { companyNo: no, status: raw.status, tanggal, catatan };
+  /* updatedAt dipertahankan untuk penyelesaian bentrok (LAM-05):
+   * entri yang diubah belakangan yang menang, bukan yang tanggal
+   * lamarannya belakangan. Nilai yang bukan tanggal sah dibuang,
+   * supaya entri lama tanpa updatedAt jatuh ke fallback tanggal. */
+  if (
+    typeof raw.updatedAt === "string" &&
+    !Number.isNaN(Date.parse(raw.updatedAt))
+  ) {
+    entry.updatedAt = raw.updatedAt;
+  }
+  return entry;
 }
 
 /* Ubah peta ({ "12": {...} }) atau larik ([{...}]) jadi peta dengan
@@ -187,14 +227,27 @@ function toMap(input) {
 }
 
 /* Gabung dua daftar pelacak jadi satu peta { "<no>": entri }.
- * Nomor yang sama: tanggal yang lebih baru menang. Tanggal sama:
- * entri lokal dipertahankan. Nomor yang beda: keduanya disimpan.
- * Daftar kosong atau entri yang tidak sah tidak membuat error. */
+ * Nomor yang sama: yang diubah belakangan menang (bandingkan
+ * updatedAt, LAM-05). Bila salah satu sisi tidak punya updatedAt
+ * yang sah (entri lama), fallback ke tanggal lamaran seperti dulu;
+ * tanggal sama: entri lokal dipertahankan. Nomor yang beda:
+ * keduanya disimpan. Daftar kosong atau entri yang tidak sah
+ * tidak membuat error. */
 export function mergeTrackers(local, remote) {
   const merged = toMap(local);
   toMap(remote).forEach((entry, key) => {
     const cur = merged.get(key);
-    if (!cur || (entry.tanggal || "") > (cur.tanggal || "")) {
+    if (!cur) {
+      merged.set(key, entry);
+      return;
+    }
+    const remoteTime = Date.parse(entry.updatedAt || "");
+    const curTime = Date.parse(cur.updatedAt || "");
+    if (!Number.isNaN(remoteTime) && !Number.isNaN(curTime)) {
+      if (remoteTime > curTime) merged.set(key, entry);
+      return;
+    }
+    if ((entry.tanggal || "") > (cur.tanggal || "")) {
       merged.set(key, entry);
     }
   });
@@ -205,30 +258,65 @@ export function mergeTrackers(local, remote) {
   return out;
 }
 
+/* Kelompokkan error Firestore ke kode yang bisa dijelaskan ke
+ * pengguna tanpa istilah teknis (kondisi terdegradasi, S4):
+ * "offline" (tidak tersambung), "sibuk" (batas server tercapai,
+ * 429), "ditolak" (izin), "sesi" (sesi akun berakhir), "gagal"
+ * (lainnya). Fungsi murni: tanpa Firebase; cek navigator hanya
+ * bila ada (di tes unit navigator tidak ada). */
+export function classifySyncError(error) {
+  const code = error && typeof error.code === "string" ? error.code : "";
+  if (code === "unavailable") return "offline";
+  if (code === "resource-exhausted") return "sibuk";
+  if (code === "permission-denied") return "ditolak";
+  if (code === "unauthenticated") return "sesi";
+  if (
+    typeof navigator !== "undefined" &&
+    navigator &&
+    navigator.onLine === false
+  ) {
+    return "offline";
+  }
+  return "gagal";
+}
+
+/* Ambil API Firestore: klien yang disuntikkan (untuk tes dengan
+ * mock) atau impor malas SDK asli. Bentuk klien suntik sama
+ * dengan yang dipakai fungsi-fungsi di bawah: { db, collection,
+ * doc, getDocs, writeBatch, deleteDoc, setDoc }. */
+async function loadFirestore(provided) {
+  if (provided && typeof provided === "object") return provided;
+  const [{ collection, doc, getDocs, writeBatch, deleteDoc, setDoc }, { db }] =
+    await Promise.all([import("firebase/firestore"), import("./firebase.js")]);
+  return { db, collection, doc, getDocs, writeBatch, deleteDoc, setDoc };
+}
+
 /* Baca pelacak akun, gabung dengan pelacak lokal, terapkan penanda
  * hapus, tulis hasilnya kembali ke akun. Kembalikan
  * { ok, merged, localCount, remoteCount, deletedCount,
- *   remainingTombstones } atau { ok: false, error } bila gagal;
- * gagal sync tidak pernah melempar dan tidak mengubah data lokal
- * maupun tombstone. Bila argumen tombstones tidak diisi, tombstone
- * dibaca dari localStorage, supaya pemanggil yang sudah ada
- * (sinkron saat masuk) ikut menghapus dokumen akun yang ditandai.
- * Perilaku merge untuk entri yang tidak ditandai hapus tidak
- * berubah. */
-export async function syncTrackers(uid, localEntries, tombstones = {}) {
+ *   remainingTombstones } atau { ok: false, error, code } bila
+ * gagal; gagal sync tidak pernah melempar dan tidak mengubah data
+ * lokal maupun tombstone. Bila argumen tombstones tidak diisi,
+ * tombstone dibaca dari localStorage untuk akun ini (kunci per
+ * akun, AKUN-06), supaya pemanggil yang sudah ada (sinkron saat
+ * masuk) ikut menghapus dokumen akun yang ditandai. Argumen
+ * terakhir firestoreClient hanya untuk tes (mock Firestore). */
+export async function syncTrackers(
+  uid,
+  localEntries,
+  tombstones = {},
+  firestoreClient = null,
+) {
   if (typeof uid !== "string" || !uid) {
-    return { ok: false, error: "UID akun tidak ada." };
+    return { ok: false, error: "UID akun tidak ada.", code: "gagal" };
   }
   const passed =
     tombstones && typeof tombstones === "object" ? tombstones : {};
   const fromStorage = Object.keys(passed).length === 0;
-  const effective = fromStorage ? readTombstones() : passed;
+  const effective = fromStorage ? readTombstones(uid) : passed;
   try {
-    const [{ collection, doc, getDocs, writeBatch }, { db }] =
-      await Promise.all([
-        import("firebase/firestore"),
-        import("./firebase.js"),
-      ]);
+    const { db, collection, doc, getDocs, writeBatch } =
+      await loadFirestore(firestoreClient);
     const itemsRef = collection(db, "user_trackers", uid, "items");
     const snap = await getDocs(itemsRef);
     const remote = {};
@@ -241,8 +329,8 @@ export async function syncTrackers(uid, localEntries, tombstones = {}) {
       remote,
       effective,
     );
-    const localCount = Object.keys(toMap(localEntries)).length;
-    const remoteCount = Object.keys(toMap(remote)).length;
+    const localCount = toMap(localEntries).size;
+    const remoteCount = toMap(remote).size;
     const batch = writeBatch(db);
     Object.values(merged).forEach((entry) => {
       batch.set(
@@ -256,7 +344,7 @@ export async function syncTrackers(uid, localEntries, tombstones = {}) {
     });
     await batch.commit();
     const remaining = pruneTombstones(remainingTombstones, toDelete);
-    if (fromStorage) writeTombstones(remaining);
+    if (fromStorage) writeTombstones(remaining, uid);
     return {
       ok: true,
       merged,
@@ -265,33 +353,76 @@ export async function syncTrackers(uid, localEntries, tombstones = {}) {
       deletedCount: toDelete.length,
       remainingTombstones: remaining,
     };
-  } catch {
-    return { ok: false, error: "Sinkronisasi gagal." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: "Sinkronisasi gagal.",
+      code: classifySyncError(error),
+    };
   }
 }
 
 /* Hapus satu lamaran dari akun (user_trackers/{uid}/items/{no}).
- * Kembalikan { ok } atau { ok: false, error }; tidak pernah
+ * Kembalikan { ok } atau { ok: false, error, code }; tidak pernah
  * melempar. Dipanggil langsung saat pengguna menghapus lamaran
- * dalam keadaan masuk; bila gagal, tombstone yang dicatat halaman
- * menjamin sinkron berikutnya menghapusnya. */
-export async function deleteTracker(uid, companyNo) {
+ * dalam keadaan masuk; bila gagal, tombstone yang dicatat pemanggil
+ * menjamin sinkron berikutnya menghapusnya. Argumen terakhir
+ * firestoreClient hanya untuk tes (mock Firestore). */
+export async function deleteTracker(uid, companyNo, firestoreClient = null) {
   const no = Number(companyNo);
   if (typeof uid !== "string" || !uid) {
-    return { ok: false, error: "UID akun tidak ada." };
+    return { ok: false, error: "UID akun tidak ada.", code: "gagal" };
   }
   if (!Number.isInteger(no) || no < 1 || no > MAX_COMPANY_NO) {
-    return { ok: false, error: "Nomor perusahaan tidak sah." };
+    return { ok: false, error: "Nomor perusahaan tidak sah.", code: "gagal" };
   }
   try {
-    const [{ deleteDoc, doc }, { db }] = await Promise.all([
-      import("firebase/firestore"),
-      import("./firebase.js"),
-    ]);
-    await deleteDoc(doc(db, "user_trackers", uid, "items", String(no)));
+    const { db, collection, doc, deleteDoc } =
+      await loadFirestore(firestoreClient);
+    const itemsRef = collection(db, "user_trackers", uid, "items");
+    await deleteDoc(doc(itemsRef, String(no)));
     return { ok: true };
-  } catch {
-    return { ok: false, error: "Hapus dari akun gagal." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: "Hapus dari akun gagal.",
+      code: classifySyncError(error),
+    };
+  }
+}
+
+/* Kirim satu lamaran ke akun (LAM-03, push-on-change): dipanggil
+ * setelah pengguna mengubah pelacak dalam keadaan masuk, supaya
+ * perubahan tidak menunggu muat ulang. Tulis memakai merge agar
+ * field lain di dokumen tidak hilang; updatedAt diperbarui.
+ * Kembalikan { ok } atau { ok: false, error, code }; tidak pernah
+ * melempar. Gagal kirim tidak mengubah data lokal; pemanggil
+ * menandai status tertunda dan mencoba lagi nanti. Argumen
+ * terakhir firestoreClient hanya untuk tes (mock Firestore). */
+export async function pushTracker(uid, entry, firestoreClient = null) {
+  if (typeof uid !== "string" || !uid) {
+    return { ok: false, error: "UID akun tidak ada.", code: "gagal" };
+  }
+  const clean = normalizeEntry(entry);
+  if (!clean) {
+    return { ok: false, error: "Lamaran tidak sah.", code: "gagal" };
+  }
+  try {
+    const { db, collection, doc, setDoc } =
+      await loadFirestore(firestoreClient);
+    const itemsRef = collection(db, "user_trackers", uid, "items");
+    await setDoc(
+      doc(itemsRef, String(clean.companyNo)),
+      { ...clean, updatedAt: new Date().toISOString() },
+      { merge: true },
+    );
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: "Kirim ke akun gagal.",
+      code: classifySyncError(error),
+    };
   }
 }
 

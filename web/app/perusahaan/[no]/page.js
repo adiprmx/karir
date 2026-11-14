@@ -7,7 +7,10 @@ import {
   daysSince,
   daysUntil,
   formatDate,
+  linkifySegments,
   safeLink,
+  splitContacts,
+  waLink,
 } from "@/app/components";
 import { Icon, Reveal, StatusStamp } from "@/app/visual";
 import { TrackerControl } from "@/app/tracker";
@@ -27,13 +30,25 @@ function shortDescription(company) {
   return withLocation.slice(0, 160);
 }
 
-/* Normalisasi nomor WhatsApp ke tautan wa.me: buang spasi/strip,
- * awalan 0 diganti 62. Null bila tidak ada digit sama sekali. */
-function waLink(number) {
-  const digits = String(number || "").replace(/[^0-9]/g, "");
-  if (!digits) return null;
-  const intl = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
-  return `https://wa.me/${intl}`;
+/* Render teks bebas (kontak_lain, catatan) dengan URL dan alamat email
+ * yang bisa diklik. Potongan dibuat helper murni linkifySegments; di
+ * sini hanya dipetakan ke elemen React biasa, tanpa HTML mentah. */
+function LinkedText({ text }) {
+  return linkifySegments(text).map((seg, i) =>
+    seg.href ? (
+      <a
+        key={i}
+        href={seg.href}
+        {...(seg.href.startsWith("mailto:")
+          ? {}
+          : { target: "_blank", rel: "noopener noreferrer" })}
+      >
+        {seg.text}
+      </a>
+    ) : (
+      seg.text
+    ),
+  );
 }
 
 export async function generateMetadata({ params }) {
@@ -62,10 +77,12 @@ export default async function CompanyDetail({ params }) {
   if (!company) notFound();
   const related = await getRelatedOrSeed(company, 4);
   const hasLink = safeLink(company.link_karir);
+  /* Portal yang diketahui tidak bisa dibuka tetap boleh dicoba, tapi
+   * tombolnya bukan lagi ajakan utama (DET-05). */
+  const portalDead = company.status === "Portal tidak bisa dibuka";
   const hasChannels = Boolean(
     company.email_hrd || company.wa_hrd || company.kontak_lain,
   );
-  const waUrl = waLink(company.wa_hrd);
   const url = `${SITE_URL}/perusahaan/${company.no}`;
   const description = shortDescription(company);
   const days = daysSince(company.tanggal_cek);
@@ -136,15 +153,33 @@ export default async function CompanyDetail({ params }) {
 
       <div className="d-cta">
         {hasLink ? (
-          <a
-            className="btn d-portal"
-            href={company.link_karir}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t(locale, "detail.portalBtn")}
-            <Icon name="ext" size={18} />
-          </a>
+          portalDead ? (
+            <>
+              <p className="note-line">
+                <Icon name="alert" size={16} />
+                {t(locale, "detail.portalDown")}
+              </p>
+              <a
+                className="btn ghost"
+                href={company.link_karir}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t(locale, "detail.tryPortalAnyway")}
+                <Icon name="ext" size={18} />
+              </a>
+            </>
+          ) : (
+            <a
+              className="btn d-portal"
+              href={company.link_karir}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t(locale, "detail.portalBtn")}
+              <Icon name="ext" size={18} />
+            </a>
+          )
         ) : (
           <p className="note-line">
             <Icon name="info" size={16} />
@@ -177,9 +212,15 @@ export default async function CompanyDetail({ params }) {
               <div>
                 <dt>{t(locale, "detail.emailHrd")}</dt>
                 <dd>
-                  <a href={`mailto:${company.email_hrd}`}>
-                    {company.email_hrd}
-                  </a>
+                  {splitContacts(company.email_hrd).map((email, i) => (
+                    <div key={i}>
+                      {email.includes("@") ? (
+                        <a href={`mailto:${email}`}>{email}</a>
+                      ) : (
+                        email
+                      )}
+                    </div>
+                  ))}
                 </dd>
               </div>
             )}
@@ -187,20 +228,33 @@ export default async function CompanyDetail({ params }) {
               <div>
                 <dt>{t(locale, "detail.waHrd")}</dt>
                 <dd>
-                  {waUrl ? (
-                    <a href={waUrl} target="_blank" rel="noopener noreferrer">
-                      {company.wa_hrd}
-                    </a>
-                  ) : (
-                    company.wa_hrd
-                  )}
+                  {splitContacts(company.wa_hrd).map((number, i) => {
+                    const waUrl = waLink(number);
+                    return (
+                      <div key={i}>
+                        {waUrl ? (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {number}
+                          </a>
+                        ) : (
+                          number
+                        )}
+                      </div>
+                    );
+                  })}
                 </dd>
               </div>
             )}
             {company.kontak_lain && (
               <div>
                 <dt>{t(locale, "detail.otherChannels")}</dt>
-                <dd>{company.kontak_lain}</dd>
+                <dd>
+                  <LinkedText text={company.kontak_lain} />
+                </dd>
               </div>
             )}
           </dl>
@@ -244,7 +298,13 @@ export default async function CompanyDetail({ params }) {
               </div>
               <div>
                 <dt>{t(locale, "detail.notes")}</dt>
-                <dd>{company.catatan || t(locale, "detail.noNotes")}</dd>
+                <dd>
+                  {company.catatan ? (
+                    <LinkedText text={company.catatan} />
+                  ) : (
+                    t(locale, "detail.noNotes")
+                  )}
+                </dd>
               </div>
             </dl>
           </section>

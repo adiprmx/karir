@@ -25,6 +25,7 @@ const DICT = {
     "footer.method": "Metode pengecekan",
     "footer.about": "Tentang Karir",
     "footer.faq": "Pertanyaan umum",
+    "footer.support": "Dukungan",
     "footer.changelog": "Riwayat perubahan",
     "footer.lamaran": "Lamaran",
     "footer.map": "Peta",
@@ -35,6 +36,13 @@ const DICT = {
     "footer.privacyPolicy": "Kebijakan Privasi",
     "footer.terms": "Syarat Penggunaan",
     /* --- akhir W-P0-08 --- */
+    /* --- T18 --- */
+    /* Detail perusahaan (DET-05): portal tidak bisa dibuka. Hanya kunci
+     * baru di blok ini, nilai kunci lama tidak diubah. */
+    "detail.portalDown":
+      "Portal ini tidak bisa dibuka saat terakhir dicek. Tautan di bawah tetap bisa dicoba.",
+    "detail.tryPortalAnyway": "Tetap coba buka portal",
+    /* --- akhir T18 --- */
     "landing.trustLabel": "Angka ringkas",
     "landing.trustChecked": "kanal dicek",
     "landing.trustTarget": "ada lowongan",
@@ -130,7 +138,7 @@ const DICT = {
       "Tidak ada kecocokan posisi di data kami. Hasil di bawah ini adalah rekomendasi kanal berdasarkan domisili dan status, bukan lowongan yang terverifikasi.",
     "search.loadMore": "Tampilkan lebih banyak",
     "search.resultsLabel": "Hasil pencarian",
-    "search.metaTitle": "Cari - Karir",
+    "search.metaTitle": "Cari",
     "dash.title": "Dasbor data",
     "dash.byStatus": "Sebaran status",
     "dash.byCategory": "Kategori terbanyak",
@@ -145,7 +153,7 @@ const DICT = {
     "dash.targetCompanies": "Perusahaan yang ada lowongan",
     "dash.whenChecked": "Kapan dicek",
     "dash.andMore": "dan {n} lainnya di data perusahaan.",
-    "dash.metaTitle": "Dasbor - Karir",
+    "dash.metaTitle": "Dasbor",
     "detail.portalBtn": "Buka portal karir",
     "detail.share": "Bagikan",
     "detail.copied": "Tautan disalin.",
@@ -238,6 +246,7 @@ const DICT = {
     "footer.method": "Checking method",
     "footer.about": "About Karir",
     "footer.faq": "FAQ",
+    "footer.support": "Support",
     "footer.changelog": "Changelog",
     "footer.lamaran": "Applications",
     "footer.map": "Map",
@@ -248,6 +257,13 @@ const DICT = {
     "footer.privacyPolicy": "Privacy Policy",
     "footer.terms": "Terms of Use",
     /* --- end W-P0-08 --- */
+    /* --- T18 --- */
+    /* Company detail (DET-05): portal cannot be opened. New keys only
+     * in this block, existing key values untouched. */
+    "detail.portalDown":
+      "This portal could not be opened when last checked. You can still try the link below.",
+    "detail.tryPortalAnyway": "Try opening the portal anyway",
+    /* --- akhir T18 --- */
     "landing.trustLabel": "Key numbers",
     "landing.trustChecked": "channels checked",
     "landing.trustTarget": "openings",
@@ -343,7 +359,7 @@ const DICT = {
       "No role match in our data. The results below are channel recommendations based on location and status, not verified openings.",
     "search.loadMore": "Show more",
     "search.resultsLabel": "Search results",
-    "search.metaTitle": "Search - Karir",
+    "search.metaTitle": "Search",
     "dash.title": "Data dashboard",
     "dash.byStatus": "Status breakdown",
     "dash.byCategory": "Top categories",
@@ -358,7 +374,7 @@ const DICT = {
     "dash.targetCompanies": "Companies with openings",
     "dash.whenChecked": "When checked",
     "dash.andMore": "and {n} more in the company data.",
-    "dash.metaTitle": "Dashboard - Karir",
+    "dash.metaTitle": "Dashboard",
     "detail.portalBtn": "Open career portal",
     "detail.share": "Share",
     "detail.copied": "Link copied.",

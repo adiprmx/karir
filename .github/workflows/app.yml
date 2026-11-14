@@ -7,10 +7,14 @@
 # hanya ada di Vercel dan di .env.local lokal, dan keduanya tidak dipakai
 # di sini. Nilai dummy ini bukan kunci asli dan tidak membuka apa pun.
 # Langkah Smoke menjalankan server production dari hasil build lalu
-# memeriksa 4 endpoint lewat web/scripts/smoke-check.mjs. Dua cek data
-# (/api/stats dan /api/companies) dilewati bila server menjawab 503,
-# karena kunci dummy tidak bisa membaca Firestore; / dan /changelog
-# harus lolos. Server dimatikan lagi di akhir langkah.
+# memeriksa 5 cek lewat web/scripts/smoke-check.mjs. Tiga cek data
+# (/api/stats, /api/companies, dan /api/index) dilewati bila server
+# menjawab 503, karena kunci dummy tidak bisa membaca Firestore; / dan
+# /changelog harus lolos. Karena ketiga cek data itu selalu dilewati di
+# CI, langkah ini juga memeriksa jalur data dari seed: beranda dan
+# halaman detail di-render dari seed saat Firestore mati, jadi isinya
+# dicek langsung (total perusahaan + satu perusahaan target dari seed).
+# Server dimatikan lagi di akhir langkah.
 name: App
 
 on:
@@ -26,7 +30,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Node 24.x: sama dengan engines di web/package.json dan
+          # .nvmrc — CI menguji runtime yang sama dengan produksi
+          # (Vercel memakai engines). Node 20 sudah end-of-life.
+          node-version: "24.x"
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: Install
@@ -75,6 +82,45 @@ jobs:
           done
           STATUS=0
           node scripts/smoke-check.mjs || STATUS=$?
+          # Cek jalur data dari seed (QA-09): tiga cek API di atas selalu
+          # dilewati di CI (503, kunci dummy), jadi tanpa cek ini CI tidak
+          # pernah memverifikasi jalur data. Beranda dan halaman detail
+          # di-render dari seed saat Firestore mati (getCompaniesOrSeed),
+          # sehingga isinya bisa dicek di sini: beranda harus memuat total
+          # perusahaan dan satu perusahaan target, dan halaman detail
+          # perusahaan itu harus memuat namanya. Total, nomor, dan nama
+          # dibaca dari seed, bukan dikode keras, supaya cek ikut saat
+          # data berubah lewat hunting harian. Nama yang mengandung & atau
+          # < dilewati karena lolos HTML akan mengubah penulisannya.
+          # Output curl ditulis ke berkas lalu di-grep dari berkas, bukan
+          # `curl | grep -q`: di bawah `pipefail`, grep yang keluar lebih
+          # dulu setelah menemukan kecocokan membuat curl kena SIGPIPE
+          # (kode 23) dan cek gagal palsu. Batas 60 detik mencegah curl
+          # menggantung bila server macet.
+          SEED_TOTAL=$(python3 -c "import json; print(len(json.load(open('data/companies.json'))))")
+          SEED_FIRST=$(python3 -c "import json; s=json.load(open('data/companies.json')); c=next(x for x in s if x['status']=='Ada lowongan' and '&' not in x['perusahaan'] and '<' not in x['perusahaan']); print(str(c['no']) + '|' + c['perusahaan'])")
+          SEED_NO="${SEED_FIRST%%|*}"
+          SEED_NAME="${SEED_FIRST#*|}"
+          if ! curl -fsS --max-time 60 http://localhost:3000/ -o /tmp/seed-home.html; then
+            echo "Cek seed gagal: beranda tidak bisa dimuat"
+            STATUS=1
+          else
+            if ! grep -F -q "$SEED_TOTAL" /tmp/seed-home.html; then
+              echo "Cek seed gagal: beranda tidak memuat total $SEED_TOTAL"
+              STATUS=1
+            fi
+            if ! grep -F -q "$SEED_NAME" /tmp/seed-home.html; then
+              echo "Cek seed gagal: beranda tidak memuat $SEED_NAME"
+              STATUS=1
+            fi
+          fi
+          if ! curl -fsS --max-time 60 "http://localhost:3000/perusahaan/$SEED_NO" -o /tmp/seed-detail.html; then
+            echo "Cek seed gagal: /perusahaan/$SEED_NO tidak bisa dimuat"
+            STATUS=1
+          elif ! grep -F -q "$SEED_NAME" /tmp/seed-detail.html; then
+            echo "Cek seed gagal: /perusahaan/$SEED_NO tidak memuat $SEED_NAME"
+            STATUS=1
+          fi
           kill $SERVER_PID 2>/dev/null || true
           pkill -f "[n]ext-server" 2>/dev/null || true
           if [ "$STATUS" -ne 0 ]; then

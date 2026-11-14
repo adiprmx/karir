@@ -4,11 +4,19 @@
  * dan ringkasan lamaran. Data dibaca dari browser (localStorage):
  * pilihan dibaca dari "karir-onboarding" dan lamaran dari
  * "karir-lamaran" lewat useTracker(). Lamaran yang dilacak tersinkron
- * ke akun bila pengunjung masuk. */
+ * ke akun bila pengunjung masuk; baris status di bawah "Lamaran saya"
+ * menunjukkan keadaan itu (DASH-04), dengan kalimat yang sama seperti
+ * di halaman detail. Pilihan SEBAGIAN (salah satu kolom terisi) diakui
+ * sebagai pilihan tersimpan (ONB-02); langkah "Tentukan domisili dan
+ * posisi" baru selesai bila kedua kolom terisi. */
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTracker, TRACKER_STATUSES } from "@/app/tracker";
-import { loadOnboarding } from "@/app/onboarding";
+import {
+  hasOnboardingChoice,
+  isOnboardingComplete,
+  loadOnboarding,
+} from "@/app/onboarding";
 import { loadRecentSearch } from "@/app/recent";
 import { CountUp, Icon, Reveal } from "@/app/visual";
 
@@ -23,7 +31,7 @@ function readVisitedMetode() {
 }
 
 export default function DashboardPersonal() {
-  const { entries, loaded } = useTracker();
+  const { entries, loaded, synced } = useTracker();
   const [onboarding, setOnboarding] = useState(null);
   const [recent, setRecent] = useState(null);
   const [visitedMetode, setVisitedMetode] = useState(false);
@@ -32,7 +40,7 @@ export default function DashboardPersonal() {
   useEffect(() => {
     const read = () => {
       const o = loadOnboarding();
-      setOnboarding(o && o.domisili && o.posisi ? o : null);
+      setOnboarding(hasOnboardingChoice(o) ? o : null);
       setRecent(loadRecentSearch());
       setVisitedMetode(readVisitedMetode());
     };
@@ -70,14 +78,35 @@ export default function DashboardPersonal() {
   }
 
   const steps = [
-    { text: "Tentukan domisili dan posisi", done: onboarding !== null, href: "/mulai" },
+    {
+      text: "Tentukan domisili dan posisi",
+      done: isOnboardingComplete(onboarding),
+      href: "/mulai",
+    },
     { text: "Tandai lamaran pertama", done: total > 0, href: "/cari" },
     { text: "Baca cara data dicek sebelum melamar", done: visitedMetode, href: "/metode" },
   ];
   const doneN = steps.filter((s) => s.done).length;
   const searchHref = onboarding
-    ? `/cari?domisili=${encodeURIComponent(onboarding.domisili)}&posisi=${encodeURIComponent(onboarding.posisi)}`
+    ? `/cari?${new URLSearchParams(
+        Object.fromEntries(
+          Object.entries({
+            domisili: onboarding.domisili,
+            posisi: onboarding.posisi,
+          }).filter(([, v]) => v),
+        ),
+      ).toString()}`
     : "/cari";
+  /* Judul menyesuaikan pilihan sebagian: kolom yang kosong tidak
+   * dirender, supaya tidak muncul kata gantung seperti
+   * "Lowongan Helper Gudang di" atau "Lowongan di". */
+  const choiceHeading = onboarding
+    ? onboarding.domisili && onboarding.posisi
+      ? `Lowongan ${onboarding.posisi} di ${onboarding.domisili}`
+      : onboarding.domisili
+        ? `Lowongan di ${onboarding.domisili}`
+        : `Lowongan ${onboarding.posisi}`
+    : null;
   const recentParts = recent
     ? [recent.domisili, recent.posisi].filter(Boolean)
     : [];
@@ -97,9 +126,7 @@ export default function DashboardPersonal() {
         <div>
           <p className="kicker">Dasbor saya</p>
           {onboarding ? (
-            <h2>
-              Lowongan {onboarding.posisi} di {onboarding.domisili}
-            </h2>
+            <h2>{choiceHeading}</h2>
           ) : (
             <h2>Belum ada pilihan tersimpan.</h2>
           )}
@@ -158,6 +185,11 @@ export default function DashboardPersonal() {
         </div>
         <div>
           <p className="label">Lamaran saya</p>
+          <p className="hint">
+            {synced
+              ? "Tersimpan di browser ini dan di akun."
+              : "Tersimpan di browser ini saja. Masuk dari menu untuk menyimpan ke akun juga."}
+          </p>
           {total === 0 ? (
             <p className="hint">Belum ada lamaran yang dilacak.</p>
           ) : (

@@ -8,7 +8,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useOnboarding } from "@/app/onboarding";
+import { hasOnboardingChoice, useOnboarding } from "@/app/onboarding";
 import { useCompanyIndex, rank } from "@/app/company-index";
 import { Icon } from "@/app/visual";
 
@@ -94,14 +94,15 @@ export default function Mulai() {
     setEditing(false);
   }
 
-  const showSummary = loaded && data && !editing;
+  const showSummary = loaded && hasOnboardingChoice(data) && !editing;
 
   return (
     <div className="wrap narrow">
       <div className="page-head">
         <h1>Mulai</h1>
         <p className="lede">
-          Jawab dua hal ini, kami tunjukkan kanal lowongan yang paling cocok.
+          Karir mengumpulkan kanal lowongan resmi perusahaan. Jawab dua hal
+          di bawah ini, lalu lihat kanal yang paling cocok denganmu.
         </p>
       </div>
 

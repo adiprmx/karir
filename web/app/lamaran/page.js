@@ -3,28 +3,54 @@
 /* Halaman "Lamaran Saya": daftar perusahaan yang dilacak pengguna.
  * Data perusahaan diambil dari indeks (/api/index), data lacakannya dari
  * localStorage (lihat app/tracker.js). Bila pengguna masuk, lacakannya
- * juga tersinkron ke akun; menghapus lamaran menghapus salinan akunnya
- * juga (lihat lib/tracker-sync.js). Status bisa diganti langsung dari
- * kartu. */
+ * juga tersinkron ke akun (kunci per akun; perubahan dikirim saat
+ * terjadi, bukan hanya saat masuk); menghapus lamaran menghapus
+ * salinan akunnya juga (lihat lib/tracker-sync.js). Status bisa
+ * diganti langsung dari kartu. */
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { TRACKER_STATUSES, useTracker } from "@/app/tracker";
+import {
+  TRACKER_STATUSES,
+  syncStatusMessage,
+  useTracker,
+} from "@/app/tracker";
 import { useCompanyIndex } from "@/app/company-index";
 import { Icon, Reveal, showToast } from "@/app/visual";
 import { CompanyLogo } from "@/lib/logos";
-import {
-  deleteTracker,
-  pruneTombstones,
-  readTombstones,
-  recordTombstone,
-  writeTombstones,
-} from "@/lib/tracker-sync";
 import { safeLink } from "@/app/components";
 
+/* Format waktu sinkron terakhir untuk label jujur (AKUN-02),
+ * mis. "15 Nov, 00.26". Gagal format: kembalikan string kosong
+ * (label tidak ditampilkan). */
+function formatSyncTime(iso) {
+  try {
+    return new Date(iso).toLocaleString("id-ID", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
 export default function Lamaran() {
-  const { entries, loaded, synced, save, remove } = useTracker();
+  const {
+    entries,
+    loaded,
+    syncState,
+    syncError,
+    lastSyncedAt,
+    guestCount,
+    save,
+    remove,
+    retrySync,
+    mergeGuest,
+  } = useTracker();
   const { index, state, start } = useCompanyIndex({ eager: true });
   const [tab, setTab] = useState("Semua");
+  const [guestDismissed, setGuestDismissed] = useState(false);
 
   const byNo = useMemo(() => {
     const m = new Map();
@@ -44,29 +70,36 @@ export default function Lamaran() {
     save(e.no, { status, tanggal: e.tanggal, catatan: e.catatan || "" });
   }
 
-  /* Hapus lamaran dari akun bila sedang masuk. Berjalan di latar
-   * belakang; bila gagal (mis. offline), tombstone yang sudah
-   * dicatat menjamin sinkron berikutnya menghapusnya. */
-  async function deleteFromAccount(no) {
-    try {
-      const { auth } = await import("@/lib/firebase");
-      const uid = auth && auth.currentUser ? auth.currentUser.uid : null;
-      if (!uid) return;
-      const res = await deleteTracker(uid, no);
-      if (res && res.ok) {
-        writeTombstones(pruneTombstones(readTombstones(), [String(no)]));
-      }
-    } catch {
-      /* Tombstone menjamin sinkron berikutnya menghapusnya. */
-    }
-  }
-
+  /* Hapus lamaran: remove() di app/tracker.js sudah mengurus
+   * penghapusan dari akun (penanda hapus + deleteTracker) bila
+   * sedang masuk; halaman ini cukup menampilkan toast. */
   function handleDelete(no) {
     remove(no);
-    recordTombstone(no);
     showToast("Dihapus dari lamaran.");
-    deleteFromAccount(no);
   }
+
+  /* Sinkron manual (LAM-04): tombol di spanduk status. */
+  async function handleRetry() {
+    const res = await retrySync();
+    showToast(
+      res && res.ok
+        ? "Lamaran sudah sinkron dengan akun."
+        : "Belum bisa sinkron. Coba lagi nanti.",
+    );
+  }
+
+  /* Gabungkan lamaran tamu ke akun (AKUN-06), atas pilihan
+   * pengguna. Bila gagal, data tamu tetap utuh. */
+  async function handleMergeGuest() {
+    const res = await mergeGuest();
+    showToast(
+      res && res.ok
+        ? "Lamaran digabungkan ke akun."
+        : "Gabungkan gagal. Coba lagi nanti.",
+    );
+  }
+
+  const lastSynced = lastSyncedAt ? formatSyncTime(lastSyncedAt) : "";
 
   return (
     <div className="wrap">
@@ -74,11 +107,50 @@ export default function Lamaran() {
         <h1>Lamaran Saya</h1>
         <p className="lede">
           Perusahaan yang kamu tandai dan lamar.{" "}
-          {synced
+          {syncState !== "tamu"
             ? "Tersimpan di perangkat ini dan di akun kamu."
             : "Tersimpan di perangkat ini saja. Masuk dari menu untuk menyimpan ke akun juga."}
         </p>
       </div>
+
+      {syncState === "tertunda" && (
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          {syncStatusMessage(syncState, syncError)}{" "}
+          <button type="button" className="linkish" onClick={handleRetry}>
+            Sinkronkan lagi
+          </button>
+        </p>
+      )}
+      {syncState === "mengirim" && (
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          {syncStatusMessage(syncState, syncError)}
+        </p>
+      )}
+      {syncState === "sinkron" && lastSynced && (
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          Terakhir disinkronkan {lastSynced}.
+        </p>
+      )}
+      {syncState !== "tamu" && guestCount > 0 && !guestDismissed && (
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          Perangkat ini punya {guestCount} lamaran yang belum masuk akun.{" "}
+          <button type="button" className="linkish" onClick={handleMergeGuest}>
+            Gabungkan ke akun
+          </button>{" "}
+          atau{" "}
+          <button
+            type="button"
+            className="linkish"
+            onClick={() => setGuestDismissed(true)}
+          >
+            biarkan saja
+          </button>
+        </p>
+      )}
 
       <Reveal>
         <div className="tabs-scroll" role="tablist" aria-label="Saring lamaran">

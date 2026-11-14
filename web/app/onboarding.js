@@ -6,7 +6,15 @@
  * tersimpan di localStorage browser pengguna saja, dengan kunci
  * "karir-onboarding". Bentuk data: {domisili, posisi, selesai: true}.
  * Setiap tulis atau hapus mengirim event "karir-onboarding-change"
- * supaya komponen lain yang memakai useOnboarding ikut update. */
+ * supaya komponen lain yang memakai useOnboarding ikut update.
+ *
+ * Kebijakan "pilihan tersimpan" (ONB-02, satu definisi untuk /mulai,
+ * Dasbor, dan Pengaturan): pilihan SEBAGIAN (salah satu kolom terisi)
+ * diakui sebagai pilihan tersimpan di semua tempat, karena wizard
+ * menyimpan begitu salah satu kolom terisi. hasOnboardingChoice()
+ * adalah satu-satunya definisi itu; jangan menulis ulang syaratnya
+ * di komponen lain. isOnboardingComplete() dipakai bila sebuah langkah
+ * memang menuntut kedua kolom terisi. */
 import { useCallback, useEffect, useState } from "react";
 
 export const ONBOARDING_KEY = "karir-onboarding";
@@ -20,6 +28,21 @@ function isValid(data) {
     typeof data.posisi === "string" &&
     data.selesai === true
   );
+}
+
+/* Pilihan tersimpan: data sah dengan paling tidak satu kolom terisi.
+ * Dipakai /mulai (ringkasan), Dasbor (judul + tombol hasil), dan
+ * Pengaturan (baris pilihan) supaya pesannya tidak bertentangan. */
+export function hasOnboardingChoice(data) {
+  if (!isValid(data)) return false;
+  return Boolean(data.domisili.trim() || data.posisi.trim());
+}
+
+/* Pilihan lengkap: kedua kolom terisi. Dipakai langkah Dasbor
+ * "Tentukan domisili dan posisi", yang memang menuntut keduanya. */
+export function isOnboardingComplete(data) {
+  if (!isValid(data)) return false;
+  return Boolean(data.domisili.trim() && data.posisi.trim());
 }
 
 export function loadOnboarding() {

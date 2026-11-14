@@ -6,5 +6,6 @@
 - `API.md`: dokumentasi tiap endpoint di `web/app/api`, parameter, contoh respons, dan kode error.
 - `PRODUCT.md`: alur pengguna dan arah produk.
 - `DESIGN.md`: bahasa visual aplikasi.
+- `CI.md`: versi Node yang dipin, gerbang CI, dan cara kerja tes asap.
 
 File `app.js`, `companies.json`, `index.html`, dan `styles.css` di folder ini adalah aplikasi statis lama (GitHub Pages). Versi itu sudah tidak live dan sengaja disimpan sebagai versi sebelumnya.

@@ -2,6 +2,19 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.11.0 — 2026-11-15
+
+Fase 4 gelombang 2 hasil audit full-stack 32 tim: sinkron pelacak, siklus hidup akun, dukungan, SEO, onboarding, produk, dan CI.
+
+- Pelacak lamaran: perubahan tersimpan ke akun dalam hitungan detik (push-on-change, debounce 800 md); sinkron otomatis saat kembali online atau kembali fokus, plus tombol manual; status sinkron jujur di halaman Lamaran (`tamu`/`sinkron`/`mengirim`/`tertunda` + waktu terakhir sinkron); data tiap akun terpisah di perangkat bersama (kunci per akun + tombstone per akun, tawaran gabung data tamu); tombol hapus di halaman perusahaan kini ikut menghapus dari akun; perbaikan bug penghitung sinkron (`Object.keys` pada `Map` selalu 0).
+- Akun: tombol masuk Google yang mati dihapus (provider tidak aktif di Firebase Auth); lupa kata sandi; verifikasi email saat daftar + kirim ulang + periksa lagi; "Hapus semua data" kini membersihkan kunci semua akun di perangkat ini dan tanda lamaran di akun (integrasi koordinator: tombstone per akun + urutan hapus yang benar); unduh salinan data (JSON, dibuat di perangkat); penjelasan nomor pengunjung `karir-visitor`; panduan tutup akun lewat GitHub Issues (hapus akun ujung-ke-ujung butuh route server Admin SDK — belum dibangun).
+- Dukungan: halaman `/dukungan` baru (lapor tautan mati, koreksi data, usulan perusahaan, lowongan mencurigakan, tanpa janji waktu respons); jawaban FAQ soal laporan diluruskan + 2 tanya baru; tautan footer + sitemap; `config.yml` tidak lagi mengarah ke Discussions yang tidak aktif; komponen seksi laporan admin siap (`support-reports.js`, filter + status baru/ditangani) — wiring ke panel admin dan aturan Firestore-nya menyusul bersama T8/T1.
+- SEO: `robots.txt` melarang `/api/` + `/admin`; `/admin` + `/pengaturan` memakai meta noindex; sitemap tanpa `/lamaran` + `/pengaturan`, `lastModified` dinamis dari tanggal cek terbaru, plus `/dukungan`; favicon + kartu Twitter besar; judul ganda diperbaiki (`Cari - Karir — Karir` menjadi `Cari — Karir`).
+- Onboarding: definisi "pilihan tersimpan" disatukan — dasbor kini benar untuk pilihan sebagian (domisili saja atau posisi saja, tanpa kata gantung); baris status sinkron di "Lamaran saya"; lede `/mulai` menjelaskan apa yang Karir lakukan.
+- Detail perusahaan: email/WA HRD ganda dipecah jadi satu tautan per nilai; `kontak_lain`/`catatan` kini jadi tautan yang bisa diklik (URL/email/domain, tanpa HTML mentah); status portal-mati tampil peringatan + tombol "Tetap coba buka portal" (akses tetap ada); halaman perusahaan yang tidak ada kini 404 nyata (akar soft 404: `loading.js` rute detail membuat Next.js mengirim shell 200 sebelum `notFound()` jalan — file itu dihapus, skeleton loading detail ikut hilang).
+- Produk dan dokumen: template issue usulan perusahaan; dokumen riset pengguna (6 hipotesis berlabel asumsi, tanpa angka karangan) + komunitas (keputusan S9: Discussions ditahan); proses investigasi sinyal penipuan + syarat masuk daftar di `docs/TRUST-SAFETY.md` (aturan WASPADA tidak berubah); dokumen dukungan internal + CI.
+- Node dipin ke 24.x (`engines` + `.nvmrc` + CI); CI kini memverifikasi jalur data dari seed (beranda + detail dari seed, total/nama dibaca dari seed saat run); `package-lock.json` disinkronkan ke versi proyek.
+
 ## 2.10.0 — 2026-11-15
 
 Perbaikan menyeluruh hasil audit full-stack 32 tim: keamanan, kebenaran data, dan kejujuran klaim produk.

@@ -55,3 +55,99 @@ export function daysUntil(value) {
   );
   return Math.round((t - todayWib) / 86400000);
 }
+
+/* ---------- Kanal melamar (DET-02/03/04) ---------- */
+
+/* Pecah field kanal yang berisi beberapa nilai ("a; b, c/d") menjadi
+ * daftar nilai mentah. Pemisah: titik koma, koma, garis miring.
+ * Spasi/strip di dalam tiap nilai dipertahankan untuk tampilan;
+ * bagian kosong dibuang. */
+export function splitContacts(value) {
+  return String(value || "")
+    .split(/[;,\/]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+/* Normalisasi satu nomor WhatsApp ke tautan wa.me: buang spasi/strip,
+ * awalan 0 diganti 62. Null bila tidak ada digit sama sekali.
+ * Dipakai per nomor sesudah splitContacts, supaya dua nomor tidak
+ * tergabung jadi satu tautan ke nomor yang tidak ada (DET-03). */
+export function waLink(number) {
+  const digits = String(number || "").replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  const intl = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
+  return `https://wa.me/${intl}`;
+}
+
+/* Akhiran domain yang dikenali saat mengubah teks bebas menjadi tautan.
+ * Daftar sengaja pendek dan berisi akhiran umum saja: domain tanpa
+ * skema yang akhirannya tidak ada di sini dibiarkan teks biasa (gagal
+ * aman), supaya singkatan alamat seperti "Jl. Tebet" tidak pernah
+ * dikira domain. Akhiran bertingkat (co.id, ac.id, go.id) tertangani
+ * lewat label terakhirnya ("id"). */
+const BARE_TLDS = [
+  "id", "com", "net", "org", "io", "me", "co", "ai", "app", "dev",
+  "info", "biz", "xyz", "site", "online", "link", "page", "live",
+  "club", "store", "tech", "ly", "ke", "gg", "to", "cc", "us",
+  "sg", "my", "au", "de", "jp", "in", "vn", "ph", "kr",
+];
+
+/* Pola tautan dalam teks bebas, diuji berurutan di tiap posisi: URL
+ * ber-skema dulu, lalu email, lalu domain tanpa skema. */
+const LINK_PATTERN = new RegExp(
+  `(https?:\\/\\/[^\\s<>"']+)` +
+    `|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})` +
+    `|((?:[A-Za-z0-9-]+\\.)+(?:${BARE_TLDS.join("|")})(?:\\/[^\\s<>"'(),;]*)?)`,
+  "gi",
+);
+
+/* Tanda baca di ujung tautan yang hampir pasti milik kalimat, bukan
+ * milik tautan ("lihat https://contoh.id/karir, lalu ..."). */
+const TRAILING_PUNCT = ".,;:!?\"'’)]}";
+
+function trimTrailingPunct(raw) {
+  let end = raw.length;
+  while (end > 0 && TRAILING_PUNCT.includes(raw[end - 1])) end -= 1;
+  return raw.slice(0, end);
+}
+
+/* Ubah teks bebas menjadi potongan teks/tautan: { text } untuk teks
+ * biasa, { text, href } untuk tautan. Dipakai halaman detail untuk
+ * kontak_lain dan catatan (DET-02). Murni pemotong string: tidak ada
+ * HTML yang dibangun di sini, render dilakukan React biasa di page.js,
+ * jadi tidak ada risiko injeksi markup. Href yang dihasilkan hanya
+ * http(s):// (skema asli dipertahankan) atau mailto:. */
+export function linkifySegments(text) {
+  const input = String(text || "");
+  const segments = [];
+  let cursor = 0;
+  LINK_PATTERN.lastIndex = 0;
+  let m;
+  while ((m = LINK_PATTERN.exec(input)) !== null) {
+    const raw = m[0];
+    const start = m.index;
+    /* Domain tanpa skema yang menempel pada token lain (mis. bagian
+     * dari alamat email yang lolos dari pola email) bukan tautan:
+     * lewati dan lanjutkan pencarian satu karakter sesudahnya. */
+    const prev = start > 0 ? input[start - 1] : "";
+    if (m[3] && /[A-Za-z0-9.@\/]/.test(prev)) {
+      LINK_PATTERN.lastIndex = start + 1;
+      continue;
+    }
+    const clean = trimTrailingPunct(raw);
+    if (start > cursor) segments.push({ text: input.slice(cursor, start) });
+    const href = m[1]
+      ? clean
+      : m[2]
+        ? `mailto:${clean}`
+        : `https://${clean}`;
+    segments.push({ text: clean, href });
+    /* Tanda baca yang dipotong tetap jadi teks biasa di potongan
+     * berikutnya, jadi kursor berhenti di ujung tautan bersih. */
+    cursor = start + clean.length;
+    LINK_PATTERN.lastIndex = cursor;
+  }
+  if (cursor < input.length) segments.push({ text: input.slice(cursor) });
+  return segments;
+}

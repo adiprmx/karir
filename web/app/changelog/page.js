@@ -16,6 +16,18 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.11.0",
+    date: "15 November 2026",
+    points: [
+      "Lamaran tersimpan ke akun dalam hitungan detik dan tersinkron otomatis saat kamu kembali online; tiap akun di perangkat yang sama kini terpisah.",
+      "Akun: ada lupa kata sandi, verifikasi email, unduh salinan data, dan hapus semua data yang benar-benar membersihkan semuanya.",
+      "Halaman Dukungan baru untuk melaporkan tautan mati, koreksi data, dan lowongan mencurigakan.",
+      "Halaman perusahaan: kontak ganda kini terpisah rapi, tautan di catatan bisa diklik, dan halaman yang tidak ada benar-benar menampilkan tidak ditemukan.",
+      "Judul halaman yang ganda diperbaiki; mesin pencari kini diarahkan dengan benar.",
+      "Halaman Mulai dan dasbor kini menjelaskan pilihanmu dengan lebih tepat.",
+    ],
+  },
+  {
     version: "2.10.0",
     date: "15 November 2026",
     points: [

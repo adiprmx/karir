@@ -94,7 +94,7 @@ ditulis; spesifikasi di sini adalah acuan bagi tim Data dan tim
 Detail Perusahaan saat mengimplementasikannya.
 
 - Nama kolom CSV/seed: `waspada`, ditambahkan sebagai kolom
-  terakhir setelah `kontak_lain`.
+  terakhir setelah `batas_lamar`.
 - Nilai yang diizinkan: kosong (bawaan — tidak ada peringatan)
   atau `ya` (ada peringatan). Nilai lain tidak valid dan harus
   ditolak skrip validasi (`scripts/validate.py`).
@@ -127,6 +127,24 @@ tindakan:
 
 Keputusan mana pun dicatat tertulis bersama bukti investigasinya.
 
+### 2.6 Dari sinyal ke investigasi
+
+Investigasi lengkap (2.2) dimulai dari sinyal. Sinyal bisa datang
+dari tiga arah:
+
+- Laporan pengguna lewat formulir di halaman detail perusahaan
+  atau issue GitHub.
+- Temuan ronde hunting: catatan hasil cek yang memuat tanda
+  mencurigakan, misalnya kontak yang tidak cocok antar sumber.
+- Peringatan penipuan yang diterbitkan perusahaan itu sendiri di
+  halaman resminya.
+
+Sinyal dicatat dan ditinjau ronde hunting, yang memutuskan apakah
+investigasi lengkap dimulai. Sinyal saja tidak pernah menjadi
+dasar label (lihat 2.1). Laporan pengguna tidak pernah mengubah
+data secara otomatis: laporan hanya dibaca pengelola, dan tindak
+lanjutnya selalu lewat peninjauan manusia.
+
 ## 3. Status saat ini: belum ada label pada perusahaan mana pun
 
 Audit 14 November 2026 menemukan 12 baris data yang catatannya
@@ -148,10 +166,51 @@ investigasi dimulai; dokumen ini tidak mengarang daftarnya dari
 pencarian kata kunci, karena pencarian kata kunci juga menangkap
 catatan yang tidak berhubungan dengan penipuan.
 
-## 4. Dokumen terkait
+## 4. Syarat masuk daftar
+
+Perusahaan masuk daftar ini bila memenuhi syarat di bawah. Syarat
+ini dipakai ronde hunting untuk memutuskan perusahaan baru, dan
+dipakai peninjau untuk menilai perusahaan yang sudah tercantum.
+
+- Keberadaan perusahaan bisa dibuktikan lewat minimal satu
+  sumber resmi: situs resmi perusahaan, kanal karir resminya,
+  atau akun resmi perusahaan. Nama saja tidak cukup.
+- Perusahaan tanpa tautan karir tetap bisa dicantumkan bila
+  keberadaannya terbukti dan kolom `catatan` menjelaskan kenapa
+  tidak ada tautan. Per 15 November 2026 ada 4 baris seperti
+  ini: No. 204 Olive Fried Chicken, No. 315 PT Dwi Indah,
+  No. 321 PT Cintas Sentul Raya, dan No. 355 PT Best Logistics
+  Service Indonesia. Bila keberadaannya tidak bisa dibuktikan,
+  perusahaan tidak dicantumkan.
+- Kanal melamar (email, nomor WhatsApp, atau kontak lain) hanya
+  dicantumkan bila ditemukan di situs resmi perusahaan, portal
+  karir resminya, atau akun resmi perusahaan. Aturan yang sama
+  berlaku di `docs/METODE.md` untuk kanal melamar
+  "terverifikasi".
+- Email berdomain gratis (misalnya Gmail) sebagai satu-satunya
+  kontak HRD bukan alasan menolak dan bukan bukti: kanal itu
+  dicantumkan hanya bila sumber resminya jelas, dan menjadi
+  sinyal untuk diselidiki (lihat 2.6) bila disertai tanda lain.
+- Tautan pemendek sebagai kanal melamar hanya dicantumkan bila
+  berasal dari sumber resmi perusahaan, dengan sumbernya
+  ditulis di catatan.
+- Perusahaan yang sudah tercantum lalu terbukti tidak memenuhi
+  syarat di atas dihapus dari daftar, dengan catatan
+  penghapusan di CHANGELOG (nomor, nama, tanggal, dan alasan
+  singkat), mengikuti prosedur di 2.5.
+
+Kasus batas yang tidak dijawab syarat di atas diputuskan pemilik
+repo bersama ronde hunting, dengan syarat ini sebagai acuan.
+Keputusan kasus batas dicatat di `catatan` baris yang
+bersangkutan supaya peninjau berikutnya bisa mengikuti
+alasannya.
+
+## 5. Dokumen terkait
 
 - `docs/METODE.md` — cara pengecekan kanal karir (apa yang
   dicek, bukti apa yang diterima, dan apa yang tidak dilakukan
   selama pengecekan).
+- `CONTRIBUTING.md`: aturan kontribusi, termasuk aturan
+  tautan resmi dan tanggal cek untuk usulan perusahaan baru.
 - `SECURITY.md` — jalur pelaporan celah keamanan repo/aplikasi
   (berbeda dari pelaporan lowongan mencurigakan di seksi 1).
