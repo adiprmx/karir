@@ -4,6 +4,15 @@
  * lalu hasilnya ditulis ke akun dan kembali ke perangkat ini. Salinan
  * lokal tidak pernah dihapus oleh sinkronisasi ini.
  *
+ * Penghapusan ikut tersinkron (W-P0-05 / LAM-01): menghapus lamaran
+ * mencatat penanda hapus (tombstone) di localStorage dan, bila sedang
+ * masuk, langsung menghapus dokumen akunnya (deleteTracker). Hapus
+ * yang dilakukan saat keluar atau offline tetap tercatat sebagai
+ * tombstone, lalu syncTrackers menghapus dokumen akunnya pada
+ * sinkron berikutnya. Tombstone yang dokumen akunnya ternyata lebih
+ * baru (lamaran ditambah lagi dari perangkat lain) dibuang dan
+ * entrinya dipertahankan.
+ *
  * Bentuk satu entri pelacak: { companyNo, status, tanggal, catatan }.
  * companyNo angka 1-10000, status salah satu dari TRACKER_STATUSES,
  * tanggal string YYYY-MM-DD (boleh kosong), catatan string maks 200
@@ -23,6 +32,122 @@ export const TRACKER_STATUSES = [
 
 const MAX_COMPANY_NO = 10000;
 const MAX_CATATAN = 200;
+
+/* Kunci localStorage untuk penanda hapus (tombstone): peta
+ * { "<companyNo>": "waktu-hapus-ISO" }. Tombstone dicatat setiap
+ * kali pengguna menghapus lamaran, termasuk saat keluar atau
+ * offline, supaya sinkron berikutnya menghapus dokumen akunnya.
+ * Tombstone dibersihkan setelah penghapusan di akun terkonfirmasi. */
+export const TOMBSTONE_KEY = "karir-lamaran-dihapus";
+
+/* Baca tombstone dari localStorage. Kembalikan peta kosong bila
+ * tidak ada, rusak, atau di luar browser (mis. saat tes unit). */
+export function readTombstones() {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(TOMBSTONE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const out = {};
+    Object.entries(parsed).forEach(([key, value]) => {
+      if (typeof value === "string") out[key] = value;
+    });
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/* Tulis peta tombstone ke localStorage. Kembalikan false bila
+ * browser menolak menyimpan atau di luar browser. */
+export function writeTombstones(tombstones) {
+  if (typeof window === "undefined") return false;
+  try {
+    window.localStorage.setItem(
+      TOMBSTONE_KEY,
+      JSON.stringify(tombstones || {}),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* Catat penanda hapus untuk satu perusahaan (waktu sekarang).
+ * Kembalikan peta tombstone terbaru; nomor tidak sah diabaikan. */
+export function recordTombstone(companyNo) {
+  const no = Number(companyNo);
+  if (!Number.isInteger(no) || no < 1 || no > MAX_COMPANY_NO) {
+    return readTombstones();
+  }
+  const next = {
+    ...readTombstones(),
+    [String(no)]: new Date().toISOString(),
+  };
+  writeTombstones(next);
+  return next;
+}
+
+/* Terapkan penanda hapus ke hasil gabung. Fungsi murni (tanpa
+ * Firebase, tanpa localStorage) supaya bisa diuji unit.
+ *
+ * Untuk tiap companyNo di tombstone:
+ * - dokumen akun tidak ada -> entri dihapus dari hasil gabung,
+ *   tidak ada yang perlu dihapus di akun, tombstone selesai;
+ * - updatedAt akun <= waktu tombstone -> entri dihapus dari hasil
+ *   gabung dan dokumen akun ditandai untuk dihapus;
+ * - updatedAt akun LEBIH BARU dari tombstone -> lamaran ditambah
+ *   lagi dari perangkat lain setelah dihapus di sini, jadi entri
+ *   dipertahankan dan tombstonenya dibuang.
+ * Dokumen akun tanpa updatedAt dianggap lebih lama dari tombstone
+ * (niat hapus menang). Nilai tombstone yang bukan tanggal sah juga
+ * dianggap menang atas dokumen akun mana pun.
+ *
+ * Kembalikan { merged, toDelete, remainingTombstones }: merged
+ * hasil gabung yang sudah bersih, toDelete daftar companyNo yang
+ * dokumen akunnya harus dihapus, remainingTombstones penanda yang
+ * masih menunggu konfirmasi hapus di akun. Masukan tidak diubah. */
+export function applyTombstones(merged, remote, tombstones) {
+  const out = { ...(merged || {}) };
+  const toDelete = [];
+  const remainingTombstones = {};
+  Object.entries(tombstones || {}).forEach(([key, deletedAt]) => {
+    const remoteDoc =
+      remote && typeof remote === "object" ? remote[key] : undefined;
+    if (!remoteDoc) {
+      delete out[key];
+      return;
+    }
+    const tombTime = Date.parse(deletedAt);
+    const remoteTime = Date.parse(remoteDoc.updatedAt);
+    const tombWins =
+      Number.isNaN(tombTime) ||
+      Number.isNaN(remoteTime) ||
+      remoteTime <= tombTime;
+    if (tombWins) {
+      delete out[key];
+      toDelete.push(key);
+      remainingTombstones[key] = deletedAt;
+    }
+    /* Bila dokumen akun lebih baru, entri dipertahankan dan
+     * tombstonenya dibuang (tidak masuk remainingTombstones). */
+  });
+  return { merged: out, toDelete, remainingTombstones };
+}
+
+/* Bersihkan tombstone yang penghapusannya di akun sudah
+ * terkonfirmasi. Fungsi murni: kembalikan salinan peta tanpa kunci
+ * yang ada di daftar `deleted`. Masukan tidak diubah. */
+export function pruneTombstones(tombstones, deleted) {
+  const out = { ...(tombstones || {}) };
+  (Array.isArray(deleted) ? deleted : []).forEach((key) => {
+    delete out[String(key)];
+  });
+  return out;
+}
 
 /* Rapikan satu entri mentah ke bentuk baku. Kembalikan null bila
  * nomor perusahaan atau statusnya tidak sah. */
@@ -80,14 +205,24 @@ export function mergeTrackers(local, remote) {
   return out;
 }
 
-/* Baca pelacak akun, gabung dengan pelacak lokal, tulis hasilnya
- * kembali ke akun. Kembalikan { ok, merged, localCount, remoteCount }
- * atau { ok: false, error } bila gagal; gagal sync tidak pernah
- * melempar dan tidak mengubah data lokal. */
-export async function syncTrackers(uid, localEntries) {
+/* Baca pelacak akun, gabung dengan pelacak lokal, terapkan penanda
+ * hapus, tulis hasilnya kembali ke akun. Kembalikan
+ * { ok, merged, localCount, remoteCount, deletedCount,
+ *   remainingTombstones } atau { ok: false, error } bila gagal;
+ * gagal sync tidak pernah melempar dan tidak mengubah data lokal
+ * maupun tombstone. Bila argumen tombstones tidak diisi, tombstone
+ * dibaca dari localStorage, supaya pemanggil yang sudah ada
+ * (sinkron saat masuk) ikut menghapus dokumen akun yang ditandai.
+ * Perilaku merge untuk entri yang tidak ditandai hapus tidak
+ * berubah. */
+export async function syncTrackers(uid, localEntries, tombstones = {}) {
   if (typeof uid !== "string" || !uid) {
     return { ok: false, error: "UID akun tidak ada." };
   }
+  const passed =
+    tombstones && typeof tombstones === "object" ? tombstones : {};
+  const fromStorage = Object.keys(passed).length === 0;
+  const effective = fromStorage ? readTombstones() : passed;
   try {
     const [{ collection, doc, getDocs, writeBatch }, { db }] =
       await Promise.all([
@@ -100,7 +235,12 @@ export async function syncTrackers(uid, localEntries) {
     snap.docs.forEach((d) => {
       remote[d.id] = d.data();
     });
-    const merged = mergeTrackers(localEntries, remote);
+    const mergedBefore = mergeTrackers(localEntries, remote);
+    const { merged, toDelete, remainingTombstones } = applyTombstones(
+      mergedBefore,
+      remote,
+      effective,
+    );
     const localCount = Object.keys(toMap(localEntries)).length;
     const remoteCount = Object.keys(toMap(remote)).length;
     const batch = writeBatch(db);
@@ -111,10 +251,47 @@ export async function syncTrackers(uid, localEntries) {
         { merge: true },
       );
     });
+    toDelete.forEach((key) => {
+      batch.delete(doc(itemsRef, key));
+    });
     await batch.commit();
-    return { ok: true, merged, localCount, remoteCount };
+    const remaining = pruneTombstones(remainingTombstones, toDelete);
+    if (fromStorage) writeTombstones(remaining);
+    return {
+      ok: true,
+      merged,
+      localCount,
+      remoteCount,
+      deletedCount: toDelete.length,
+      remainingTombstones: remaining,
+    };
   } catch {
     return { ok: false, error: "Sinkronisasi gagal." };
+  }
+}
+
+/* Hapus satu lamaran dari akun (user_trackers/{uid}/items/{no}).
+ * Kembalikan { ok } atau { ok: false, error }; tidak pernah
+ * melempar. Dipanggil langsung saat pengguna menghapus lamaran
+ * dalam keadaan masuk; bila gagal, tombstone yang dicatat halaman
+ * menjamin sinkron berikutnya menghapusnya. */
+export async function deleteTracker(uid, companyNo) {
+  const no = Number(companyNo);
+  if (typeof uid !== "string" || !uid) {
+    return { ok: false, error: "UID akun tidak ada." };
+  }
+  if (!Number.isInteger(no) || no < 1 || no > MAX_COMPANY_NO) {
+    return { ok: false, error: "Nomor perusahaan tidak sah." };
+  }
+  try {
+    const [{ deleteDoc, doc }, { db }] = await Promise.all([
+      import("firebase/firestore"),
+      import("./firebase.js"),
+    ]);
+    await deleteDoc(doc(db, "user_trackers", uid, "items", String(no)));
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Hapus dari akun gagal." };
   }
 }
 

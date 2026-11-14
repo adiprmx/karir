@@ -33,6 +33,7 @@ EXPECTED_COLUMNS = [
     "email_hrd",
     "wa_hrd",
     "kontak_lain",
+    "batas_lamar",
 ]
 VALID_STATUSES = {
     "Ada lowongan",
@@ -76,6 +77,16 @@ def main() -> int:
                 date(y, m, d)
             except ValueError:
                 errors.append(f"baris {i}: tanggal tidak valid: {row['tanggal_cek']!r}")
+        batas = (row["batas_lamar"] or "").strip()
+        if batas:
+            if not DATE_RE.match(batas):
+                errors.append(f"baris {i}: batas_lamar bukan YYYY-MM-DD: {batas!r}")
+            else:
+                y, m, d = map(int, batas.split("-"))
+                try:
+                    date(y, m, d)
+                except ValueError:
+                    errors.append(f"baris {i}: batas_lamar bukan tanggal kalender yang valid: {batas!r}")
         link = (row["link_karir"] or "").strip()
         if link and not link.startswith(("http://", "https://")):
             errors.append(f"baris {i}: link_karir bukan URL http(s): {link!r}")

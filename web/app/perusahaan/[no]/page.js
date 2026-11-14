@@ -5,6 +5,7 @@ import { getLocale, t } from "@/lib/i18n";
 import {
   STATUS_EXPLAIN,
   daysSince,
+  daysUntil,
   formatDate,
   safeLink,
 } from "@/app/components";
@@ -73,6 +74,20 @@ export default async function CompanyDetail({ params }) {
       : days === 0
         ? t(locale, "detail.today")
         : t(locale, "detail.daysAgo", { n: days });
+  /* Batas lamar: tampilkan tanggalnya, plus penanda seberapa dekat
+   * bila masih dalam 30 hari ke depan ("3 hari lagi", "hari ini"),
+   * atau "Sudah lewat" bila tanggalnya sudah berlalu. */
+  const deadlineDays = daysUntil(company.batas_lamar);
+  const deadlineNote =
+    deadlineDays === null
+      ? null
+      : deadlineDays === 0
+        ? t(locale, "detail.today")
+        : deadlineDays > 0 && deadlineDays <= 30
+          ? t(locale, "detail.daysLeft", { n: deadlineDays })
+          : deadlineDays < 0
+            ? t(locale, "detail.deadlinePassed")
+            : null;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -204,6 +219,18 @@ export default async function CompanyDetail({ params }) {
                   {ago && <span className="ago"> · {ago}</span>}
                 </dd>
               </div>
+              {company.batas_lamar && (
+                <div>
+                  <dt>{t(locale, "detail.deadline")}</dt>
+                  <dd>
+                    {formatDate(company.batas_lamar, locale) ||
+                      company.batas_lamar}
+                    {deadlineNote && (
+                      <span className="ago"> · {deadlineNote}</span>
+                    )}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt>{t(locale, "detail.location")}</dt>
                 <dd>{company.lokasi || t(locale, "common.notListed")}</dd>

@@ -2,18 +2,27 @@
 
 /* Halaman "Lamaran Saya": daftar perusahaan yang dilacak pengguna.
  * Data perusahaan diambil dari indeks (/api/index), data lacakannya dari
- * localStorage (lihat app/tracker.js). Tidak ada akun, tidak ada data
- * yang dikirim ke server. Status bisa diganti langsung dari kartu. */
+ * localStorage (lihat app/tracker.js). Bila pengguna masuk, lacakannya
+ * juga tersinkron ke akun; menghapus lamaran menghapus salinan akunnya
+ * juga (lihat lib/tracker-sync.js). Status bisa diganti langsung dari
+ * kartu. */
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { TRACKER_STATUSES, useTracker } from "@/app/tracker";
 import { useCompanyIndex } from "@/app/company-index";
 import { Icon, Reveal, showToast } from "@/app/visual";
 import { CompanyLogo } from "@/lib/logos";
+import {
+  deleteTracker,
+  pruneTombstones,
+  readTombstones,
+  recordTombstone,
+  writeTombstones,
+} from "@/lib/tracker-sync";
 import { safeLink } from "@/app/components";
 
 export default function Lamaran() {
-  const { entries, loaded, save, remove } = useTracker();
+  const { entries, loaded, synced, save, remove } = useTracker();
   const { index, state, start } = useCompanyIndex({ eager: true });
   const [tab, setTab] = useState("Semua");
 
@@ -35,13 +44,39 @@ export default function Lamaran() {
     save(e.no, { status, tanggal: e.tanggal, catatan: e.catatan || "" });
   }
 
+  /* Hapus lamaran dari akun bila sedang masuk. Berjalan di latar
+   * belakang; bila gagal (mis. offline), tombstone yang sudah
+   * dicatat menjamin sinkron berikutnya menghapusnya. */
+  async function deleteFromAccount(no) {
+    try {
+      const { auth } = await import("@/lib/firebase");
+      const uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+      if (!uid) return;
+      const res = await deleteTracker(uid, no);
+      if (res && res.ok) {
+        writeTombstones(pruneTombstones(readTombstones(), [String(no)]));
+      }
+    } catch {
+      /* Tombstone menjamin sinkron berikutnya menghapusnya. */
+    }
+  }
+
+  function handleDelete(no) {
+    remove(no);
+    recordTombstone(no);
+    showToast("Dihapus dari lamaran.");
+    deleteFromAccount(no);
+  }
+
   return (
     <div className="wrap">
       <div className="page-head">
         <h1>Lamaran Saya</h1>
         <p className="lede">
-          Perusahaan yang kamu tandai dan lamar. Semua tersimpan di browser ini
-          saja.
+          Perusahaan yang kamu tandai dan lamar.{" "}
+          {synced
+            ? "Tersimpan di perangkat ini dan di akun kamu."
+            : "Tersimpan di perangkat ini saja. Masuk dari menu untuk menyimpan ke akun juga."}
         </p>
       </div>
 
@@ -144,10 +179,7 @@ export default function Lamaran() {
                     <button
                       type="button"
                       className="btn ghost small"
-                      onClick={() => {
-                        remove(e.no);
-                        showToast("Dihapus dari lamaran.");
-                      }}
+                      onClick={() => handleDelete(e.no)}
                     >
                       <Icon name="trash" size={16} />
                       Hapus

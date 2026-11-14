@@ -1,10 +1,17 @@
 /* Tes unit untuk lib/tracker-sync.js, memakai test runner bawaan Node.
  * Dijalankan dengan: node --test lib/tracker-sync.test.js
  * Yang dites: mergeTrackers, fungsi murni penggabung pelacak lokal
- * dan pelacak akun. Tidak ada jaringan, tidak ada Firebase. */
+ * dan pelacak akun; applyTombstones dan pruneTombstones, fungsi
+ * murni penanda hapus; serta alur hapus-lalu-sinkron (QA-01).
+ * Tidak ada jaringan, tidak ada Firebase. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mergeTrackers, TRACKER_STATUSES } from "./tracker-sync.js";
+import {
+  applyTombstones,
+  mergeTrackers,
+  pruneTombstones,
+  TRACKER_STATUSES,
+} from "./tracker-sync.js";
 
 function entry(overrides = {}) {
   return {
@@ -97,5 +104,116 @@ describe("mergeTrackers", () => {
       "Dipanggil",
       "Ditolak",
     ]);
+  });
+});
+
+describe("applyTombstones", () => {
+  const REMOTE_LAMA = "2026-11-10T10:00:00.000Z";
+  const WAKTU_HAPUS = "2026-11-12T10:00:00.000Z";
+  const REMOTE_BARU = "2026-11-13T10:00:00.000Z";
+
+  it("entri yang ditandai hapus tidak muncul di hasil gabung", () => {
+    const merged = { 12: entry(), 34: entry({ companyNo: 34 }) };
+    const remote = { 12: { ...entry(), updatedAt: REMOTE_LAMA } };
+    const res = applyTombstones(merged, remote, { 12: WAKTU_HAPUS });
+    assert.deepEqual(Object.keys(res.merged), ["34"]);
+    assert.deepEqual(res.toDelete, ["12"]);
+    assert.deepEqual(res.remainingTombstones, { 12: WAKTU_HAPUS });
+  });
+
+  it("tombstone kedaluwarsa oleh updatedAt akun yang lebih baru: entri dipertahankan", () => {
+    const merged = { 12: entry() };
+    const remote = { 12: { ...entry(), updatedAt: REMOTE_BARU } };
+    const res = applyTombstones(merged, remote, { 12: WAKTU_HAPUS });
+    assert.deepEqual(Object.keys(res.merged), ["12"]);
+    assert.deepEqual(res.toDelete, []);
+    assert.deepEqual(res.remainingTombstones, {});
+  });
+
+  it("tombstone tanpa dokumen akun: entri hilang dari gabung, tidak ada hapus di akun", () => {
+    const merged = { 12: entry() };
+    const res = applyTombstones(merged, {}, { 12: WAKTU_HAPUS });
+    assert.deepEqual(res.merged, {});
+    assert.deepEqual(res.toDelete, []);
+    assert.deepEqual(res.remainingTombstones, {});
+  });
+
+  it("dokumen akun tanpa updatedAt dianggap lebih lama: niat hapus menang", () => {
+    const merged = { 12: entry() };
+    const remote = { 12: entry() };
+    const res = applyTombstones(merged, remote, { 12: WAKTU_HAPUS });
+    assert.deepEqual(res.merged, {});
+    assert.deepEqual(res.toDelete, ["12"]);
+  });
+
+  it("tanpa tombstone, hasil gabung tidak berubah", () => {
+    const merged = { 12: entry() };
+    const res = applyTombstones(merged, { 12: entry() }, {});
+    assert.deepEqual(res.merged, merged);
+    assert.deepEqual(res.toDelete, []);
+    assert.deepEqual(res.remainingTombstones, {});
+  });
+
+  it("masukan tidak diubah", () => {
+    const merged = { 12: entry() };
+    const remote = { 12: { ...entry(), updatedAt: REMOTE_LAMA } };
+    const tombstones = { 12: WAKTU_HAPUS };
+    applyTombstones(merged, remote, tombstones);
+    assert.deepEqual(Object.keys(merged), ["12"]);
+    assert.deepEqual(tombstones, { 12: WAKTU_HAPUS });
+  });
+});
+
+describe("pruneTombstones", () => {
+  it("menghapus tombstone yang sudah terkonfirmasi terhapus", () => {
+    const pruned = pruneTombstones(
+      { 12: "2026-11-12T10:00:00.000Z", 34: "2026-11-12T11:00:00.000Z" },
+      ["12"],
+    );
+    assert.deepEqual(pruned, { 34: "2026-11-12T11:00:00.000Z" });
+  });
+
+  it("daftar hapus kosong atau tidak cocok tidak mengubah apa pun", () => {
+    const tombstones = { 12: "2026-11-12T10:00:00.000Z" };
+    assert.deepEqual(pruneTombstones(tombstones, []), tombstones);
+    assert.deepEqual(pruneTombstones(tombstones, ["99"]), tombstones);
+    assert.deepEqual(tombstones, { 12: "2026-11-12T10:00:00.000Z" });
+  });
+});
+
+/* QA-01 — regresi LAM-01: lamaran yang dihapus tidak boleh hidup
+ * lagi setelah sinkron. Yang diuji di sini adalah logika murninya
+ * (merge + tombstone + prune); repo ini belum punya mock Firestore,
+ * jadi uji integrasi deleteDoc/syncTrackers ke Firebase dilakukan
+ * manual setelah merge (hapus -> keluar -> masuk -> tetap terhapus). */
+describe("hapus lalu sinkron (QA-01)", () => {
+  it("hapus lalu sinkron: entri tetap terhapus", () => {
+    const remote = {
+      12: { ...entry(), updatedAt: "2026-11-10T10:00:00.000Z" },
+    };
+    const tombstones = { 12: "2026-11-12T10:00:00.000Z" };
+    const merged = mergeTrackers({}, remote);
+    assert.equal(merged[12].status, "Ditandai"); // tanpa tombstone, hidup lagi
+    const res = applyTombstones(merged, remote, tombstones);
+    assert.deepEqual(res.merged, {});
+    assert.deepEqual(res.toDelete, ["12"]);
+    assert.deepEqual(
+      pruneTombstones(res.remainingTombstones, res.toDelete),
+      {},
+    );
+  });
+
+  it("tambah lagi dari perangkat lain setelah hapus: entri kembali", () => {
+    const remote = {
+      12: {
+        ...entry({ status: "Sudah dilamar" }),
+        updatedAt: "2026-11-13T10:00:00.000Z",
+      },
+    };
+    const tombstones = { 12: "2026-11-12T10:00:00.000Z" };
+    const merged = mergeTrackers({}, remote);
+    const res = applyTombstones(merged, remote, tombstones);
+    assert.equal(res.merged[12].status, "Sudah dilamar");
+    assert.deepEqual(res.remainingTombstones, {});
   });
 });

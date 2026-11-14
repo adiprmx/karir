@@ -4,11 +4,15 @@ on:
   push:
     paths:
       - "data/daftar-link-karir.csv"
+      - "web/data/companies.json"
       - "scripts/validate.py"
+      - "scripts/check-consistency.py"
   pull_request:
     paths:
       - "data/daftar-link-karir.csv"
+      - "web/data/companies.json"
       - "scripts/validate.py"
+      - "scripts/check-consistency.py"
 
 jobs:
   validate:
@@ -20,3 +24,11 @@ jobs:
           python-version: "3.12"
       - name: Validate CSV
         run: python3 scripts/validate.py
+      - name: Check CSV vs seed consistency
+        run: python3 scripts/check-consistency.py
+      # Cek live hanya di main: butuh situs produksi yang sudah menayangkan
+      # commit ini. Di pull request, situs live masih menayangkan main lama
+      # sehingga perbandingan live vs CSV baru pasti salah.
+      - name: Check consistency vs live site
+        if: github.ref == 'refs/heads/main'
+        run: python3 scripts/check-consistency.py --live

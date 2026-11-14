@@ -36,3 +36,19 @@ export function daysSince(value) {
   if (Number.isNaN(t)) return null;
   return Math.max(0, Math.floor((Date.now() - t) / 86400000));
 }
+
+/* Selisih hari dari sekarang sampai tanggal ISO ("2026-11-15" bila hari
+ * ini 2026-11-14 = 1). Negatif bila tanggal sudah lewat, null bila
+ * bukan tanggal ISO yang valid. Dipakai halaman detail untuk
+ * menandai seberapa dekat batas lamar. */
+export function daysUntil(value) {
+  const t = Date.parse(`${value}T00:00:00Z`);
+  if (Number.isNaN(t)) return null;
+  const now = new Date();
+  const todayUtc = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  return Math.round((t - todayUtc) / 86400000);
+}
