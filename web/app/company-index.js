@@ -1,6 +1,6 @@
 "use client";
 
-/* Indeks 406 perusahaan di browser: diambil sekali dari /api/index lalu
+/* Indeks perusahaan di browser: diambil sekali dari /api/index lalu
  * dipakai bersama oleh Beranda, Cari, dan Mulai. Pencarian dan skor
  * memakai lib/search.js yang sama dengan server, jadi hasilnya sama,
  * tetapi tanpa menunggu jaringan tiap kali mengetik. */

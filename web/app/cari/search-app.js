@@ -1,6 +1,6 @@
 "use client";
 
-/* Halaman Cari. Hasil diurutkan di browser dari indeks 406 perusahaan
+/* Halaman Cari. Hasil diurutkan di browser dari indeks perusahaan
  * (lib/search.js, aturan skor yang sama dengan server), jadi mengetik
  * langsung menggeser urutan. Kartu yang sudah ada meluncur ke posisi
  * barunya; kartu baru masuk. Alamat halaman ikut berubah supaya hasil

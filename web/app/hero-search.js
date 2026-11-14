@@ -1,7 +1,7 @@
 "use client";
 
 /* Pencarian di layar pertama Beranda. Dua isian (domisili, posisi) dan
- * satu pertanyaan yang dijawab langsung oleh data: dari 406 kanal,
+ * satu pertanyaan yang dijawab langsung oleh data: dari seluruh kanal,
  * berapa yang cocok denganmu? Tiap kanal satu kotak; saat mengetik,
  * kotak yang cocok menyala dan sisanya meredup. Hasil teratas muncul
  * di bawahnya. Semua dihitung di browser dari indeks perusahaan. */
@@ -15,7 +15,7 @@ import { useTracker } from "@/app/tracker";
 import { trackEvent } from "@/app/analytics-track";
 import { Icon } from "@/app/visual";
 
-const COLS = 29; // 29 x 14 = 406 kotak
+const COLS = 29; // Lebar grid; jumlah kotak ikut jumlah kanal.
 
 function fill(template, vars) {
   let s = template;

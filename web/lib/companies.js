@@ -124,12 +124,13 @@ export async function getCompanyById(no) {
   return docToCompany(d);
 }
 
-/* Cadangan lokal: snapshot repo `data/companies.json` (406 baris, dicek
- * 4-5 Nov 2026). Dipakai HALAMAN saat Firestore tidak bisa dijangkau,
- * supaya pengunjung tetap melihat data asli (dengan tanggal cek aslinya),
- * bukan halaman error 500. API tetap memakai getCompanies() yang melempar
- * supaya jawaban 503-nya jujur saat data live tidak bisa dimuat.
- * Impor dinamis supaya berkas JSON tidak ikut ke bundle klien. */
+/* Cadangan lokal: snapshot repo `data/companies.json`, sinkron dengan
+ * Firestore lewat rekonsiliasi berkala. Dipakai HALAMAN saat Firestore
+ * tidak bisa dijangkau, supaya pengunjung tetap melihat data asli
+ * (dengan tanggal cek aslinya), bukan halaman error 500. API tetap
+ * memakai getCompanies() yang melempar supaya jawaban 503-nya jujur
+ * saat data live tidak bisa dimuat. Impor dinamis supaya berkas JSON
+ * tidak ikut ke bundle klien. */
 async function loadSeed() {
   const { default: seed } = await import("@/data/companies.json");
   return seed;

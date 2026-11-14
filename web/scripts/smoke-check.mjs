@@ -3,9 +3,12 @@
  *   BASE_URL=http://localhost:3000 node scripts/smoke-check.mjs
  * BASE_URL bawaan: http://localhost:3000.
  *
- * Lima cek: Beranda 200 + judul utama, /api/stats 200 + total 406,
- * /api/companies?q=Novell 200 + Novell di hasil, /api/index 200 dengan
- * token dari /api/token, /changelog 200 + 2.8.0.
+ * Lima cek: Beranda 200 + judul utama, /api/stats 200 + total sesuai
+ * seed, /api/companies?q=Novell 200 + Novell di hasil, /api/index 200
+ * dengan token dari /api/token, /changelog 200 + 2.8.0.
+ * Jumlah perusahaan yang diharapkan dibaca dari seed repo
+ * (web/data/companies.json), bukan angka yang dikode keras — data
+ * bertambah lewat hunting harian, dan smoke test harus ikut.
  * /api/index ber-token: smoke test mengambil token dulu dari
  * /api/token, lalu memanggil /api/index dengan header Authorization
  * Bearer. Semua fetch memakai User-Agent browser biasa dan Referer
@@ -17,6 +20,8 @@
  * Status lain yang salah, atau isi yang tidak sesuai, tetap GAGAL.
  * Keluar 1 bila ada yang gagal, 0 bila semua lolos atau dilewati. */
 
+import { readFileSync } from "node:fs";
+
 const BASE_URL = (process.env.BASE_URL || "http://localhost:3000").replace(
   /\/+$/,
   "",
@@ -24,6 +29,22 @@ const BASE_URL = (process.env.BASE_URL || "http://localhost:3000").replace(
 
 const TIMEOUT_MS = 10_000;
 const results = [];
+
+/* Jumlah perusahaan yang diharapkan: panjang seed repo, dibaca sekali
+ * di awal. Kalau seed tidak bisa dibaca, skrip berhenti dengan kode 2 —
+ * itu kerusakan repo, bukan kegagalan cek. */
+const SEED_PATH = new URL("../data/companies.json", import.meta.url);
+let EXPECTED_TOTAL;
+try {
+  const seed = JSON.parse(readFileSync(SEED_PATH, "utf8"));
+  if (!Array.isArray(seed) || seed.length === 0) {
+    throw new Error("seed bukan larik berisi data");
+  }
+  EXPECTED_TOTAL = seed.length;
+} catch (err) {
+  console.error(`Seed tidak bisa dibaca: ${err.message}`);
+  process.exit(2);
+}
 
 /* UA browser biasa: fetch Node bawaan mengirim UA "node", yang gerbang
  * API tidak kenali sebagai browser, jadi smoke test memakai UA ini. */
@@ -121,11 +142,11 @@ async function checkStats() {
     fail(name, "bukan JSON");
     return;
   }
-  if (data.total !== 406) {
-    fail(name, `total ${data.total}, bukan 406`);
+  if (data.total !== EXPECTED_TOTAL) {
+    fail(name, `total ${data.total}, bukan ${EXPECTED_TOTAL}`);
     return;
   }
-  pass(name, "200, total 406");
+  pass(name, `200, total ${EXPECTED_TOTAL}`);
 }
 
 async function checkCompanies() {
@@ -201,14 +222,17 @@ async function checkIndex() {
     fail(name, "bukan JSON");
     return;
   }
-  if (!Array.isArray(data.companies) || data.companies.length !== 406) {
+  if (
+    !Array.isArray(data.companies) ||
+    data.companies.length !== EXPECTED_TOTAL
+  ) {
     fail(
       name,
-      `jumlah perusahaan ${data.companies?.length}, bukan 406`,
+      `jumlah perusahaan ${data.companies?.length}, bukan ${EXPECTED_TOTAL}`,
     );
     return;
   }
-  pass(name, "200, 406 perusahaan");
+  pass(name, `200, ${EXPECTED_TOTAL} perusahaan`);
 }
 
 async function checkChangelog() {
