@@ -63,7 +63,7 @@ export default function HeroSearch({ labels, nos, targetMask, roles }) {
     if (!ranked || !index) return 0;
     let n = 0;
     for (const c of index) {
-      if (c.status === "Ada lowongan target" && ranked.matched.has(c.no)) n++;
+      if (c.status === "Ada lowongan" && ranked.matched.has(c.no)) n++;
     }
     return n;
   }, [ranked, index]);

@@ -1,4 +1,4 @@
-/* Daftar lowongan target dengan chip kelompok peran. Pemetaan dari teks
+/* Daftar perusahaan yang ada lowongan dengan chip kelompok peran. Pemetaan dari teks
  * posisi dan kategori (huruf kecil, substring). Kartu bisa langsung
  * ditandai tanpa membuka halaman detail. */
 "use client";

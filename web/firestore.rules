@@ -4,7 +4,7 @@ service cloud.firestore {
     match /companies/{doc} {
       allow read: if true;
       // Tulis hanya untuk admin yang login, dan isi dokumen harus valid:
-      // no angka, nama perusahaan ada, status salah satu dari 6 nilai,
+      // no angka, nama perusahaan ada, status salah satu dari 4 nilai,
       // dan 9 kolom wajib ada.
       allow create, update: if request.auth != null
         && request.resource.data.no is int
@@ -12,10 +12,8 @@ service cloud.firestore {
         && request.resource.data.perusahaan.size() > 0
         && request.resource.data.perusahaan.size() < 200
         && request.resource.data.status in [
-          'Ada lowongan target',
-          'Ada lowongan target (tidak cocok)',
-          'Tidak ada lowongan target',
-          'Tidak ada lowongan terlihat',
+          'Ada lowongan',
+          'Tidak ada lowongan',
           'Tidak dapat diverifikasi',
           'Portal tidak bisa dibuka'
         ]
@@ -46,9 +44,10 @@ service cloud.firestore {
         && request.resource.data.createdAt is string;
       allow update, delete: if false;
     }
-    // Snapshot internal cron (meta/targets: daftar nomor target run
-    // sebelumnya). Hanya service account yang menulis dan membaca
-    // (melewati rules); klien tidak mendapat akses sama sekali.
+    // Snapshot internal cron (meta/targets: daftar nomor perusahaan
+    // yang ada lowongannya run sebelumnya). Hanya service account
+    // yang menulis dan membaca (melewati rules); klien tidak
+    // mendapat akses sama sekali.
     match /meta/{doc} {
       allow read, write: if false;
     }
@@ -102,18 +101,14 @@ service cloud.firestore {
         && request.resource.data.perusahaan.size() > 0
         && request.resource.data.perusahaan.size() < 200
         && request.resource.data.from in [
-          'Ada lowongan target',
-          'Ada lowongan target (tidak cocok)',
-          'Tidak ada lowongan target',
-          'Tidak ada lowongan terlihat',
+          'Ada lowongan',
+          'Tidak ada lowongan',
           'Tidak dapat diverifikasi',
           'Portal tidak bisa dibuka'
         ]
         && request.resource.data.to in [
-          'Ada lowongan target',
-          'Ada lowongan target (tidak cocok)',
-          'Tidak ada lowongan target',
-          'Tidak ada lowongan terlihat',
+          'Ada lowongan',
+          'Tidak ada lowongan',
           'Tidak dapat diverifikasi',
           'Portal tidak bisa dibuka'
         ]

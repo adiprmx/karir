@@ -23,8 +23,7 @@ export default async function Tentang() {
   const locale = await getLocale();
   const stats = await getStatsOrSeed();
   const total = stats.total;
-  const targets = stats.byStatus["Ada lowongan target"] || 0;
-  const notFit = stats.byStatus["Ada lowongan target (tidak cocok)"] || 0;
+  const targets = stats.byStatus["Ada lowongan"] || 0;
   const d4 = stats.byDate["2026-11-04"] || 0;
   const d5 = stats.byDate["2026-11-05"] || 0;
 
@@ -48,15 +47,7 @@ export default async function Tentang() {
             <span className="stat-num ok num">
               <CountUp value={targets} />
             </span>
-            <span className="stat-label">lowongan target terverifikasi</span>
-          </div>
-          <div className="stat-row">
-            <span className="stat-num warn num">
-              <CountUp value={notFit} />
-            </span>
-            <span className="stat-label">
-              lowongan target, syarat tidak cocok
-            </span>
+            <span className="stat-label">perusahaan ada lowongan</span>
           </div>
         </div>
         <p className="fresh-note">
@@ -75,8 +66,9 @@ export default async function Tentang() {
             perusahaan yang paling relevan dan lamar lewat sana.
           </li>
           <li>
-            Pengecekan difokuskan ke gudang, produksi, cleaning, office boy,
-            packing, dan crew store.
+            Pengecekan mencatat lowongan apa pun yang aktif di portal
+            resmi perusahaan — dari gudang, produksi, cleaning, dan
+            office boy sampai admin, teknisi, dan kasir.
           </li>
           <li>
             Data dan kode ada di{" "}

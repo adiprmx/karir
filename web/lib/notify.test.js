@@ -26,7 +26,7 @@ function target(overrides = {}) {
     perusahaan: "Angkasa Pura Supports",
     posisi: "CLEANING SERVICE",
     link_karir: "https://contoh.test/karir",
-    status: "Ada lowongan target",
+    status: "Ada lowongan",
     batas_lamar: "",
     ...overrides,
   };

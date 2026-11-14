@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Peta lowongan",
   description:
-    "Lokasi perusahaan dengan lowongan target, dipetakan berdasarkan kota.",
+    "Lokasi perusahaan yang ada lowongan, dipetakan berdasarkan kota.",
 };
 
 export default async function Peta() {

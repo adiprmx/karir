@@ -35,12 +35,10 @@ EXPECTED_COLUMNS = [
     "kontak_lain",
 ]
 VALID_STATUSES = {
-    "Tidak ada lowongan target",
-    "Tidak ada lowongan terlihat",
+    "Ada lowongan",
+    "Tidak ada lowongan",
     "Tidak dapat diverifikasi",
     "Portal tidak bisa dibuka",
-    "Ada lowongan target",
-    "Ada lowongan target (tidak cocok)",
 }
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")

@@ -45,10 +45,10 @@ function doc(no, perusahaan, status, tanggal_cek) {
 
 const HARI_INI = new Date().toISOString().slice(0, 10);
 const HALAMAN_1 = [
-  doc(2, "PT Beta", "Ada lowongan target", HARI_INI),
-  doc(1, "PT Alfa", "Tidak ada lowongan target", "2020-01-01"),
+  doc(2, "PT Beta", "Ada lowongan", HARI_INI),
+  doc(1, "PT Alfa", "Tidak ada lowongan", "2020-01-01"),
 ];
-const HALAMAN_2 = [doc(3, "PT Gamma", "Ada lowongan target", "")];
+const HALAMAN_2 = [doc(3, "PT Gamma", "Ada lowongan", "")];
 
 after(() => {
   globalThis.fetch = fetchAsli;

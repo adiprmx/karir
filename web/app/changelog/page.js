@@ -16,6 +16,15 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.9.0",
+    date: "14 November 2026",
+    points: [
+      "Status perusahaan kini netral: Ada lowongan, Tidak ada lowongan, Tidak dapat diverifikasi, Portal tidak bisa dibuka. Istilah target dan tidak cocok tidak dipakai lagi — Karir untuk semua pencari kerja, bukan satu profil.",
+      "228 perusahaan dicek ulang satu per satu; 196 di antaranya ternyata sedang ada lowongan. Total perusahaan yang ada lowongannya kini 288 dari 610.",
+      "Notifikasi kini mengabarkan perusahaan yang baru ada lowongan, lengkap dengan peran lowongannya.",
+    ],
+  },
+  {
     version: "2.8.2",
     date: "8 November 2026",
     points: [

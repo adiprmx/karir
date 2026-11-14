@@ -75,7 +75,7 @@ function fieldMatchesAffirmative(field, tokens) {
 
 /*
  * Skor: posisi cocok +50, domisili cocok +30,
- * "Ada lowongan target" +20, "(tidak cocok)" +10,
+ * "Ada lowongan" +20,
  * "Portal tidak bisa dibuka" -20, "Tidak dapat diverifikasi" -10.
  * Angka ini hanya urutan rekomendasi, bukan janji lowongan.
  */
@@ -109,12 +109,9 @@ function scoreCompany(company, query) {
     reasons.push("Lokasi cocok");
   }
 
-  if (company.status === "Ada lowongan target") {
+  if (company.status === "Ada lowongan") {
     score += 20;
     reasons.push("Lowongan terverifikasi");
-  } else if (company.status === "Ada lowongan target (tidak cocok)") {
-    score += 10;
-    reasons.push("Lowongan terverifikasi, syarat tidak cocok");
   } else if (company.status === "Portal tidak bisa dibuka") {
     score -= 20;
   } else if (company.status === "Tidak dapat diverifikasi") {
@@ -231,10 +228,8 @@ if (typeof document !== "undefined") {
 
     function statusBadge(status) {
       var badge = el("span", "badge");
-      if (status === "Ada lowongan target") {
+      if (status === "Ada lowongan") {
         badge.className += " badge-ok";
-      } else if (status === "Ada lowongan target (tidak cocok)") {
-        badge.className += " badge-warn";
       } else {
         badge.className += " badge-muted";
       }
@@ -367,12 +362,12 @@ if (typeof document !== "undefined") {
       renderResults();
     }
 
-    /* ----- Beranda: rel lowongan target ----- */
+    /* ----- Beranda: rel lowongan ----- */
     function renderVacancyRail() {
       var rail = $("vacancy-rail");
       if (!rail) { return; }
       rail.textContent = "";
-      var targets = DATA.filter(function (c) { return c.status === "Ada lowongan target"; });
+      var targets = DATA.filter(function (c) { return c.status === "Ada lowongan"; });
       targets.sort(function (a, b) { return a.perusahaan.localeCompare(b.perusahaan, "id"); });
       targets.forEach(function (c) {
         var card = el("article", "vacancy-card");
@@ -409,13 +404,11 @@ if (typeof document !== "undefined") {
       var statusBox = $("dash-status");
       if (statusBox) {
         statusBox.textContent = "";
-        var order = ["Ada lowongan target", "Ada lowongan target (tidak cocok)",
-          "Tidak ada lowongan target", "Tidak ada lowongan terlihat",
+        var order = ["Ada lowongan", "Tidak ada lowongan",
           "Tidak dapat diverifikasi", "Portal tidak bisa dibuka"];
         var counts = countBy(DATA, "status");
         order.forEach(function (s) {
-          var cls = s === "Ada lowongan target" ? "bar-ok"
-            : s === "Ada lowongan target (tidak cocok)" ? "bar-warn" : "";
+          var cls = s === "Ada lowongan" ? "bar-ok" : "";
           statusBox.appendChild(barRow(s, counts[s] || 0, total, cls));
         });
       }
@@ -431,7 +424,7 @@ if (typeof document !== "undefined") {
       var targetBox = $("dash-targets");
       if (targetBox) {
         targetBox.textContent = "";
-        var targets = DATA.filter(function (c) { return c.status === "Ada lowongan target"; });
+        var targets = DATA.filter(function (c) { return c.status === "Ada lowongan"; });
         targets.sort(function (a, b) { return a.perusahaan.localeCompare(b.perusahaan, "id"); });
         targets.forEach(function (c) {
           var row = el("div", "target-row");

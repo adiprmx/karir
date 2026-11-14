@@ -7,14 +7,10 @@ export function safeLink(url) {
 /* Penjelasan satu kalimat per status, diambil dari makna yang sudah
  * ditulis di FAQ dan halaman Tentang, bukan klaim baru. */
 export const STATUS_EXPLAIN = {
-  "Ada lowongan target":
-    "Saat dicek, portal ini punya lowongan untuk posisi target.",
-  "Ada lowongan target (tidak cocok)":
-    "Saat dicek, ada lowongan, tetapi syaratnya tidak cocok.",
-  "Tidak ada lowongan target":
-    "Saat dicek, tidak ada lowongan untuk posisi target.",
-  "Tidak ada lowongan terlihat":
-    "Saat dicek, tidak ada lowongan yang terlihat di portal.",
+  "Ada lowongan":
+    "Saat dicek, portal ini punya lowongan aktif.",
+  "Tidak ada lowongan":
+    "Saat dicek, portal ini tidak punya lowongan aktif.",
   "Tidak dapat diverifikasi":
     "Lowongannya tidak bisa diverifikasi (halaman kosong atau perlu login). Itu bukan berarti tidak ada lowongan.",
   "Portal tidak bisa dibuka":

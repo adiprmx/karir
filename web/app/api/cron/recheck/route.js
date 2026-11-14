@@ -1,4 +1,4 @@
-/* GET /api/cron/recheck — cek ulang harian 22 portal target Karir.
+/* GET /api/cron/recheck — cek ulang harian portal Karir.
  * Dijalankan Vercel Cron tiap hari 18:00 UTC (01:00 WIB), lihat vercel.json.
  *
  * Cara kerja:
@@ -20,24 +20,28 @@
  * 5. Tiap portal dicek paralel batch 5 lewat lib/check.js. Cek ini hanya
  *    menguji portal bisa dibuka atau tidak, BUKAN isi lowongannya. Karena
  *    itu pemetaan statusnya hati-hati:
- *    - target + portal mati -> "Portal tidak bisa dibuka" + catat perubahan
- *    - target + portal hidup -> tanggal cek diperbarui, tanpa perubahan
+ *    - ada lowongan + portal mati -> "Portal tidak bisa dibuka" + catat perubahan
+ *    - ada lowongan + portal hidup -> tanggal cek diperbarui, tanpa perubahan
  *    - portal yang tadinya mati + sekarang hidup -> "Tidak dapat
  *      diverifikasi" + catat perubahan (lowongannya sendiri belum dicek
- *      ulang manusia, jadi tidak boleh langsung kembali jadi target)
- *    Setelah 22 target selesai, bila waktu masih ada, giliran portal yang
- *    sedang berstatus "Portal tidak bisa dibuka" dicek juga supaya ada
- *    jalan pulih; sisanya menunggu hari berikut bila waktu habis.
+ *      ulang manusia, jadi tidak boleh langsung kembali jadi ada lowongan)
+ *    Antrean diurutkan dari yang paling lama tidak dicek, supaya cek
+ *    harian berputar ke seluruh daftar: perusahaan yang baru dicek
+ *    (tanggal cek diperbarui tiap run) otomatis pindah ke belakang.
+ *    Tanpa urutan ini, run yang terpotong anggaran akan selalu mengecek
+ *    perusahaan yang sama dan sisanya tidak pernah terjangkau.
+ *    Perusahaan tanpa tautan karir tidak masuk antrean (tidak ada yang
+ *    bisa dicek lewat URL) dan tidak menyumbat antrean.
  *
  * Balasan: {checked, changed, updated, skipped, truncated, alerts,
  * telegram}. alerts = alert baru yang dibuat di run ini; telegram =
  * "sent" | "failed" | "skipped-no-token" | "none".
  *
  * Notifikasi (lihat lib/notify.js):
- * - Sebelum loop cek, daftar target yang baru dimuat dibandingkan
+ * - Sebelum loop cek, daftar perusahaan yang ada lowongannya dibandingkan
  *   dengan snapshot meta/targets run sebelumnya. Nomor yang baru muncul =
- *   lowongan target baru -> alert new-target-{no}-{tanggal}.
- * - Perusahaan target yang batas_lamar-nya 0-3 hari lagi ->
+ *   lowongan baru -> alert new-target-{no}-{tanggal}.
+ * - Perusahaan yang ada lowongannya dan batas_lamar-nya 0-3 hari lagi ->
  *   alert deadline-{no}-{batas_lamar}.
  * - Alert ditulis ke koleksi alerts dengan id deterministik (jadi
  *   idempotent), lalu paling banyak satu pesan Telegram gabungan
@@ -50,7 +54,7 @@ import { createSign } from "node:crypto";
 import { getCompanies, STATUS_ORDER } from "@/lib/companies";
 import { checkUrl } from "@/lib/check";
 import {
-  TARGET_STATUS,
+  OPEN_STATUS,
   DEFAULT_CHAT_ID,
   collectNewTargetAlerts,
   collectDeadlineAlerts,
@@ -62,18 +66,17 @@ export const dynamic = "force-dynamic";
 
 const DEADLINE_MS = 50_000;
 const BATCH = 5;
-const TARGET_STATUSES = [
-  "Ada lowongan target",
-  "Ada lowongan target (tidak cocok)",
-];
+const OPEN_STATUSES = ["Ada lowongan"];
 const DEAD_STATUS = "Portal tidak bisa dibuka";
 const UNVERIFIED_STATUS = "Tidak dapat diverifikasi";
-/* Snapshot daftar target run sebelumnya (dokumen meta/targets) dan
- * koleksi alerts. Snapshot dipakai untuk mendeteksi "lowongan target
- * baru": cron hanya menguji portal bisa dibuka atau tidak, jadi
- * kemunculan target baru hanya terlihat dari perbandingan snapshot.
- * Id alert deterministik (lihat lib/notify.js) supaya satu kejadian
- * tidak tercatat dua kali dan tidak ada spam harian. */
+/* Snapshot daftar perusahaan yang ada lowongannya run sebelumnya
+ * (dokumen meta/targets) dan koleksi alerts. Snapshot dipakai untuk
+ * mendeteksi "lowongan baru": cron hanya menguji portal bisa dibuka
+ * atau tidak, jadi kemunculan lowongan baru hanya terlihat dari
+ * perbandingan snapshot. Id alert deterministik (lihat lib/notify.js)
+ * supaya satu kejadian tidak tercatat dua kali dan tidak ada spam
+ * harian. Nama dokumen meta/targets dipertahankan dari versi lama
+ * supaya snapshot yang sudah ada tetap terbaca. */
 
 function todayWib() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
@@ -265,14 +268,19 @@ export async function GET(request) {
     );
   }
 
-  /* 22 target dulu, lalu portal yang sedang mati (jalan pulih). */
-  const targets = companies.filter((c) =>
-    TARGET_STATUSES.includes(c.status),
+  /* Perusahaan yang ada lowongannya dulu, lalu portal yang sedang mati
+   * (jalan pulih), diurutkan dari yang paling lama tidak dicek supaya
+   * cek harian berputar ke seluruh daftar. Tanpa tautan karir tidak
+   * masuk antrean: tidak ada URL yang bisa dicek. */
+  const open = companies.filter(
+    (c) => OPEN_STATUSES.includes(c.status) && c.link_karir,
   );
   const dead = companies.filter(
     (c) => c.status === DEAD_STATUS && c.link_karir,
   );
-  const queue = [...targets, ...dead];
+  const queue = [...open, ...dead].sort((a, b) =>
+    (a.tanggal_cek || "").localeCompare(b.tanggal_cek || ""),
+  );
 
   let token;
   try {
@@ -285,9 +293,10 @@ export async function GET(request) {
   }
   const fsBase = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents`;
 
-  /* Snapshot target run sebelumnya. Bila dokumen belum ada (run
-   * pertama dengan fitur ini), snapshot ditulis tanpa alert supaya
-   * 22 target lama tidak langsung terkirim sebagai "baru". */
+  /* Snapshot perusahaan yang ada lowongannya run sebelumnya. Bila
+   * dokumen belum ada (run pertama dengan fitur ini), snapshot ditulis
+   * tanpa alert supaya perusahaan yang sudah lama ada lowongan tidak
+   * langsung terkirim sebagai "baru". */
   let previousTargetNos = null;
   let snapshotKnown = true;
   try {
@@ -301,7 +310,7 @@ export async function GET(request) {
   } catch {
     /* Baca snapshot gagal: tandai tidak diketahui supaya fase alert
      * tidak menimpa snapshot dengan data yang bisa menghilangkan
-     * deteksi target baru di run berikut. */
+     * deteksi lowongan baru di run berikut. */
     snapshotKnown = false;
   }
 
@@ -324,14 +333,15 @@ export async function GET(request) {
    * loop cek bisa menghabiskan seluruh anggaran 50 detik; bila fase
    * ini menunggu sesudah loop, fase ini tidak pernah jalan dan
    * snapshot meta/targets tidak pernah diperbarui (terbukti 9 Nov
-   * 2026). Daftar target di sini adalah data yang baru dimuat;
-   * loop cek di bawah tidak pernah menambah target baru (hanya
-   * target -> mati atau mati -> belum terverifikasi), jadi
-   * perbandingan snapshot tetap benar. */
+   * 2026). Daftar perusahaan yang ada lowongannya di sini adalah data
+   * yang baru dimuat; loop cek di bawah tidak pernah menambah
+   * perusahaan baru ke daftar itu (hanya ada lowongan -> mati atau
+   * mati -> belum terverifikasi), jadi perbandingan snapshot tetap
+   * benar. */
   const freshAlerts = [];
   try {
     const currentTargets = companies
-      .filter((c) => statusAfter.get(c.no) === TARGET_STATUS)
+      .filter((c) => statusAfter.get(c.no) === OPEN_STATUS)
       .map((c) => ({ ...c, status: statusAfter.get(c.no) }));
     const newTargetAlerts =
       !snapshotKnown || previousTargetNos === null
@@ -418,12 +428,12 @@ export async function GET(request) {
       summary.checked += 1;
       const oldStatus = company.status;
       let newStatus = null;
-      if (!result.ok && TARGET_STATUSES.includes(oldStatus)) {
+      if (!result.ok && OPEN_STATUSES.includes(oldStatus)) {
         newStatus = DEAD_STATUS;
       } else if (result.ok && oldStatus === DEAD_STATUS) {
         newStatus = UNVERIFIED_STATUS;
       }
-      /* Status baru harus salah satu dari 6 nilai yang diakui. */
+      /* Status baru harus salah satu dari 4 nilai yang diakui. */
       if (newStatus && !STATUS_ORDER.includes(newStatus)) newStatus = null;
       if (newStatus) statusAfter.set(company.no, newStatus);
 

@@ -34,7 +34,7 @@ Contoh: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang`
         "perusahaan": "Roti O",
         "kategori": "Makanan",
         "link_karir": "https://rotio.id/Career",
-        "status": "Ada lowongan target",
+        "status": "Ada lowongan",
         "tanggal_cek": "2026-11-07",
         "catatan": "Dibuka lewat menu KARIR di rotio.id (bukan URL lama job-vacancy.html yang 404 di riset). Judul target yang tercatat adalah judul SETARA, bukan persis: Pelaksana Gudang (Kalideres, Jakarta Barat, setara Staff Gudang/Helper Gudang), Produksi Buns & Pastry (Kalideres, setara staf produksi), Office Girl (Kalideres, setara Office Boy/Girl). Daftar lengkap juga: Kasir & Baker (Jakarta, Bogor, Depok, Tangerang, Bekasi, Cikarang - bukan judul target), Teknisi Listrik/pendingin, Driver B1/BII Jakarta, Teknisi Listrik/building, Admin Gudang, Staff Finance & Accounting, Staff QC Pabrik, Security, Staff Payroll, Staff Pajak. Cek ulang 7 Nov 2026: Pelaksana Gudang, Kasir & Baker, dan Office Girl masih tercantum di tabel karier, status tetap.",
         "lokasi": "Kalideres (Jakarta Barat); Kasir & Baker: Jakarta, Bogor, Depok, Tangerang, Bekasi, Cikarang",
@@ -47,7 +47,7 @@ Contoh: `GET /api/companies?domisili=Bogor&posisi=Helper%20Gudang`
 }
 ```
 
-`total` adalah jumlah hasil sebelum paginasi. `mode` bernilai `perusahaan` bila kata kunci posisi cocok dengan nama perusahaan, sehingga hanya perusahaan itu yang tampil; selain itu `semua`. Skor: posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, tidak cocok +10, portal mati -20, tidak dapat diverifikasi -10.
+`total` adalah jumlah hasil sebelum paginasi. `mode` bernilai `perusahaan` bila kata kunci posisi cocok dengan nama perusahaan, sehingga hanya perusahaan itu yang tampil; selain itu `semua`. Skor: posisi cocok +50, domisili cocok +30, lowongan terverifikasi +20, portal mati -20, tidak dapat diverifikasi -10.
 
 Gagal memuat data dari Firestore:
 
@@ -68,7 +68,7 @@ Satu perusahaan berdasarkan nomor baris. Contoh: `GET /api/companies/212`
     "perusahaan": "PT Novell Pharmaceutical Laboratories",
     "kategori": "Manufaktur",
     "link_karir": "https://novellpharm.com/index.php?mod=professional",
-    "status": "Tidak ada lowongan terlihat",
+    "status": "Tidak ada lowongan",
     "tanggal_cek": "2026-11-07",
     "catatan": "Judul persis HELPER dengan penempatan Gunung Putri Bogor, di https://novellpharm.com/career (dialihkan ke URL di atas). Halaman yang sama juga mencantumkan WAREHOUSE STAFF sebagai pilihan posisi, plus OPERATOR PACKAGING OT (SUKABUMI), OPERATOR PRODUKSI OT, PACKING PRODUKSI OT, QUALITY CONTROL STAFF, QUALITY ASSURANCE, ANALIS QC, STAFF PPIC, FINANCE & ACCOUNTING STAFF, dan lain-lain; lokasi untuk posisi selain HELPER tidak dirinci di laporan ini selain daftar lokasi lain di halaman (Sukabumi, Jakarta, Bandung, Semarang, Bali, Makassar, Medan, Palembang, Surabaya, Yogyakarta, Cirebon, Pekanbaru, Pontianak, Banjarmasin). Cek ulang 7 Nov 2026: HELPER dan WAREHOUSE STAFF tidak lagi terlihat di portal maupun kanal resmi terbaru (postingan terbaru: Supervisor Produksi 28 Okt 2026, Staff Teknik HVAC 2 Nov 2026). Daftar lowongan portal tidak terbaca penuh dalam teks halaman (kemungkinan dimuat lewat JavaScript), jadi status ini berarti tidak terlihat, bukan vonis pasti lowongan sudah ditutup.",
     "lokasi": "Gunung Putri Bogor",
@@ -87,12 +87,10 @@ Angka ringkas data. Contoh: `GET /api/stats`
 {
   "total": 610,
   "byStatus": {
-    "Ada lowongan target": 9,
-    "Ada lowongan target (tidak cocok)": 7,
-    "Tidak ada lowongan target": 153,
-    "Tidak ada lowongan terlihat": 80,
-    "Tidak dapat diverifikasi": 89,
-    "Portal tidak bisa dibuka": 68
+    "Ada lowongan": 288,
+    "Tidak ada lowongan": 156,
+    "Tidak dapat diverifikasi": 111,
+    "Portal tidak bisa dibuka": 55
   },
   "byCategory": [
     { "label": "Manufaktur", "count": 67 },
@@ -105,7 +103,7 @@ Angka ringkas data. Contoh: `GET /api/stats`
     { "label": "Retail", "count": 16 }
   ],
   "byDate": { "2026-11-04": 81, "2026-11-05": 303, "2026-11-07": 22 },
-  "targets": 9,
+  "targets": 288,
   "stale": 0
 }
 ```
@@ -114,7 +112,7 @@ Angka ringkas data. Contoh: `GET /api/stats`
 
 ## GET /api/changes
 
-Umpan perubahan status, 10 terbaru, terbaru dulu. Aturan Firestore untuk koleksi `changes` diterbitkan 7 November 2026, jadi perubahan dari cron harian dan cek massal admin tercatat di sini. Perubahan dalam 48 jam terakhir ditandai chip "Baru" di umpan Yang berubah, daftar target, dan kartu perusahaan. Contoh: `GET /api/changes`
+Umpan perubahan status, 10 terbaru, terbaru dulu. Aturan Firestore untuk koleksi `changes` diterbitkan 7 November 2026, jadi perubahan dari cron harian dan cek massal admin tercatat di sini. Perubahan dalam 48 jam terakhir ditandai chip "Baru" di umpan Yang berubah, daftar perusahaan yang ada lowongannya, dan kartu perusahaan. Contoh: `GET /api/changes`
 
 ```json
 { "changes": [] }
@@ -177,7 +175,7 @@ Contoh: `POST /api/admin/check-link` dengan body `{ "no": 212 }`
 
 ## GET /api/cron/recheck
 
-Cek ulang harian portal target. Dijalankan Vercel Cron tiap 18:00 UTC (01:00 WIB). Antrean dimulai dari perusahaan berstatus target, lalu portal yang sedang berstatus mati supaya ada jalan pulih. Anggaran waktu 50 detik; bila habis, sisanya dicatat terpotong.
+Cek ulang harian portal perusahaan yang ada lowongannya. Dijalankan Vercel Cron tiap 18:00 UTC (01:00 WIB). Antrean diurutkan dari tanggal cek terlama dulu (rotasi), lalu portal yang sedang berstatus mati supaya ada jalan pulih; perusahaan tanpa tautan karir tidak masuk antrean. Anggaran waktu 50 detik; bila habis, sisanya dicatat terpotong.
 
 Bila `CRON_SECRET` terisi di env Vercel, request wajib membawa header `Authorization: Bearer <CRON_SECRET>`, kalau tidak jawabannya 401 `{ "error": "Tidak diizinkan." }`.
 
@@ -208,7 +206,7 @@ Setelah cek selesai, cron membandingkan daftar target sekarang dengan snapshot r
 | `companies` | 610 dokumen perusahaan; kolom `batas_lamar` ("YYYY-MM-DD", opsional) menyimpan tanggal batas lamar yang diparse dari catatan yang sudah ada | Admin login, 9 kolom wajib, `batas_lamar` harus string bila ada |
 | `changes` | Umpan perubahan status | Admin login; entri tidak bisa diubah atau dihapus |
 | `alerts` | Alert notifikasi (`new-target` atau `deadline`) dengan field `type`, `companyNo`, `perusahaan`, `sent`, `createdAt` | Admin login; entri tidak bisa diubah atau dihapus |
-| `meta` | Snapshot internal cron (`meta/targets`: daftar nomor target run sebelumnya) | Tidak ada akses klien; hanya service account |
+| `meta` | Snapshot internal cron (`meta/targets`: daftar nomor perusahaan yang ada lowongannya run sebelumnya) | Tidak ada akses klien; hanya service account |
 | `rate_limits` | Satu dokumen per hash pengunjung harian: larik waktu hit (maks 60 angka) dan `updatedAt` | Bentuk dibatasi ketat oleh aturan; tidak bisa dihapus |
 | `audit_logs` | Jejak perubahan data oleh admin | Admin login; entri tidak bisa diubah atau dihapus |
 | `reports` | Laporan tautan mati dari pengunjung | Siapa pun boleh membuat satu laporan berbentuk benar; tidak bisa dibaca publik |

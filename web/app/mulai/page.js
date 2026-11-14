@@ -60,7 +60,7 @@ export default function Mulai() {
     const r = rank(index, { domisili, posisi, urutan: "relevansi" });
     let verified = 0;
     for (const e of r.results) {
-      if (r.matched.has(e.company.no) && e.company.status === "Ada lowongan target") {
+      if (r.matched.has(e.company.no) && e.company.status === "Ada lowongan") {
         verified++;
       }
     }

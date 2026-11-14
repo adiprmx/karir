@@ -1,7 +1,7 @@
 /* Tes unit untuk lib/search.js, memakai test runner bawaan Node.
  * Dijalankan dengan: npm test
  * Setiap tes meniru perilaku nyata kode yang dibaca, bukan asumsi:
- * skor +50/+30/+20/+10/-20/-10, sinonim, token mentah untuk nama
+ * skor +50/+30/+20/-20/-10, sinonim, token mentah untuk nama
  * perusahaan, jendela penyangkalan 60 karakter, dan mode nama. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -25,7 +25,7 @@ function company(overrides = {}) {
     posisi: "",
     lokasi: "",
     kategori: "Manufaktur",
-    status: "Tidak ada lowongan target",
+    status: "Tidak ada lowongan",
     link_karir: "",
     catatan: "",
     ...overrides,
@@ -143,11 +143,11 @@ describe("skor", () => {
     assert.deepEqual(result.reasons, ["Posisi cocok", "Lokasi cocok"]);
   });
 
-  it("lowongan target menambah +20 di atas skor kecocokan", () => {
+  it("lowongan menambah +20 di atas skor kecocokan", () => {
     const c = company({
       posisi: "Helper Gudang",
       lokasi: "Bogor",
-      status: "Ada lowongan target",
+      status: "Ada lowongan",
       link_karir: "https://contoh.id/karir",
     });
     const result = scoreCompany(c, query({ posisi: "helper", domisili: "Bogor" }));
@@ -156,10 +156,11 @@ describe("skor", () => {
     assert.ok(result.reasons.includes("Portal terbuka"));
   });
 
-  it("target yang syaratnya tidak cocok menambah +10", () => {
-    const c = company({ status: "Ada lowongan target (tidak cocok)" });
+  it("tidak ada lowongan tidak menambah skor status", () => {
+    const c = company({ status: "Tidak ada lowongan" });
     const result = scoreCompany(c, query({}));
-    assert.equal(result.score, 10);
+    assert.equal(result.score, 0);
+    assert.ok(!result.reasons.includes("Lowongan terverifikasi"));
   });
 
   it("portal mati mengurangi 20 dan tanpa alasan portal terbuka", () => {
@@ -188,7 +189,7 @@ describe("skor", () => {
     const c = company({
       perusahaan: "PT Novell Pharmaceutical Laboratories",
       posisi: "HELPER",
-      status: "Ada lowongan target",
+      status: "Ada lowongan",
     });
     const result = scoreCompany(c, query({ posisi: "Novell" }));
     assert.equal(result.nameMatched, true);
@@ -204,14 +205,14 @@ describe("runSearch", () => {
         perusahaan: "PT Novell Pharmaceutical Laboratories",
         posisi: "HELPER",
         lokasi: "Gunung Putri Bogor",
-        status: "Ada lowongan target",
+        status: "Ada lowongan",
         link_karir: "https://novellpharm.com",
       }),
       company({
         perusahaan: "PT Lain",
         posisi: "Helper Gudang",
         lokasi: "Bogor",
-        status: "Ada lowongan target",
+        status: "Ada lowongan",
         link_karir: "https://lain.id",
       }),
     ];
@@ -226,8 +227,8 @@ describe("runSearch", () => {
 
   it("tanpa kata kunci, semua tampil dengan mode semua dan skor dari status", () => {
     const companies = [
-      company({ perusahaan: "PT A", status: "Ada lowongan target" }),
-      company({ perusahaan: "PT B", status: "Tidak ada lowongan target" }),
+      company({ perusahaan: "PT A", status: "Ada lowongan" }),
+      company({ perusahaan: "PT B", status: "Tidak ada lowongan" }),
     ];
     const { results, mode } = runSearch(companies, {});
     assert.equal(mode, "semua");
@@ -238,16 +239,16 @@ describe("runSearch", () => {
 
   it("filter kategori dan status benar-benar menyaring", () => {
     const companies = [
-      company({ perusahaan: "PT A", kategori: "Manufaktur", status: "Ada lowongan target" }),
-      company({ perusahaan: "PT B", kategori: "Retail", status: "Ada lowongan target" }),
-      company({ perusahaan: "PT C", kategori: "Manufaktur", status: "Tidak ada lowongan target" }),
+      company({ perusahaan: "PT A", kategori: "Manufaktur", status: "Ada lowongan" }),
+      company({ perusahaan: "PT B", kategori: "Retail", status: "Ada lowongan" }),
+      company({ perusahaan: "PT C", kategori: "Manufaktur", status: "Tidak ada lowongan" }),
     ];
     const byKategori = runSearch(companies, { kategori: "Manufaktur" });
     assert.deepEqual(
       byKategori.results.map((e) => e.company.perusahaan),
       ["PT A", "PT C"],
     );
-    const byStatus = runSearch(companies, { status: "Ada lowongan target" });
+    const byStatus = runSearch(companies, { status: "Ada lowongan" });
     assert.deepEqual(
       byStatus.results.map((e) => e.company.perusahaan),
       ["PT A", "PT B"],
@@ -256,8 +257,8 @@ describe("runSearch", () => {
 
   it("urutan nama mengurutkan abjad tanpa peduli skor", () => {
     const companies = [
-      company({ perusahaan: "PT Zulu", status: "Ada lowongan target" }),
-      company({ perusahaan: "PT Alpha", status: "Tidak ada lowongan target" }),
+      company({ perusahaan: "PT Zulu", status: "Ada lowongan" }),
+      company({ perusahaan: "PT Alpha", status: "Tidak ada lowongan" }),
     ];
     const { results } = runSearch(companies, { urutan: "nama" });
     assert.deepEqual(
@@ -300,17 +301,17 @@ describe("urutan dan hitungan", () => {
   it("countBy dan topEntries menghitung status", () => {
     const counts = countBy(
       [
-        { status: "Ada lowongan target" },
-        { status: "Ada lowongan target" },
-        { status: "Tidak ada lowongan target" },
+        { status: "Ada lowongan" },
+        { status: "Ada lowongan" },
+        { status: "Tidak ada lowongan" },
         {},
       ],
       "status",
     );
-    assert.equal(counts["Ada lowongan target"], 2);
+    assert.equal(counts["Ada lowongan"], 2);
     assert.equal(counts["Tidak tercatat"], 1);
     assert.deepEqual(topEntries(counts, 1), [
-      { label: "Ada lowongan target", count: 2 },
+      { label: "Ada lowongan", count: 2 },
     ]);
   });
 });

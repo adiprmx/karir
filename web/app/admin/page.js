@@ -33,7 +33,7 @@ const EMPTY = {
   perusahaan: "",
   kategori: "",
   link_karir: "",
-  status: "Tidak ada lowongan target",
+  status: "Tidak ada lowongan",
   tanggal_cek: "",
   catatan: "",
   lokasi: "",
@@ -601,9 +601,9 @@ export default function Admin() {
   }
 
   /* Catat perubahan status ke umpan Yang berubah (koleksi `changes`).
-   * Dipanggil dari cek massal saat portal target ternyata tidak bisa
-   * dibuka. Gagal tulis tidak menggagalkan pemeriksaan: pemanggil
-   * mengabaikan hasilnya. */
+   * Dipanggil dari cek massal saat portal perusahaan yang ada
+   * lowongannya ternyata tidak bisa dibuka. Gagal tulis tidak
+   * menggagalkan pemeriksaan: pemanggil mengabaikan hasilnya. */
   async function writeChange(c, from, to) {
     try {
       await addDoc(collection(db, "changes"), {
@@ -627,7 +627,7 @@ export default function Admin() {
       perusahaan: c.perusahaan || "",
       kategori: c.kategori || "",
       link_karir: c.link_karir || "",
-      status: c.status || "Tidak ada lowongan target",
+      status: c.status || "Tidak ada lowongan",
       tanggal_cek: c.tanggal_cek || "",
       catatan: c.catatan || "",
       lokasi: c.lokasi || "",
@@ -761,13 +761,13 @@ export default function Admin() {
   }
 
   /* Jeda antar pemeriksaan massal. Batas di server: 10 permintaan per
-   * 60 detik per alamat IP. Jeda 6,5 detik membuat 22 pemeriksaan
-   * selesai dalam sekitar 2,5 menit tanpa kena batas itu. */
+   * 60 detik per alamat IP. Jeda 6,5 detik menjaga laju di bawah
+   * batas itu, berapa pun jumlah perusahaan yang diperiksa. */
   const BULK_CHECK_DELAY_MS = 6500;
 
   async function checkBulkTargets() {
     const targets = companies
-      .filter((c) => c.status === "Ada lowongan target")
+      .filter((c) => c.status === "Ada lowongan")
       .sort((a, b) => a.no - b.no);
     if (targets.length === 0 || bulkRunning) return;
     setBulkRunning(true);
@@ -826,10 +826,10 @@ export default function Admin() {
       done.push(entry);
       setBulkResults([...done]);
       setBulkDone(i + 1);
-      /* Portal target yang ternyata tidak bisa dibuka: status
-       * tersimpannya tidak lagi cocok dengan hasil cek, jadi
-       * perubahannya dicatat ke umpan. Gagal tulis (mis. aturan
-       * belum terbit) tidak menghentikan pemeriksaan. */
+      /* Portal perusahaan yang ada lowongannya yang ternyata tidak
+       * bisa dibuka: status tersimpannya tidak lagi cocok dengan
+       * hasil cek, jadi perubahannya dicatat ke umpan. Gagal tulis
+       * (mis. aturan belum terbit) tidak menghentikan pemeriksaan. */
       if (!entry.ok && typeof entry.status === "number") {
         const recordedOk = await writeChange(
           c,
@@ -1116,7 +1116,7 @@ export default function Admin() {
   ];
 
   const targetCompanies = companies
-    .filter((c) => c.status === "Ada lowongan target")
+    .filter((c) => c.status === "Ada lowongan")
     .sort((a, b) => a.no - b.no);
 
   return (
@@ -1413,10 +1413,10 @@ export default function Admin() {
       </div>
 
       <div className="filters" style={{ marginTop: 24 }}>
-        <p className="section-label">Cek massal tautan target</p>
+        <p className="section-label">Cek massal tautan perusahaan yang ada lowongan</p>
         <p className="section-note">
           Memeriksa satu per satu tautan {targetCompanies.length} perusahaan
-          yang punya lowongan target. Tiap pemeriksaan dijeda beberapa
+          yang ada lowongan. Tiap pemeriksaan dijeda beberapa
           detik supaya tidak melewati batas server. Tombol tidak bisa
           ditekan selama pemeriksaan berjalan.
         </p>

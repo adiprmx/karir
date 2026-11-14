@@ -1,5 +1,7 @@
 # Lowongan target yang terverifikasi
 
+> Catatan 14 November 2026: dokumen ini adalah catatan temuan cek ulang 7 November 2026 dan dipertahankan apa adanya sebagai arsip. Taksonomi status berubah pada 14 November 2026 menjadi 4 nilai netral profil ("Ada lowongan", "Tidak ada lowongan", "Tidak dapat diverifikasi", "Portal tidak bisa dibuka"); label "target" dan "tidak cocok" di bawah ini adalah istilah lama dan tidak lagi dipakai di data maupun aplikasi.
+
 Daftar ini hanya memuat lowongan yang judul peran targetnya terlihat langsung di halaman resmi pada tanggal cek. Baca catatan di tiap baris sebelum melamar. Lowongan bisa sudah berubah setelah tanggal cek.
 
 ## Yang tidak cocok

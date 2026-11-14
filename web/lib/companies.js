@@ -154,12 +154,12 @@ export async function getCompanyByIdOrSeed(no) {
 }
 
 /* Perusahaan sejenis: kategori sama, bukan dirinya sendiri, yang punya
- * lowongan target dulu, lalu nama A-Z. */
+ * lowongan dulu, lalu nama A-Z. */
 function computeRelated(companies, company, n = 6) {
   const same = companies.filter(
     (c) => c.kategori === company.kategori && c.no !== company.no,
   );
-  const rank = (c) => (c.status === "Ada lowongan target" ? 0 : 1);
+  const rank = (c) => (c.status === "Ada lowongan" ? 0 : 1);
   same.sort(
     (a, b) =>
       rank(a) - rank(b) || a.perusahaan.localeCompare(b.perusahaan, "id"),
@@ -192,7 +192,7 @@ export async function getStaleCount() {
 
 function computeTargets(companies) {
   return companies
-    .filter((c) => c.status === "Ada lowongan target")
+    .filter((c) => c.status === "Ada lowongan")
     .sort((a, b) => a.perusahaan.localeCompare(b.perusahaan, "id"));
 }
 
@@ -220,11 +220,13 @@ export async function getCategoriesOrSeed() {
   return computeCategories(await getCompaniesOrSeed());
 }
 
+/* Taksonomi status (14 Nov 2026): 4 nilai netral profil — pertanyaannya
+ * hanya apakah perusahaan sedang ada lowongan aktif, untuk siapa pun.
+ * Nilai lama ("Ada lowongan target", "Ada lowongan target (tidak cocok)",
+ * "Tidak ada lowongan target", "Tidak ada lowongan terlihat") dipensiunkan. */
 export const STATUS_ORDER = [
-  "Ada lowongan target",
-  "Ada lowongan target (tidak cocok)",
-  "Tidak ada lowongan target",
-  "Tidak ada lowongan terlihat",
+  "Ada lowongan",
+  "Tidak ada lowongan",
   "Tidak dapat diverifikasi",
   "Portal tidak bisa dibuka",
 ];

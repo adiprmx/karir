@@ -107,7 +107,7 @@ export default function MapClient({ groups, other }) {
         ref={el}
         className="karir-map"
         role="application"
-        aria-label="Peta lowongan target"
+        aria-label="Peta perusahaan yang ada lowongan"
       />
       {failed && (
         <p className="note-line">

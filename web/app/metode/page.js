@@ -33,19 +33,11 @@ const TARGET_ROLES = [
 
 const STATUS_MEANINGS = [
   {
-    status: "Ada lowongan target",
-    text: "Judul peran target terlihat di halaman resmi, lengkap dengan lokasinya.",
+    status: "Ada lowongan",
+    text: "Portal menampilkan minimal satu lowongan aktif pada tanggal cek, peran apa pun.",
   },
   {
-    status: "Ada lowongan target (tidak cocok)",
-    text: "Judulnya terlihat, tapi syaratnya tidak cocok, dan syarat itu ditulis di catatan.",
-  },
-  {
-    status: "Tidak ada lowongan target",
-    text: "Portal terbuka dan ada lowongan, tapi tidak ada peran target.",
-  },
-  {
-    status: "Tidak ada lowongan terlihat",
+    status: "Tidak ada lowongan",
     text: "Portal terbuka, tapi tidak menampilkan lowongan apa pun pada tanggal cek.",
   },
   {
@@ -78,15 +70,12 @@ const SCORE_RULES = [
   "Posisi cocok dengan data: +50",
   "Domisili cocok dengan data: +30",
   "Lowongan terverifikasi: +20",
-  "Lowongan target, syarat tidak cocok: +10",
   "Portal tidak bisa dibuka: -20",
   "Tidak dapat diverifikasi: -10",
 ];
 
 function numClass(status) {
-  if (status === "Ada lowongan target") return "stat-num ok num";
-  if (status === "Ada lowongan target (tidak cocok)")
-    return "stat-num warn num";
+  if (status === "Ada lowongan") return "stat-num ok num";
   return "stat-num num";
 }
 
@@ -106,8 +95,9 @@ export default async function Metode() {
         <h2>Cara pengecekan</h2>
         <p>
           Tiap perusahaan dicek dengan membuka kanal karir resminya langsung
-          di browser. Pengecekan difokuskan ke 8 peran di bawah ini, dan
-          lokasi yang diutamakan: Bogor, Depok, Cibinong, Citayam, Bojonggede,
+          di browser. Lowongan apa pun yang aktif dicatat — peran di bawah
+          ini adalah yang paling sering dicari pengunjung, dan lokasi
+          yang diutamakan: Bogor, Depok, Cibinong, Citayam, Bojonggede,
           Citeureup, Gunung Putri, dan Jabodetabek.
         </p>
         <ul className="recheck-list">
@@ -122,7 +112,7 @@ export default async function Metode() {
         aria-label="Arti tiap status"
       >
         <p className="section-label">Arti tiap status</p>
-        <h2>Enam status di data</h2>
+        <h2>Empat status di data</h2>
         <ul className="stat-stack">
           {STATUS_MEANINGS.map((s) => (
             <li className="stat-row" key={s.status}>

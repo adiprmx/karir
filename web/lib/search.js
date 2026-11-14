@@ -3,7 +3,7 @@
  * Aturan yang sama berlaku di sini: pencocokan substring dengan
  * pengecualian kalimat penyangkalan, skor rekomendasi
  * posisi +50, domisili +30, lowongan terverifikasi +20,
- * tidak cocok +10, portal mati -20, tidak terverifikasi -10.
+ * portal mati -20, tidak terverifikasi -10.
  * Sinonim peran: tokenize() memperluas tiap kata kunci dengan
  * padanannya (mis. cleaner juga cocok dengan cleaning dan
  * kebersihan), jadi pencari tidak harus menebak kata yang persis
@@ -146,12 +146,9 @@ export function scoreCompany(company, query) {
     reasons.push("Lokasi cocok");
   }
 
-  if (company.status === "Ada lowongan target") {
+  if (company.status === "Ada lowongan") {
     score += 20;
     reasons.push("Lowongan terverifikasi");
-  } else if (company.status === "Ada lowongan target (tidak cocok)") {
-    score += 10;
-    reasons.push("Lowongan terverifikasi, syarat tidak cocok");
   } else if (company.status === "Portal tidak bisa dibuka") {
     score -= 20;
   } else if (company.status === "Tidak dapat diverifikasi") {

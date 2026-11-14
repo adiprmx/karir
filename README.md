@@ -2,9 +2,9 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Daftar ini berisi 610 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 52 perusahaan masih memiliki lowongan untuk peran target.</p>
+<p align="center">Daftar ini berisi 610 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 288 perusahaan sedang ada lowongan.</p>
 
-Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Packing, Operator Produksi, Helper Produksi, Crew Store.
+Status tiap perusahaan netral: yang dicatat hanya apakah portalnya sedang ada lowongan, untuk peran apa pun.
 
 <h3 align="center"><a href="https://karir-adiprmx.vercel.app/">Cari loker sekarang</a></h3>
 
@@ -16,9 +16,9 @@ Peran yang dicari: Helper Gudang, Staff Gudang, Cleaning Service, Office Boy, Pa
 2. Ketik domisili dan posisi yang dicari, lalu baca status tiap perusahaan beserta tanggal ceknya.
 3. Kalau ada yang cocok, buka portal resmi perusahaan itu dari tautan yang tercantum dan lamar di sana. Karir tidak menerima lamaran.
 
-Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) untuk mencari dari domisili dan posisi, lalu mengurutkan hasil dengan skor kecocokan. [Peta](https://karir-adiprmx.vercel.app/peta) menampilkan target per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) menyimpan tandaan lamaran di browser saja. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode). Pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
+Di aplikasi ada [Cari](https://karir-adiprmx.vercel.app/cari) untuk mencari dari domisili dan posisi, lalu mengurutkan hasil dengan skor kecocokan. [Peta](https://karir-adiprmx.vercel.app/peta) menampilkan perusahaan yang ada lowongannya per kota. [Lamaran Saya](https://karir-adiprmx.vercel.app/lamaran) menyimpan tandaan lamaran di browser saja. Cara kanal dicek ada di [Metode](https://karir-adiprmx.vercel.app/metode). Pertanyaan umum ada di [FAQ](https://karir-adiprmx.vercel.app/faq).
 
-<h2 align="center">Perusahaan target yang dicek ulang</h2>
+<h2 align="center">Perusahaan yang ada lowongannya</h2>
 
 Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [Dasbor](https://karir-adiprmx.vercel.app/dasbor).
 
@@ -32,7 +32,7 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 
 <h2 align="center">Hasil cek 610 kanal</h2>
 
-52 dari 610 kanal ada lowongan target.
+288 dari 610 kanal ada lowongan.
 
 <p align="center">
   <img src="assets/status-bar.svg" alt="Sebaran status 610 perusahaan" width="100%">
@@ -40,19 +40,17 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 
 | Status | Jumlah |
 | --- | --- |
-| Ada lowongan target | 9 |
-| Ada lowongan, syarat tidak cocok | 7 |
-| Tidak ada lowongan target | 153 |
-| Tidak ada lowongan terlihat | 80 |
-| Tidak dapat diverifikasi | 89 |
-| Portal tidak bisa dibuka | 68 |
+| Ada lowongan | 288 |
+| Tidak ada lowongan | 156 |
+| Tidak dapat diverifikasi | 111 |
+| Portal tidak bisa dibuka | 55 |
 
 4 perusahaan tidak punya tautan karena situs resminya tidak ketemu. Tautannya tidak ditebak: Olive Fried Chicken (204), PT Dwi Indah (315), PT Cintas Sentul Raya (321), PT Best Logistics Service Indonesia (355, BLSI).
 
-<h2 align="center">Paling cocok</h2>
+<h2 align="center">Contoh lowongan yang sedang buka</h2>
 
-- [Angkasa Pura Supports](https://karir-adiprmx.vercel.app/perusahaan/299): CLEANING SERVICE, batas 10 November 2026; TRAIN ATTENDANT, batas 18 November 2026.
-- [Roti O](https://karir-adiprmx.vercel.app/perusahaan/190): Pelaksana Gudang, Kalideres, Jakarta Barat. Judul ini tercatat setara Staff Gudang.
+- [Angkasa Pura Supports](https://karir-adiprmx.vercel.app/perusahaan/299): TRAIN ATTENDANT, batas 18 November 2026.
+- [Roti O](https://karir-adiprmx.vercel.app/perusahaan/190): Pelaksana Gudang, Kalideres, Jakarta Barat.
 - [Fore Coffee](https://karir-adiprmx.vercel.app/perusahaan/330): Barista (Part-Time), seluruh Indonesia. SMA/SMK, lulusan baru boleh daftar.
 
 <h2 align="center">Dari kanal ke aplikasi</h2>
@@ -76,7 +74,7 @@ Data mentah tersedia dalam dua format: [daftar-link-karir.csv](data/daftar-link-
 | Leaflet | Dipakai | Peta lowongan |
 | Supabase | Tidak dipakai | Mentok 2 proyek |
 | Vercel KV | Belum terpasang | Store batas laju (rencana); Firestore aktif sementara |
-| Notifikasi Telegram | Dipakai | Target baru + batas lamar 0-3 hari, via cron 01:00 WIB |
+| Notifikasi Telegram | Dipakai | Lowongan baru + batas lamar 0-3 hari, via cron 01:00 WIB |
 | Batas laju bersama | Dipakai | Redis → Firestore → memori, satu limiter untuk semua endpoint API |
 | Payment gateway | Tidak dipakai | Tanpa bayar |
 | Akun pengguna | Opsional | Login Firebase (Email/Password + Google) untuk sinkron pelacak; tamu tetap bisa pakai semua fitur |
@@ -91,7 +89,7 @@ Dicek langsung di browser tanggal 4 dan 5 November 2026. 81 kanal dicek tanggal 
 
 Kapan dicek ulang?
 
-Cek ulang otomatis jalan tiap jam 01:00 WIB. Cron mengecek ulang portal target dan portal yang sempat mati, lalu mencatat perubahan status di umpan Yang berubah. Bila ada lowongan target baru atau batas lamar yang tinggal 0-3 hari, pemilik mendapat satu pesan Telegram gabungan.
+Cek ulang otomatis jalan tiap jam 01:00 WIB. Cron mengecek ulang portal perusahaan yang ada lowongannya dan portal yang sempat mati, lalu mencatat perubahan status di umpan Yang berubah. Bila ada lowongan baru atau batas lamar yang tinggal 0-3 hari, pemilik mendapat satu pesan Telegram gabungan.
 
 Bagaimana cara melaporkan tautan mati?
 

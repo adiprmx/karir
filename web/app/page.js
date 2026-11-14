@@ -38,12 +38,12 @@ export default async function Beranda() {
     getLocale(),
   ]);
 
-  /* Angka di chip posisi: kanal yang terverifikasi punya lowongan target
+  /* Angka di chip posisi: kanal yang terverifikasi punya lowongan
    * DAN posisinya cocok dengan nama posisi itu. Dihitung dari data. */
   const roles = ROLE_NAMES.map((name) => {
     const { results } = runSearch(companies, { posisi: name });
     const count = results.filter(
-      (e) => e.positionMatched && e.company.status === "Ada lowongan target",
+      (e) => e.positionMatched && e.company.status === "Ada lowongan",
     ).length;
     return { name, count };
   });
@@ -55,8 +55,8 @@ export default async function Beranda() {
 
   const shareText =
     (locale === "en"
-      ? `Target openings on Karir (${targets.length} companies):\n`
-      : `Lowongan target di Karir (${targets.length} perusahaan):\n`) +
+      ? `Openings on Karir (${targets.length} companies):\n`
+      : `Lowongan di Karir (${targets.length} perusahaan):\n`) +
     targets
       .map(
         (c) =>
@@ -114,7 +114,7 @@ export default async function Beranda() {
           labels={heroLabels}
           nos={companies.map((c) => c.no)}
           targetMask={companies
-            .map((c) => (c.status === "Ada lowongan target" ? "1" : "0"))
+            .map((c) => (c.status === "Ada lowongan" ? "1" : "0"))
             .join("")}
           roles={roles}
         />

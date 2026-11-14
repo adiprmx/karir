@@ -182,8 +182,7 @@ export function CountUp({ value, duration = 800 }) {
 /* ---------- Status ---------- */
 
 const STATUS_META = {
-  "Ada lowongan target": { cls: "ok", icon: "check" },
-  "Ada lowongan target (tidak cocok)": { cls: "warn", icon: "alert" },
+  "Ada lowongan": { cls: "ok", icon: "check" },
   "Portal tidak bisa dibuka": { cls: "off", icon: "x" },
 };
 
@@ -201,12 +200,7 @@ export function StatusStamp({ status, index = 0 }) {
 
 /* Penanda status kecil untuk daftar padat. Hanya menandai keadaan nyata. */
 export function StatusDot({ status }) {
-  const cls =
-    status === "Ada lowongan target"
-      ? "dot ok"
-      : status === "Ada lowongan target (tidak cocok)"
-        ? "dot warn"
-        : "dot";
+  const cls = status === "Ada lowongan" ? "dot ok" : "dot";
   return <span className={cls} aria-hidden="true" />;
 }
 

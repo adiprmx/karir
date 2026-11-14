@@ -9,10 +9,10 @@ import { StatusStamp } from "@/app/visual";
 import { isNewChange } from "@/lib/notify";
 
 /* Entri baru: dibuat dalam 48 jam terakhir, atau perubahannya menuju
- * "Ada lowongan target". Sumber kebenaran adalah createdAt di koleksi
+ * "Ada lowongan". Sumber kebenaran adalah createdAt di koleksi
  * changes. Chip memakai pola chip yang sudah ada (.chip.match). */
 function isNew(c) {
-  return isNewChange(c.createdAt) || c.to === "Ada lowongan target";
+  return isNewChange(c.createdAt) || c.to === "Ada lowongan";
 }
 
 export default function ChangesFeed({ labels }) {

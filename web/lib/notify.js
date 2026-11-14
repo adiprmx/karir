@@ -1,4 +1,4 @@
-/* Helper notifikasi lowongan target Karir.
+/* Helper notifikasi lowongan baru Karir.
  * Dipakai cron cek ulang harian (app/api/cron/recheck/route.js) dan
  * watcher agent-side (notify_watch.py membaca dokumen alerts yang
  * ditulis cron). Murni fungsi tanpa dependensi Next, supaya bisa
@@ -18,7 +18,7 @@
 
 export const NEW_WINDOW_MS = 48 * 60 * 60 * 1000;
 export const DEADLINE_WINDOW_DAYS = 3;
-export const TARGET_STATUS = "Ada lowongan target";
+export const OPEN_STATUS = "Ada lowongan";
 export const DEFAULT_CHAT_ID = "2028330429";
 
 const BULAN = {
@@ -155,9 +155,9 @@ export function deadlineAlertId(no, batasLamar) {
   return `deadline-${Number(no)}-${batasLamar}`;
 }
 
-/* Lowongan target baru: nomor yang ada di daftar target sekarang tapi
- * belum ada di snapshot run sebelumnya. Urutan naik nomor supaya pesan
- * dan penulisan deterministik. */
+/* Lowongan baru: nomor yang ada di daftar perusahaan yang sedang ada
+ * lowongan sekarang tapi belum ada di snapshot run sebelumnya. Urutan
+ * naik nomor supaya pesan dan penulisan deterministik. */
 export function collectNewTargetAlerts(previousNos, currentTargets, todayIso) {
   const prev = new Set((previousNos || []).map((n) => Number(n)));
   return (currentTargets || [])
@@ -174,9 +174,9 @@ export function collectNewTargetAlerts(previousNos, currentTargets, todayIso) {
     }));
 }
 
-/* Peringatan batas lamar: perusahaan target yang batas_lamar-nya 0-3
- * hari ke depan (hari ini sampai 3 hari lagi). Yang sudah lewat atau
- * lebih dari 3 hari lagi tidak masuk. */
+/* Peringatan batas lamar: perusahaan yang ada lowongannya dan
+ * batas_lamar-nya 0-3 hari ke depan (hari ini sampai 3 hari lagi).
+ * Yang sudah lewat atau lebih dari 3 hari lagi tidak masuk. */
 export function collectDeadlineAlerts(targets, todayIso) {
   return (targets || [])
     .filter((c) => typeof c.batas_lamar === "string" && c.batas_lamar)
@@ -216,7 +216,7 @@ function shortPosisi(posisi, max = 140) {
 export function formatTelegramMessage(alerts, todayIso) {
   const list = alerts || [];
   if (list.length === 0) return "";
-  const lines = [`Lowongan target di Karir (${formatTanggalId(todayIso)}):`];
+  const lines = [`Lowongan baru di Karir (${formatTanggalId(todayIso)}):`];
   for (const a of list) {
     const posisi = shortPosisi(a.posisi);
     const head = posisi ? `${a.perusahaan} (${posisi})` : a.perusahaan;
@@ -229,7 +229,7 @@ export function formatTelegramMessage(alerts, todayIso) {
         `• ${head} — batas lamar ${formatTanggalId(a.batasLamar)} (${kapan}).`,
       );
     } else {
-      lines.push(`• ${head} — lowongan target baru.`);
+      lines.push(`• ${head} — lowongan baru.`);
     }
     if (a.link) lines.push(`  ${a.link}`);
   }

@@ -14,15 +14,13 @@ export async function generateMetadata() {
   return { title: t(locale, "dash.metaTitle") };
 }
 
-/* Warna per status mengikuti makna: hijau target, kuning tidak cocok,
+/* Warna per status mengikuti makna: hijau ada lowongan,
  * sisanya gradasi netral dari gelap ke terang. */
 const SEG_CLASS = {
-  "Ada lowongan target": "s-ok",
-  "Ada lowongan target (tidak cocok)": "s-warn",
-  "Tidak ada lowongan target": "s-1",
-  "Tidak ada lowongan terlihat": "s-2",
-  "Tidak dapat diverifikasi": "s-3",
-  "Portal tidak bisa dibuka": "s-4",
+  "Ada lowongan": "s-ok",
+  "Tidak ada lowongan": "s-1",
+  "Tidak dapat diverifikasi": "s-2",
+  "Portal tidak bisa dibuka": "s-3",
 };
 
 function MiniRow({ c }) {

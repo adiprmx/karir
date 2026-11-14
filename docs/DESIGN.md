@@ -13,7 +13,7 @@ dan 610 kanal tampil sebagai 610 kotak yang menyala sesuai pencarianmu.
 
 - Warna inti: kertas `#f4f1ea`, permukaan `#fffdf9`, tinta `#15140f`.
 - Aksen tunggal: hijau `#0b7a43` yang artinya hanya "terverifikasi".
-  Kuning `#8f5200` hanya untuk "syarat tidak cocok". Selain itu netral.
+  Kuning `#8f5200` hanya untuk peringatan. Selain itu netral.
 - Mode gelap: kertas `#12120f`, tinta `#f2efe6`, hijau `#4cd484`. Dipilih
   dengan saklar, awalnya mengikuti pengaturan perangkat.
 - Huruf: Plus Jakarta Sans (variabel, 200–800), rancangan Tokotype (Indonesia),

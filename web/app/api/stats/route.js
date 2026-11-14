@@ -36,7 +36,7 @@ export async function GET(request) {
       byStatus: stats.byStatus,
       byCategory: topEntries(countBy(companies, "kategori"), 8),
       byDate: stats.byDate,
-      targets: companies.filter((c) => c.status === "Ada lowongan target")
+      targets: companies.filter((c) => c.status === "Ada lowongan")
         .length,
       stale,
     });
