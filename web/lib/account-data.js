@@ -25,7 +25,14 @@ export function authErrorMessage(code) {
     case "auth/invalid-credential":
       return "Email atau kata sandi salah.";
     case "auth/email-already-in-use":
-      return "Email ini sudah dipakai. Coba masuk, atau pakai email lain.";
+      /* SEC-17: pesan sengaja NETRAL — sama nadanya dengan kegagalan
+       * pendaftaran umum, tanpa menyebut email sudah dipakai.
+       * Pesan lama ("Email ini sudah dipakai. Coba masuk, atau
+       * pakai email lain.") membocorkan keberadaan email ke siapa
+       * pun yang mencoba mendaftar dengan email orang lain. Kode
+       * ini hanya muncul saat pendaftaran (createUser), jadi pesan
+       * ini tidak pernah tampil di alur masuk. */
+      return "Tidak bisa mendaftar sekarang. Coba lagi sebentar lagi.";
     case "auth/weak-password":
       return "Kata sandi terlalu pendek, minimal 6 huruf.";
     case "auth/too-many-requests":

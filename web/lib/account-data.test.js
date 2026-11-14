@@ -40,7 +40,7 @@ describe("authErrorMessage", () => {
     );
     assert.equal(
       authErrorMessage("auth/email-already-in-use"),
-      "Email ini sudah dipakai. Coba masuk, atau pakai email lain.",
+      "Tidak bisa mendaftar sekarang. Coba lagi sebentar lagi.",
     );
     assert.equal(
       authErrorMessage("auth/weak-password"),
@@ -53,6 +53,17 @@ describe("authErrorMessage", () => {
     assert.equal(authErrorMessage("auth/user-not-found"), message);
     assert.equal(authErrorMessage("auth/wrong-password"), message);
     assert.equal(authErrorMessage("auth/invalid-credential"), message);
+  });
+
+  it("email sudah dipakai mendapat pesan netral, tidak membocorkan keberadaan email (SEC-17)", () => {
+    const message = authErrorMessage("auth/email-already-in-use");
+    assert.equal(message, "Tidak bisa mendaftar sekarang. Coba lagi sebentar lagi.");
+    /* Pesan tidak boleh mengandung petunjuk apa pun bahwa email
+     * itu terdaftar: bukan "sudah dipakai", bukan "sudah
+     * terdaftar", bukan ajakan masuk yang menyiratkan akun ada. */
+    assert.equal(message.includes("sudah dipakai"), false);
+    assert.equal(message.includes("sudah terdaftar"), false);
+    assert.equal(message.includes("Coba masuk"), false);
   });
 
   it("memetakan batas laju dan jaringan", () => {

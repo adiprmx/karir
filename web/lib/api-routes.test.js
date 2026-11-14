@@ -71,6 +71,8 @@ const IP = {
   company: "203.0.113.16",
   analytics: "203.0.113.17",
   misc: "203.0.113.18",
+  locale: "203.0.113.19",
+  checklink: "203.0.113.20",
 };
 
 /* Request tiruan: url, headers (Headers asli), nextUrl (URL asli
@@ -309,6 +311,14 @@ describe("gerbang bot (403)", () => {
     assert.equal(res.status, 403);
   });
 
+  it("/api/locale menolak UA curl (SEC-14)", async () => {
+    const res = await getLocale(
+      apiRequest("/api/locale?lang=en&next=/", { ip: IP.bot, ua: BOT_UA }),
+    );
+    assert.equal(res.status, 403);
+    assert.equal((await res.json()).error, "Permintaan otomatis ditolak.");
+  });
+
   it("/api/companies/[no] menolak UA curl", async () => {
     const res = await getCompanyByNo(
       apiRequest("/api/companies/1", { ip: IP.bot, ua: BOT_UA }),
@@ -373,6 +383,20 @@ describe("batas laju dan cakupan ember", () => {
       }),
     );
     assert.equal(res.status, 429);
+  });
+
+  it("/api/locale: 60 lolos (redirect 307), ke-61 ditolak 429 (SEC-14)", async () => {
+    for (let i = 0; i < 60; i++) {
+      const res = await getLocale(
+        apiRequest("/api/locale?lang=en&next=/cari", { ip: IP.locale }),
+      );
+      assert.equal(res.status, 307);
+    }
+    const res = await getLocale(
+      apiRequest("/api/locale?lang=en&next=/cari", { ip: IP.locale }),
+    );
+    assert.equal(res.status, 429);
+    assert.match((await res.json()).error, /Terlalu banyak permintaan/);
   });
 
   it("ember penuh di satu rute TIDAK mengunci rute lain (BE-03)", async () => {
@@ -603,6 +627,17 @@ describe("/api/locale (SEC-04)", () => {
     assert.equal(location.pathname, "/cari");
     assert.equal(location.search, "?q=gudang");
     assert.match(res.headers.get("set-cookie"), /karir-locale=en/);
+  });
+
+  it("cookie karir-locale membawa Secure + HttpOnly (SEC-16)", async () => {
+    const res = await getLocale(
+      apiRequest("/api/locale?lang=en&next=/", { ip: IP.misc }),
+    );
+    const setCookie = res.headers.get("set-cookie");
+    assert.match(setCookie, /karir-locale=en/);
+    assert.match(setCookie, /;\s*Secure/);
+    assert.match(setCookie, /;\s*HttpOnly/);
+    assert.match(setCookie, /SameSite=lax/);
   });
 });
 
@@ -863,6 +898,34 @@ describe("/api/admin/check-link", () => {
         }),
       );
       assert.equal(res.status, 400);
+    } finally {
+      delete process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    }
+  });
+
+  it("memakai limiter BERSAMA (OPS-08): 10 lolos, ke-11 ditolak 429, reset membuka lagi", async () => {
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "proyek-uji-t7";
+    try {
+      const token = adminJwt();
+      const call = () =>
+        postCheckLink(
+          apiRequest("/api/admin/check-link", {
+            ip: IP.checklink,
+            body: { no: 1 },
+            headers: { authorization: `Bearer ${token}` },
+          }),
+        );
+      for (let i = 0; i < 10; i++) {
+        assert.equal((await call()).status, 200);
+      }
+      const limited = await call();
+      assert.equal(limited.status, 429);
+      assert.match((await limited.json()).error, /Terlalu banyak permintaan/);
+      /* Limiter Map lokal per rute TIDAK akan terpengaruh reset
+       * ini; limiter bersama terpengaruh — ini yang membuktikan
+       * migrasi OPS-08. */
+      resetSharedLimiter();
+      assert.equal((await call()).status, 200);
     } finally {
       delete process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
     }

@@ -6,52 +6,45 @@
  * - URL TIDAK PERNAH diambil dari request. Endpoint hanya menerima
  *   nomor perusahaan, lalu memakai link_karir yang tersimpan di
  *   Firestore. Jadi tidak bisa dipakai untuk menembak URL sembarangan.
- * - IP klien diambil lewat getClientIp (x-real-ip dulu, lalu elemen
+ * - Batas laju memakai limiter bersama (OPS-08), bukan Map lokal:
+ *   ember dibagikan antar instance dan bertahan melewati cold start.
+ *   IP klien diambil lewat getClientIp (x-real-ip dulu, lalu elemen
  *   TERAKHIR x-forwarded-for — elemen pertama adalah klaim pengirim
- *   yang bisa dipalsukan) dan hanya dipakai untuk hash + rate limit,
- *   lalu dibuang. Kunci Map batas laju adalah hash SHA-256 harian
- *   atas IP; IP mentah tidak pernah disimpan.
+ *   yang bisa dipalsukan) lalu di-hash harian (hashVisitor) dan
+ *   dibuang; IP mentah tidak pernah disimpan.
  * Timeout 10 dtk, maksimal 5 redirect, batas laju 10/menit.
  * Logika ceknya tinggal di lib/check.js (dipakai bersama cron harian). */
 import { NextResponse } from "next/server";
-import { createHash } from "node:crypto";
 import { getCompanyById } from "@/lib/companies";
 import { checkUrl } from "@/lib/check";
 import { getClientIp } from "@/lib/api-guard";
+import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
+import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
 import { requireAdmin } from "@/lib/admin-auth";
 
 const WINDOW_MS = 60 * 1000;
 const MAX_REQ = 10;
-const hits = new Map();
-
-/* Garam statis di memori untuk hash kunci batas laju. Bukan secret:
- * hash ini hanya pengenal bucket batas laju, bukan token. Garam
- * digabung tanggal (UTC) supaya kunci berganti tiap hari dan hash
- * lama tidak berlaku selamanya. */
-const IP_SALT = "karir-check-link";
-
-function hashIp(ip) {
-  const day = new Date().toISOString().slice(0, 10);
-  return createHash("sha256")
-    .update(`${IP_SALT}:${day}:${ip}`)
-    .digest("hex");
-}
-
-function rateLimited(ipHash) {
-  const now = Date.now();
-  const list = (hits.get(ipHash) || []).filter((t) => now - t < WINDOW_MS);
-  list.push(now);
-  hits.set(ipHash, list);
-  return list.length > MAX_REQ;
-}
 
 export async function POST(request) {
   const auth = await requireAdmin(request);
   if (auth.error) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  const ipHash = hashIp(getClientIp(request));
-  if (rateLimited(ipHash)) {
+  /* Batas laju memakai hash IP; bila garam analitik belum dipasang,
+   * hash tidak bisa dibuat dan batas laju dilewati — tidak ada hash
+   * lemah dan tidak ada IP mentah yang disimpan. Rute ini tetap di
+   * belakang auth admin, jadi yang dilewati hanya lapisan kedua. */
+  let limited = false;
+  try {
+    const key = scopedKey(
+      "check-link",
+      hashVisitor(getClientIp(request), todayJakarta()),
+    );
+    limited = !(await getSharedLimiter().check(key, MAX_REQ, WINDOW_MS));
+  } catch {
+    console.warn("Batas laju /api/admin/check-link dilewati: env ANALYTICS_SALT belum dipasang.");
+  }
+  if (limited) {
     return NextResponse.json(
       { error: "Terlalu banyak permintaan. Coba lagi sebentar." },
       { status: 429 },

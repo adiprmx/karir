@@ -2,6 +2,17 @@
  * /api/index. Token hanya diberikan bila halaman peminta berasal
  * dari situs ini sendiri: origin header Referer atau Origin harus
  * sama dengan origin request. Tanpa origin yang cocok, jawab 403.
+ * Penerimaan desain (SEC-11): gerbang Referer/Origin ini adalah
+ * pemeriksaan asal situs yang sama, BUKAN autentikasi — token bisa
+ * diperoleh browser mana pun yang membuka situs, oleh desain, dan
+ * header Referer/Origin memang bisa dipalsukan klien non-browser.
+ * Yang membatasi penyalahgunaan adalah penolakan UA otomatis +
+ * batas laju per hash IP di bawah, bukan kerahasiaan token.
+ * Firebase App Check sengaja tidak dipakai: keputusan koordinator
+ * adalah opsi minimal yang diizinkan audit (terima sebagai desain,
+ * bukan membangun App Check). Catatan penerimaan desain di
+ * SECURITY.md dikerjakan batch dokumen; komentar ini menjaga
+ * alasannya tetap menempel pada kode.
  * Gerbang: tolak UA otomatis (403), lalu batas laju 60/menit per
  * hash IP lewat limiter bersama (429) — batas longgar, karena
  * pemakaian normal hanya ~1 token per menit (BE-11). Urutan gerbang

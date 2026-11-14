@@ -16,6 +16,7 @@ import {
   parseRateLimitDoc,
   firestoreDocId,
   scopedKey,
+  emergencyLimit,
   FIRESTORE_SYNC_EVERY,
 } from "./rate-limit.js";
 import { getClientIp } from "./api-guard.js";
@@ -380,5 +381,240 @@ describe("createRateLimiter", () => {
     assert.equal(a, b);
     assert.equal(a.kind, "memory");
     resetSharedLimiter();
+  });
+});
+
+/* Penangkap console.warn untuk test alarm fail-open: peringatan
+ * dicatat ke larik, bukan ke output test. Kembalikan restore()
+ * yang wajib dipanggil di finally. */
+function captureWarn() {
+  const lines = [];
+  const original = console.warn;
+  console.warn = (...args) => {
+    lines.push(args.join(" "));
+  };
+  return { lines, restore: () => {
+    console.warn = original;
+  } };
+}
+
+/* Mock fetch Firestore yang "sehat tapi kosong": baca dokumen
+ * selalu 404 (belum ada), tulis selalu berhasil. Keputusan izin
+ * jadi murni dari cache memori store Firestore. */
+function emptyFirestoreFetch() {
+  return async (url, options) => {
+    const method = (options?.method || "GET").toUpperCase();
+    if (method === "GET") return { ok: false, status: 404 };
+    return { ok: true, status: 200 };
+  };
+}
+
+describe("emergencyLimit (SEC-12)", () => {
+  it("separuh batas rute, dengan lantai 5/menit", () => {
+    assert.equal(emergencyLimit(60), 30);
+    assert.equal(emergencyLimit(30), 15);
+    assert.equal(emergencyLimit(10), 5);
+    assert.equal(emergencyLimit(6), 5);
+    assert.equal(emergencyLimit(1), 5);
+  });
+
+  it("nilai tidak sah jatuh ke lantai 5", () => {
+    assert.equal(emergencyLimit(0), 5);
+    assert.equal(emergencyLimit(-30), 5);
+    assert.equal(emergencyLimit(undefined), 5);
+    assert.equal(emergencyLimit("bukan-angka"), 5);
+  });
+});
+
+describe("cadangan store dan batas darurat (SEC-12, OPS-06)", () => {
+  it("Upstash gagal beralih ke Firestore, bukan fail-open (OPS-06)", async () => {
+    const warn = captureWarn();
+    try {
+      const fallback = createFirestoreStore({
+        projectId: "proyek-uji",
+        apiKey: "kunci-uji",
+        fetchImpl: emptyFirestoreFetch(),
+        syncEvery: 100,
+      });
+      const store = createUpstashStore({
+        url: "https://contoh.upstash.io",
+        token: "token-uji",
+        fetchImpl: async () => {
+          throw new Error("redis mati");
+        },
+        fallback,
+      });
+      /* Batas normal 30 ditegakkan store Firestore; bila fail-open
+       * murni, ke-31 akan lolos. */
+      for (let i = 0; i < 30; i++) {
+        assert.equal(await store.check("k", 30, 60_000, NOW + i), true);
+      }
+      assert.equal(await store.check("k", 30, 60_000, NOW + 30), false);
+    } finally {
+      warn.restore();
+    }
+  });
+
+  it("Upstash sehat tidak memanggil cadangan sama sekali", async () => {
+    let fallbackCalls = 0;
+    const fallback = createFirestoreStore({
+      projectId: "proyek-uji",
+      apiKey: "kunci-uji",
+      fetchImpl: async () => {
+        fallbackCalls += 1;
+        return { ok: false, status: 404 };
+      },
+    });
+    const store = createUpstashStore({
+      url: "https://contoh.upstash.io",
+      token: "token-uji",
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => [
+          { result: 1 },
+          { result: 1 },
+          { result: 3 },
+          { result: 1 },
+        ],
+      }),
+      fallback,
+    });
+    assert.equal(await store.check("k", 30, 60_000, NOW), true);
+    assert.equal(fallbackCalls, 0);
+  });
+
+  it("Upstash gagal tanpa cadangan: batas darurat memori yang lebih ketat + alarm (SEC-12)", async () => {
+    const warn = captureWarn();
+    try {
+      const store = createUpstashStore({
+        url: "https://contoh.upstash.io",
+        token: "token-uji",
+        fetchImpl: async () => {
+          throw new Error("redis mati");
+        },
+      });
+      /* Batas rute 30 -> batas darurat 15. */
+      for (let i = 0; i < 15; i++) {
+        assert.equal(await store.check("k", 30, 60_000, NOW + i), true);
+      }
+      assert.equal(await store.check("k", 30, 60_000, NOW + 15), false);
+      /* Fail-open dicatat (alarm), bukan diam — dan dibatasi
+       * sekali walau kegagalan terjadi 16 kali. */
+      assert.equal(warn.lines.length, 1);
+      assert.match(warn.lines[0], /upstash gagal/);
+    } finally {
+      warn.restore();
+    }
+  });
+
+  it("respons Upstash bentuk tak dikenal juga memakai batas darurat", async () => {
+    const warn = captureWarn();
+    try {
+      const store = createUpstashStore({
+        url: "https://contoh.upstash.io",
+        token: "token-uji",
+        fetchImpl: async () => ({
+          ok: true,
+          json: async () => ({ bukan: "pipeline" }),
+        }),
+      });
+      for (let i = 0; i < 15; i++) {
+        assert.equal(await store.check("k", 30, 60_000, NOW + i), true);
+      }
+      assert.equal(await store.check("k", 30, 60_000, NOW + 15), false);
+      assert.equal(warn.lines.length, 1);
+    } finally {
+      warn.restore();
+    }
+  });
+
+  it("createRateLimiter merangkai Upstash -> Firestore saat keduanya terkonfigurasi (OPS-06)", async () => {
+    const warn = captureWarn();
+    try {
+      const fetchImpl = async (url, options) => {
+        /* Pipeline Redis selalu gagal; Firestore sehat tapi kosong. */
+        if (String(url).includes("/pipeline")) {
+          throw new Error("redis mati");
+        }
+        return emptyFirestoreFetch()(url, options);
+      };
+      const limiter = createRateLimiter({
+        fetchImpl,
+        env: {
+          KV_REST_API_URL: "https://contoh.upstash.io",
+          KV_REST_API_TOKEN: "token-uji",
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "proyek-uji",
+          NEXT_PUBLIC_FIREBASE_API_KEY: "kunci-uji",
+        },
+      });
+      /* kind tetap melaporkan store UTAMA. */
+      assert.equal(limiter.kind, "upstash");
+      for (let i = 0; i < 30; i++) {
+        assert.equal(await limiter.check("k", 30, 60_000, NOW + i), true);
+      }
+      assert.equal(await limiter.check("k", 30, 60_000, NOW + 30), false);
+    } finally {
+      warn.restore();
+    }
+  });
+
+  it("createRateLimiter hanya KV: Upstash gagal jatuh ke batas darurat memori", async () => {
+    const warn = captureWarn();
+    try {
+      const limiter = createRateLimiter({
+        fetchImpl: async () => {
+          throw new Error("redis mati");
+        },
+        env: {
+          KV_REST_API_URL: "https://contoh.upstash.io",
+          KV_REST_API_TOKEN: "token-uji",
+        },
+      });
+      assert.equal(limiter.kind, "upstash");
+      for (let i = 0; i < 15; i++) {
+        assert.equal(await limiter.check("k", 30, 60_000, NOW + i), true);
+      }
+      assert.equal(await limiter.check("k", 30, 60_000, NOW + 15), false);
+    } finally {
+      warn.restore();
+    }
+  });
+
+  it("Firestore tidak terjangkau dicatat sekali, keputusan tetap dari memori (SEC-12)", async () => {
+    const warn = captureWarn();
+    try {
+      const store = createFirestoreStore({
+        projectId: "proyek-uji",
+        apiKey: "kunci-uji",
+        fetchImpl: async () => {
+          throw new Error("jaringan putus");
+        },
+        syncEvery: 100,
+      });
+      /* Dua kunci berbeda = dua kegagalan muat, tetapi peringatan
+       * dibatasi sekali per menit. */
+      assert.equal(await store.check("k", 30, 60_000, NOW), true);
+      assert.equal(await store.check("k2", 30, 60_000, NOW), true);
+      assert.equal(warn.lines.length, 1);
+      assert.match(warn.lines[0], /firestore tidak terjangkau/);
+    } finally {
+      warn.restore();
+    }
+  });
+
+  it("Firestore 404 saat baca (dokumen belum ada) TIDAK dicatat sebagai gangguan", async () => {
+    const warn = captureWarn();
+    try {
+      const store = createFirestoreStore({
+        projectId: "proyek-uji",
+        apiKey: "kunci-uji",
+        fetchImpl: emptyFirestoreFetch(),
+        syncEvery: 100,
+      });
+      assert.equal(await store.check("k", 30, 60_000, NOW), true);
+      assert.equal(warn.lines.length, 0);
+    } finally {
+      warn.restore();
+    }
   });
 });
