@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { hasOnboardingChoice, useOnboarding } from "@/app/onboarding";
 import { useCompanyIndex, rank } from "@/app/company-index";
+import { trackEvent } from "@/app/analytics-track";
 import { Icon } from "@/app/visual";
 
 const CITY_CHIPS = [
@@ -77,6 +78,19 @@ export default function Mulai() {
     if (d || p) save({ domisili: d, posisi: p });
     const query = params.toString();
     router.push(query ? `/cari?${query}` : "/cari");
+  }
+
+  /* Onboarding selesai (langkah 3): catat event, lalu ke hasil.
+   * Hanya dari wizard — tombol yang sama di ringkasan (pilihan yang
+   * sudah tersimpan) tidak mengirim event selesai lagi. Yang dikirim
+   * hanya jenis eventnya; jawaban domisili/posisi tidak ikut. */
+  function finishOnboarding() {
+    trackEvent({ type: "onboarding", path: "/mulai", action: "selesai" });
+    goToResults();
+  }
+
+  function skipOnboarding() {
+    trackEvent({ type: "onboarding", path: "/mulai", action: "dilewati" });
   }
 
   function onEdit() {
@@ -253,7 +267,7 @@ export default function Mulai() {
                 Kembali
               </button>
             ) : (
-              <Link className="btn ghost" href="/cari">
+              <Link className="btn ghost" href="/cari" onClick={skipOnboarding}>
                 Lewati
               </Link>
             )}
@@ -263,7 +277,7 @@ export default function Mulai() {
                 <Icon name="arrow" size={18} />
               </button>
             ) : (
-              <button type="button" className="btn" onClick={goToResults}>
+              <button type="button" className="btn" onClick={finishOnboarding}>
                 Lihat lowongan yang cocok
                 <Icon name="arrow" size={18} />
               </button>

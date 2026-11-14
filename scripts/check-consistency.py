@@ -8,7 +8,9 @@ menyalinnya kembali ke CSV + seed. Karena itu data live BOLEH lebih baru
 dari CSV, tetapi hanya dalam jendela write-back (maksimal 24 jam).
 
 Mode bawaan (tanpa --live): bandingkan CSV vs seed saja, 0 selisih di
-semua field. Mode ini yang jalan di CI pada setiap perubahan data.
+semua field, ditambah cek angka README (DOK-01: angka-angka kunci yang
+dinyatakan README.md harus cocok dengan CSV). Mode ini yang jalan di CI
+pada setiap perubahan data atau README.
 Mode --live: tambah perbandingan CSV vs situs live:
   - /api/stats: total harus sama dengan jumlah baris CSV.
   - Daftar penuh lewat /api/companies (2 halaman): field statis
@@ -46,15 +48,18 @@ tidak bisa dijangkau setelah 3 percobaan.
 import argparse
 import csv
 import json
+import re
 import subprocess
 import sys
 import time
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CSV_PATH = ROOT / "data" / "daftar-link-karir.csv"
 SEED_PATH = ROOT / "web" / "data" / "companies.json"
+README_PATH = ROOT / "README.md"
 
 FIELDS = [
     "no", "perusahaan", "kategori", "link_karir", "status", "tanggal_cek",
@@ -139,6 +144,103 @@ def check_csv_vs_seed(csv_rows, seed_rows, errors):
         errors.append(f"CSV vs seed: total {diffs} selisih sel (10 pertama di atas)")
     print(f"CSV vs seed: {len(csv_rows)} baris, {diffs} selisih")
     return diffs == 0
+
+
+def check_readme_numbers(csv_rows, errors):
+    """DOK-01: angka-angka kunci yang dinyatakan README.md harus
+    cocok dengan CSV. Angka README pernah membusuk berulang (406 vs
+    610, "22 lowongan target" vs 288) karena tidak ada yang
+    memeriksanya. Cek ini jalan di mode bawaan (tanpa --live) dan
+    di CI tiap push yang menyentuh README/data/skrip.
+
+    Bila sebuah pola tidak ditemukan di README, itu juga kesalahan:
+    kalimat README yang berubah harus diikuti pembaruan pola di
+    sini, supaya angka tidak lolos tanpa diperiksa.
+    """
+    try:
+        text = README_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        errors.append(f"README tidak bisa dibaca: {exc}")
+        return
+    total = len(csv_rows)
+    status_count = Counter(r["status"] for r in csv_rows.values())
+
+    def has_channel(r):
+        return any(
+            (r[k] or "").strip() for k in ("email_hrd", "wa_hrd", "kontak_lain")
+        )
+
+    no_link = [r for r in csv_rows.values() if not r["link_karir"].strip()]
+    with_channel = [r for r in no_link if has_channel(r)]
+    no_channel = [r for r in no_link if not has_channel(r)]
+
+    checks = [
+        ("total perusahaan (kalimat pembuka)",
+         r"berisi (\d+) kanal karir resmi", total),
+        ("ada lowongan (kalimat pembuka)",
+         r"(\d+) perusahaan sedang ada lowongan",
+         status_count["Ada lowongan"]),
+        ("total kanal (judul hasil cek)",
+         r"Hasil cek (\d+) kanal", total),
+        ("ada lowongan (kalimat hasil cek)",
+         r"(\d+) dari \d+ kanal ada lowongan",
+         status_count["Ada lowongan"]),
+        ("total kanal (kalimat hasil cek)",
+         r"\d+ dari (\d+) kanal ada lowongan", total),
+        ("total perusahaan (alt grafik status)",
+         r"Sebaran status (\d+) perusahaan", total),
+        ("Ada lowongan (tabel status)",
+         r"\| Ada lowongan \| (\d+) \|", status_count["Ada lowongan"]),
+        ("Tidak ada lowongan (tabel status)",
+         r"\| Tidak ada lowongan \| (\d+) \|",
+         status_count["Tidak ada lowongan"]),
+        ("Tidak dapat diverifikasi (tabel status)",
+         r"\| Tidak dapat diverifikasi \| (\d+) \|",
+         status_count["Tidak dapat diverifikasi"]),
+        ("Portal tidak bisa dibuka (tabel status)",
+         r"\| Portal tidak bisa dibuka \| (\d+) \|",
+         status_count["Portal tidak bisa dibuka"]),
+        ("tanpa tautan karir",
+         r"(\d+) perusahaan tidak punya tautan karir", len(no_link)),
+        ("tanpa tautan tapi ada kanal lain",
+         r"(\d+) di antaranya masih bisa dilamar lewat kanal lain",
+         len(with_channel)),
+        ("tanpa kanal apa pun",
+         r"(\d+) perusahaan tidak punya kanal apa pun", len(no_channel)),
+    ]
+    bad = 0
+    for label, pattern, expected in checks:
+        m = re.search(pattern, text)
+        if not m:
+            errors.append(
+                f"README: pola {label} tidak ditemukan — perbarui pola di "
+                f"check-consistency.py bila kalimat README berubah"
+            )
+            bad += 1
+            continue
+        found = int(m.group(1))
+        if found != expected:
+            errors.append(
+                f"README vs CSV {label}: README={found}, CSV={expected} "
+                f"(perbarui README.md)"
+            )
+            bad += 1
+    # Nomor perusahaan tanpa kanal yang disebut README harus sama
+    # dengan CSV (bukan hanya jumlahnya).
+    m = re.search(r"tidak ditebak: ([^.]+)\.", text)
+    if not m:
+        errors.append("README: daftar perusahaan tanpa kanal tidak ditemukan")
+        bad += 1
+    else:
+        listed = sorted(int(n) for n in re.findall(r"\d+", m.group(1)))
+        actual = sorted(r["no"] for r in no_channel)
+        if listed != actual:
+            errors.append(
+                f"README vs CSV perusahaan tanpa kanal: README={listed}, "
+                f"CSV={actual} (perbarui README.md)"
+            )
+            bad += 1
+    print(f"README vs CSV: {len(checks) + 1} angka dicek, {bad} bermasalah")
 
 
 def live_row_ok(no, csv_row, live_row, today, errors):
@@ -308,6 +410,7 @@ def main() -> int:
     csv_rows = load_csv()
     seed_rows = load_seed()
     check_csv_vs_seed(csv_rows, seed_rows, errors)
+    check_readme_numbers(csv_rows, errors)
 
     if args.live:
         reached = check_live(csv_rows, args.base_url, errors)
@@ -319,7 +422,7 @@ def main() -> int:
         for e in errors:
             print(f" - {e}")
         return 1
-    print("OK: konsistensi lolos" + (" (termasuk live)" if args.live else " (CSV vs seed)"))
+    print("OK: konsistensi lolos" + (" (termasuk live)" if args.live else " (CSV vs seed + README)"))
     return 0
 
 

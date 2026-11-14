@@ -15,7 +15,7 @@ import {
 import { Icon, Reveal, StatusStamp } from "@/app/visual";
 import { TrackerControl } from "@/app/tracker";
 import { FraudWarning } from "@/app/fraud-warning";
-import { DetailActions } from "./actions";
+import { DetailActions, CopyChannelButton } from "./actions";
 import { CompanyLogo } from "@/lib/logos";
 
 const SITE_URL = "https://karir-adiprmx.vercel.app";
@@ -219,6 +219,18 @@ export default async function CompanyDetail({ params }) {
                       ) : (
                         email
                       )}
+                      <CopyChannelButton
+                        value={email}
+                        channel="email"
+                        companyNo={company.no}
+                        labels={{
+                          copy: t(locale, "detail.copyChannel"),
+                          copied: t(locale, "detail.channelCopied"),
+                          copyFailed: t(locale, "detail.channelCopyFailed"),
+                          copyWa: t(locale, "detail.copyWa"),
+                          copyEmail: t(locale, "detail.copyEmail"),
+                        }}
+                      />
                     </div>
                   ))}
                 </dd>
@@ -243,6 +255,18 @@ export default async function CompanyDetail({ params }) {
                         ) : (
                           number
                         )}
+                        <CopyChannelButton
+                          value={number}
+                          channel="wa"
+                          companyNo={company.no}
+                          labels={{
+                            copy: t(locale, "detail.copyChannel"),
+                            copied: t(locale, "detail.channelCopied"),
+                            copyFailed: t(locale, "detail.channelCopyFailed"),
+                            copyWa: t(locale, "detail.copyWa"),
+                            copyEmail: t(locale, "detail.copyEmail"),
+                          }}
+                        />
                       </div>
                     );
                   })}

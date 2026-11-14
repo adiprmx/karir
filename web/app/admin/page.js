@@ -104,12 +104,28 @@ const QUOTA_DAILY_LIMIT = 50000;
 const TRACKER_ACTIONS = ["Ditandai", "Sudah dilamar", "Dipanggil", "Ditolak"];
 
 /* Hari (YYYY-MM-DD) dari satu catatan pengunjung: pakai kolom `day`
- * bila ada, kalau tidak potong 10 huruf pertama dari `ts`. */
+ * bila ada, kalau tidak dari `ts`. `ts` bisa berupa Timestamp
+ * Firestore (objek dengan toDate(), atau { seconds }) — String()
+ * mentah pada objek itu menghasilkan sampah, jadi dikonversi ke
+ * tanggal dulu (ADM-05). Terakhir, potong 10 huruf pertama dari
+ * string ISO. */
 function eventDay(e) {
-  const d =
-    typeof e.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.day)
-      ? e.day
-      : String(e.ts || "").slice(0, 10);
+  if (typeof e.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.day)) {
+    return e.day;
+  }
+  const ts = e.ts;
+  let d = "";
+  if (ts && typeof ts.toDate === "function") {
+    const date = ts.toDate();
+    if (date instanceof Date && !Number.isNaN(date.getTime())) {
+      d = dayString(date);
+    }
+  } else if (ts && typeof ts.seconds === "number") {
+    const date = new Date(ts.seconds * 1000);
+    if (!Number.isNaN(date.getTime())) d = dayString(date);
+  } else {
+    d = String(ts || "").slice(0, 10);
+  }
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "";
 }
 
@@ -168,6 +184,10 @@ export function aggregateVisitors(events, companies, today = new Date()) {
   const paths = new Map();
   const searches = new Map();
   const opened = new Map();
+  const portalClicks = new Map();
+  const portalChannels = { portal: 0, wa: 0, email: 0 };
+  const filters = new Map();
+  const noResult = new Map();
   const tracker = new Map(TRACKER_ACTIONS.map((a) => [a, 0]));
   const kindsByVisitor = new Map();
 
@@ -185,17 +205,53 @@ export function aggregateVisitors(events, companies, today = new Date()) {
     if (e.type === "search" && typeof e.q === "string" && e.q.trim()) {
       const q = e.q.trim();
       searches.set(q, (searches.get(q) || 0) + 1);
+      /* ANALITIK-03: pencarian tanpa hasil (results === 0). Event
+       * search lama tanpa field results diabaikan di sini. */
+      if (e.results === 0) {
+        noResult.set(q, (noResult.get(q) || 0) + 1);
+      }
     }
     if (e.type === "detail" && Number.isInteger(e.companyNo)) {
       opened.set(e.companyNo, (opened.get(e.companyNo) || 0) + 1);
     }
+    /* ANALITIK-02: klik lamar per perusahaan + per kanal (portal,
+     * wa, email dari field action). */
+    if (e.type === "portal_click") {
+      if (Number.isInteger(e.companyNo)) {
+        portalClicks.set(
+          e.companyNo,
+          (portalClicks.get(e.companyNo) || 0) + 1,
+        );
+      }
+      if (
+        e.action === "portal" ||
+        e.action === "wa" ||
+        e.action === "email"
+      ) {
+        portalChannels[e.action]++;
+      }
+    }
+    /* ANALITIK-02: nilai filter yang dipakai, format kontrak
+     * "kategori:X|status:Y|kota:Z" — tiap token dihitung terpisah. */
+    if (e.type === "filter" && typeof e.filter === "string") {
+      for (const token of e.filter.split("|")) {
+        const value = token.trim();
+        if (value) filters.set(value, (filters.get(value) || 0) + 1);
+      }
+    }
     if (e.type === "tracker_mark" && TRACKER_ACTIONS.includes(e.action)) {
       tracker.set(e.action, tracker.get(e.action) + 1);
     }
-    if (typeof e.visitor === "string" && e.visitor) {
-      if (!kindsByVisitor.has(e.visitor))
-        kindsByVisitor.set(e.visitor, new Set());
-      kindsByVisitor.get(e.visitor).add(e.type);
+    /* ANALITIK-06: kunci yang sama dengan hitungan harian (perDay)
+     * — visitorHash diutamakan, visitor sebagai cadangan — supaya
+     * penyebut "serius" sepopulasi dengan hitungan harian. Catatan
+     * jujur: visitorHash berganti tiap hari (sengaja, demi
+     * privasi), jadi penyebut ini adalah kunjungan unik harian,
+     * bukan orang unik lintas hari. */
+    const key = e.visitorHash || e.visitor;
+    if (typeof key === "string" && key) {
+      if (!kindsByVisitor.has(key)) kindsByVisitor.set(key, new Set());
+      kindsByVisitor.get(key).add(e.type);
     }
   });
 
@@ -216,9 +272,14 @@ export function aggregateVisitors(events, companies, today = new Date()) {
   }
 
   const totalVisitors = kindsByVisitor.size;
+  /* Serius: mencari, membuka detail, lalu menandai lamaran ATAU
+   * mengklik lamar (portal_click sebagai syarat alternatif —
+   * pengunjung yang langsung melamar tanpa menandai tetap serius). */
   const serious = [...kindsByVisitor.values()].filter(
     (kinds) =>
-      kinds.has("search") && kinds.has("detail") && kinds.has("tracker_mark"),
+      kinds.has("search") &&
+      kinds.has("detail") &&
+      (kinds.has("tracker_mark") || kinds.has("portal_click")),
   ).length;
 
   return {
@@ -226,11 +287,19 @@ export function aggregateVisitors(events, companies, today = new Date()) {
     daily,
     topPaths: topCounts(paths, "path"),
     topSearches: topCounts(searches, "q"),
+    noResultSearches: topCounts(noResult, "q"),
     topCompanies: topCounts(opened, "no").map((row) => ({
       no: row.no,
       name: names.get(row.no) || `No. ${row.no}`,
       count: row.count,
     })),
+    topPortalClicks: topCounts(portalClicks, "no").map((row) => ({
+      no: row.no,
+      name: names.get(row.no) || `No. ${row.no}`,
+      count: row.count,
+    })),
+    portalChannels,
+    topFilters: topCounts(filters, "filter"),
     tracker: TRACKER_ACTIONS.map((action) => ({
       action,
       count: tracker.get(action),
@@ -248,9 +317,9 @@ export function aggregateVisitors(events, companies, today = new Date()) {
  * `events` catatan pengunjung (boleh membawa `uid` bila ada pengguna
  * yang masuk), `profiles` daftar profil akun { id/uid, email,
  * displayName }. Tamu dihitung sebagai agregat tanpa identitas.
- * "Butuh beneran": mencari peran spesifik, membuka detail, dan
- * menandai lamaran, sama seperti hitungan serius di aggregateVisitors,
- * hanya dipisah akun masuk vs tamu. */
+ * "Butuh beneran": mencari peran spesifik, membuka detail, lalu
+ * menandai lamaran atau mengklik lamar, sama seperti hitungan
+ * serius di aggregateVisitors, hanya dipisah akun masuk vs tamu. */
 export function aggregateAccountActivity(events, profiles) {
   const list = Array.isArray(events) ? events : [];
   const profileByUid = new Map(
@@ -299,7 +368,9 @@ export function aggregateAccountActivity(events, profiles) {
   });
 
   const isSerious = (kinds) =>
-    kinds.has("search") && kinds.has("detail") && kinds.has("tracker_mark");
+    kinds.has("search") &&
+    kinds.has("detail") &&
+    (kinds.has("tracker_mark") || kinds.has("portal_click"));
 
   const accounts = [...byUid.values()]
     .map((r) => {
@@ -1905,8 +1976,11 @@ export default function Admin() {
                   {visitorSummary.serious.total}
                 </span>
                 <span className="stat-label">
-                  pengunjung ({visitorSummary.serious.percent}%) mencari
-                  peran spesifik, membuka detail, dan menandai lamaran.
+                  kunjungan ({visitorSummary.serious.percent}%) mencari,
+                  membuka detail, lalu menandai lamaran atau mengklik
+                  lamar. Kode pengunjung berubah tiap hari demi privasi,
+                  jadi ini kunjungan unik harian, bukan jumlah orang
+                  yang berbeda.
                 </span>
               </div>
 
@@ -1989,6 +2063,39 @@ export default function Admin() {
               )}
 
               <p>
+                <strong>Pencarian tanpa hasil</strong>
+              </p>
+              <p className="section-note">
+                Kata yang dicari tapi tidak menemukan perusahaan apa pun.
+                Hanya dari event pencarian yang membawa jumlah hasil;
+                event lama tanpa jumlah hasil tidak ikut dihitung.
+              </p>
+              {visitorSummary.noResultSearches.length === 0 ? (
+                <p className="section-note">
+                  Belum ada pencarian tanpa hasil yang tercatat.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Kata yang dicari</th>
+                      <th>Dicari</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visitorSummary.noResultSearches.map((row) => (
+                      <tr key={row.q}>
+                        <td data-label="Kata yang dicari">{row.q}</td>
+                        <td data-label="Dicari" className="num">
+                          {row.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <p>
                 <strong>Perusahaan paling sering dibuka</strong>
               </p>
               {visitorSummary.topCompanies.length === 0 ? (
@@ -2010,6 +2117,96 @@ export default function Admin() {
                           {row.no}. {row.name}
                         </td>
                         <td data-label="Dibuka" className="num">
+                          {row.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <p>
+                <strong>Perusahaan paling sering diklik lamar</strong>
+              </p>
+              {visitorSummary.topPortalClicks.length === 0 ? (
+                <p className="section-note">
+                  Belum ada klik lamar yang tercatat.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Perusahaan</th>
+                      <th>Diklik</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visitorSummary.topPortalClicks.map((row) => (
+                      <tr key={row.no}>
+                        <td data-label="Perusahaan">
+                          {row.no}. {row.name}
+                        </td>
+                        <td data-label="Diklik" className="num">
+                          {row.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <p>
+                <strong>Kanal lamar yang diklik</strong>
+              </p>
+              <table className="results-table">
+                <thead>
+                  <tr>
+                    <th>Kanal</th>
+                    <th>Diklik</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="Kanal">Portal perusahaan</td>
+                    <td data-label="Diklik" className="num">
+                      {visitorSummary.portalChannels.portal}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td data-label="Kanal">WhatsApp</td>
+                    <td data-label="Diklik" className="num">
+                      {visitorSummary.portalChannels.wa}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td data-label="Kanal">Email</td>
+                    <td data-label="Diklik" className="num">
+                      {visitorSummary.portalChannels.email}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <p>
+                <strong>Filter yang paling sering dipakai</strong>
+              </p>
+              {visitorSummary.topFilters.length === 0 ? (
+                <p className="section-note">
+                  Belum ada filter yang tercatat dipakai.
+                </p>
+              ) : (
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>Filter</th>
+                      <th>Dipakai</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visitorSummary.topFilters.map((row) => (
+                      <tr key={row.filter}>
+                        <td data-label="Filter">{row.filter}</td>
+                        <td data-label="Dipakai" className="num">
                           {row.count}
                         </td>
                       </tr>
@@ -2051,8 +2248,9 @@ export default function Admin() {
               <p className="notice">
                 Yang butuh beneran: {accountActivity.seriousLogin} akun
                 masuk dan {accountActivity.guests.serious} tamu dari{" "}
-                {accountActivity.guests.totalVisitors} tamu, mencari peran
-                spesifik, membuka detail, dan menandai lamaran.
+                {accountActivity.guests.totalVisitors} tamu, mencari,
+                membuka detail, lalu menandai lamaran atau mengklik
+                lamar.
               </p>
               {accountActivity.accounts.length === 0 ? (
                 <p className="section-note">

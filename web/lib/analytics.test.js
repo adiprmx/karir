@@ -1,8 +1,10 @@
-/* Tes unit untuk lib/analytics-server.js, memakai test runner bawaan Node.
+/* Tes unit untuk lib/analytics-server.js + pengirim klien
+ * lib/analytics.js, memakai test runner bawaan Node.
  * Dijalankan dengan: npm test
  * Yang dites: validasi event, pembersihan teks pencarian, hashing IP
  * harian, rate limit, tulis event (mock fetch), token service account,
- * pembersihan retensi (mock fetch), dan kontrak rules-vs-kode.
+ * pembersihan retensi (mock fetch), kontrak rules-vs-kode, dan
+ * penempelan ID token di body event klien (SEC-07).
  * IP mentah tidak pernah muncul di output fungsi apa pun. Tidak ada
  * panggilan jaringan live di file ini: semua fetch di-mock. */
 import { describe, it, before, after, beforeEach, afterEach } from "node:test";
@@ -24,6 +26,11 @@ import {
   writeAnalyticsEvent,
   cleanupOldEvents,
 } from "./analytics-server.js";
+import {
+  trackEvent,
+  setAnalyticsIdToken,
+  clearAnalyticsUid,
+} from "./analytics.js";
 
 function validEvent(overrides = {}) {
   return {
@@ -911,5 +918,53 @@ describe("kontrak rules-vs-kode", () => {
     assert.match(rules, /function isAdmin\(\)/);
     assert.equal(rules.includes("lastChange"), true);
     assert.equal(rules.includes("request.auth.token.admin == true"), true);
+  });
+});
+
+/* Pengirim klien lib/analytics.js: ID token di body event (SEC-07).
+ * Di Node tidak ada localStorage/navigator, jadi trackEvent memakai
+ * jalur fetch — fetch global di-stub untuk menangkap body yang
+ * dikirim. Penyegaran token malas memanggil import("@/lib/firebase")
+ * yang tidak bisa di-resolve Node; kegagalannya ditelan modul
+ * (itulah perilaku yang diharapkan saat Firebase tidak tersedia). */
+describe("trackEvent klien (idToken, SEC-07)", () => {
+  let sentBodies;
+  let realFetch;
+
+  beforeEach(() => {
+    sentBodies = [];
+    realFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, options) => {
+      sentBodies.push(JSON.parse(options.body));
+      return { ok: true };
+    };
+    clearAnalyticsUid();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    clearAnalyticsUid();
+  });
+
+  it("token yang dipasang ikut di body event", () => {
+    setAnalyticsIdToken("token-uji-123");
+    trackEvent({ type: "pageview", path: "/cari" });
+    assert.equal(sentBodies.length, 1);
+    assert.equal(sentBodies[0].type, "pageview");
+    assert.equal(sentBodies[0].idToken, "token-uji-123");
+  });
+
+  it("tanpa token, body tidak membawa idToken", () => {
+    trackEvent({ type: "pageview", path: "/cari" });
+    assert.equal(sentBodies.length, 1);
+    assert.equal("idToken" in sentBodies[0], false);
+  });
+
+  it("clearAnalyticsUid ikut menghapus token", () => {
+    setAnalyticsIdToken("token-uji-123");
+    clearAnalyticsUid();
+    trackEvent({ type: "pageview", path: "/cari" });
+    assert.equal(sentBodies.length, 1);
+    assert.equal("idToken" in sentBodies[0], false);
   });
 });

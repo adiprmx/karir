@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.14.0 — 2026-11-15
+
+Susulan analitik (T1-followup): UID terverifikasi di event, agregasi admin, pengirim event baru, opt-out, dan cek angka README.
+
+- Analitik: event kini membawa UID terverifikasi dari ID token Firebase (route membaca idToken dari body atau header; token tidak valid → tamu, bukan 400); klien mengambil token malas saat masuk; `verifyAdminToken` kini wrapper di atas verifier umum `verifyIdToken` (kontrak requireAdmin tidak berubah).
+- Panel admin: agregasi pengunjung baru — klik portal per perusahaan + kanal (portal/WA/email), filter yang dipakai, pencarian tanpa hasil; definisi "serius" disamakan (cari + detail + tandai/klik lamar) dengan penyebut kunjungan unik harian; `eventDay` menangani Timestamp Firestore.
+- Pengirim event: onboarding selesai/dilewati, laporan tautan mati terkirim, salin kanal WA/email (tombol "Salin" baru per kanal di halaman detail, label dua bahasa).
+- Privasi: toggle "Jangan catat kunjungan saya" di /pengaturan (sengaja tidak ikut "Hapus semua data"); /privasi menjelaskan jenis event, penyamaran email/telepon di kata pencarian, dan cara menolak.
+- Filter analitik kini mencakup kota (`kota:Z` di string filter, agregasi menghitungnya otomatis).
+- DOK-01: `check-consistency.py` kini menegaskan 14 angka README terhadap CSV (total, status, tanpa tautan + nomor perusahaan) dan gagal bila tidak cocok; CI memicu saat README berubah.
+
 ## 2.13.0 — 2026-11-15
 
 Pencarian (T2, Fase 4 gelombang 3): mode nama tidak lagi membajak kata peran, filter kota, dan tombol bagikan.

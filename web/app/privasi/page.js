@@ -84,6 +84,11 @@ export default async function Privasi() {
             membuka halaman Metode.
           </li>
           <li>
+            <code>karir-tanpa-analitik</code>: penanda bahwa kamu memilih
+            kunjunganmu tidak dicatat. Hanya ada bila kamu mengaktifkan
+            pilihan itu di Pengaturan.
+          </li>
+          <li>
             Cookie <code>karir-locale</code>: pilihan bahasa Indonesia
             atau Inggris.
           </li>
@@ -103,6 +108,17 @@ export default async function Privasi() {
           angka gabungan, misalnya halaman yang paling sering dibuka.
         </p>
         <p>
+          Yang dicatat: halaman yang dibuka, kata yang dicari, perusahaan
+          yang detailnya dibuka, filter yang dipakai di pencarian, kanal
+          lamar yang diklik (portal perusahaan, WhatsApp, atau email),
+          lamaran yang ditandai, alamat email atau nomor WhatsApp yang
+          disalin dari halaman perusahaan, laporan tautan mati yang
+          dikirim, dan apakah pengenalan awal di halaman Mulai
+          diselesaikan atau dilewati. Yang tidak dicatat: alamat
+          internetmu, alamat emailmu, dan isi laporan atau jawaban
+          pengenalan awalmu.
+        </p>
+        <p>
           Tiap pengunjung mendapat nomor acak yang tersimpan di browser.
           Nomor ini hanya angka acak yang tidak memuat nama atau alamat
           email, dan situs tidak mencoba mengenali perangkatmu dari
@@ -110,7 +126,9 @@ export default async function Privasi() {
         </p>
         <p>
           Kata yang kamu ketik di pencarian ikut terkirim ke server, tanpa
-          nama, untuk statistik gabungan.
+          nama, untuk statistik gabungan. Sebelum disimpan, alamat email
+          dan nomor telepon yang tidak sengaja terketik di kolom
+          pencarian disamarkan, jadi yang tersimpan bukan teks mentahnya.
         </p>
         <p>
           Alamat internetmu tidak disimpan. Alamat itu diubah jadi kode
@@ -128,6 +146,13 @@ export default async function Privasi() {
           dengan kunjungan orang.
         </p>
         <p>Catatan kunjungan mentah disimpan 90 hari, lalu dihapus.</p>
+        <p>
+          Kamu bisa menolak pencatatan ini kapan saja: buka halaman{" "}
+          <Link href="/pengaturan">Pengaturan</Link>, lalu centang
+          &ldquo;Jangan catat kunjungan saya&rdquo;. Setelah itu tidak ada
+          lagi kunjungan yang dicatat dari browser ini. Catatan yang sudah
+          terkirim sebelumnya tetap terhapus sendiri setelah 90 hari.
+        </p>
       </section>
 
       <section className="dash-section" aria-label="Laporan tautan mati">

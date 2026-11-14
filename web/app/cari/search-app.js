@@ -219,13 +219,14 @@ export default function SearchApp({ initial, categories, statuses, labels }) {
           q: keyword,
           results: rRef.current ? rRef.current.results.length : 0,
         });
-      } else if (state.kategori || state.status) {
+      } else if (state.kategori || state.status || state.kota) {
         trackEvent({
           type: "filter",
           path: "/cari",
           filter: [
             state.kategori ? `kategori:${state.kategori}` : null,
             state.status ? `status:${state.status}` : null,
+            state.kota ? `kota:${state.kota}` : null,
           ]
             .filter(Boolean)
             .join("|"),

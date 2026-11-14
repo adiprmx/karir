@@ -183,14 +183,14 @@ function b64urlJson(obj) {
   return Buffer.from(JSON.stringify(obj)).toString("base64url");
 }
 
-function adminJwt({ admin = true } = {}) {
+function adminJwt({ admin = true, sub = "uid-admin-uji" } = {}) {
   const nowSec = Math.floor(Date.now() / 1000);
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   const header = b64urlJson({ alg: "RS256", kid: "kunci-uji-t7", typ: "JWT" });
   const payload = b64urlJson({
     iss: `https://securetoken.google.com/${projectId}`,
     aud: projectId,
-    sub: "uid-admin-uji",
+    sub,
     admin,
     iat: nowSec - 10,
     exp: nowSec + 3600,
@@ -200,6 +200,11 @@ function adminJwt({ admin = true } = {}) {
   return `${header}.${payload}.${signer.sign(privateKey, "base64url")}`;
 }
 
+/* Dokumen event analitik yang ditulis route (ditangkap dari mock
+ * fetch, supaya test bisa menegaskan field uid yang tersimpan —
+ * SEC-07). Dikosongkan tiap test di beforeEach. */
+const writtenAnalytics = [];
+
 /* --- Mock fetch global: Firestore REST + JWKS Google --- */
 globalThis.fetch = async (url, options = {}) => {
   const u = String(url);
@@ -208,8 +213,16 @@ globalThis.fetch = async (url, options = {}) => {
     return mockResponse({ ok: true, status: 200, body: { keys: [TEST_JWK] } });
   }
   /* Tulis (PATCH marker, POST analytics/alerts): selalu berhasil —
-   * semua tulis di jalur ini best-effort. */
+   * semua tulis di jalur ini best-effort. Tulis event analitik
+   * ditangkap supaya test SEC-07 bisa memeriksa field-nya. */
   if (method === "PATCH" || method === "POST") {
+    if (u.includes("/analytics_events")) {
+      try {
+        writtenAnalytics.push(JSON.parse(options.body || "{}"));
+      } catch {
+        /* Body bukan JSON: abaikan, bukan urusan mock ini. */
+      }
+    }
     return mockResponse({ ok: true, status: 200, body: {} });
   }
   if (u.includes("/meta/lastChange")) {
@@ -249,7 +262,9 @@ beforeEach(() => {
   revalidateCompanies();
   revalidateChanges();
   resetModes();
+  writtenAnalytics.length = 0;
   delete process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  delete process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
 });
 
 /* --- Gerbang bot: 403 untuk UA otomatis di semua rute baca --- */
@@ -665,6 +680,15 @@ describe("/api/companies/[no] dan seed-first", () => {
 });
 
 /* --- /api/analytics --- */
+
+/* Env supaya writeAnalyticsEvent benar-benar mencoba menulis
+ * (jalur fallback API key; service account tidak dipasang di test
+ * ini). Dibersihkan lagi oleh beforeEach di atas. */
+function withAnalyticsWriteEnv() {
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "proyek-uji-t7";
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY = "kunci-api-uji-bukan-asli";
+}
+
 describe("/api/analytics", () => {
   it("event valid dijawab 202 {ok:true}", async () => {
     const res = await postAnalytics(
@@ -715,6 +739,69 @@ describe("/api/analytics", () => {
       (await res.json()).error,
       "Terlalu banyak permintaan. Coba lagi sebentar.",
     );
+  });
+
+  it("idToken valid di body: uid terverifikasi tersimpan, token tidak disimpan (SEC-07)", async () => {
+    withAnalyticsWriteEnv();
+    const token = adminJwt({ admin: false, sub: "uid-pengguna-uji" });
+    const res = await postAnalytics(
+      apiRequest("/api/analytics", {
+        ip: IP.analytics,
+        body: { type: "pageview", path: "/cari", idToken: token },
+      }),
+    );
+    assert.equal(res.status, 202);
+    assert.equal(writtenAnalytics.length, 1);
+    const fields = writtenAnalytics[0].fields;
+    assert.equal(fields.uid.stringValue, "uid-pengguna-uji");
+    assert.equal(
+      JSON.stringify(writtenAnalytics[0]).includes(token),
+      false,
+    );
+  });
+
+  it("idToken tidak valid di body: tetap 202 sebagai tamu, tanpa uid", async () => {
+    withAnalyticsWriteEnv();
+    const res = await postAnalytics(
+      apiRequest("/api/analytics", {
+        ip: IP.analytics,
+        body: { type: "pageview", path: "/cari", idToken: "bukan-jwt" },
+      }),
+    );
+    assert.equal(res.status, 202);
+    assert.equal(writtenAnalytics.length, 1);
+    assert.equal("uid" in writtenAnalytics[0].fields, false);
+  });
+
+  it("token valid di header Authorization: uid terverifikasi tersimpan", async () => {
+    withAnalyticsWriteEnv();
+    const token = adminJwt({ admin: false, sub: "uid-header-uji" });
+    const res = await postAnalytics(
+      apiRequest("/api/analytics", {
+        ip: IP.analytics,
+        body: { type: "pageview", path: "/cari" },
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+    assert.equal(res.status, 202);
+    assert.equal(writtenAnalytics.length, 1);
+    assert.equal(
+      writtenAnalytics[0].fields.uid.stringValue,
+      "uid-header-uji",
+    );
+  });
+
+  it("uid dari body dibuang walau tanpa token (SEC-07)", async () => {
+    withAnalyticsWriteEnv();
+    const res = await postAnalytics(
+      apiRequest("/api/analytics", {
+        ip: IP.analytics,
+        body: { type: "pageview", path: "/cari", uid: "uid-palsu" },
+      }),
+    );
+    assert.equal(res.status, 202);
+    assert.equal(writtenAnalytics.length, 1);
+    assert.equal("uid" in writtenAnalytics[0].fields, false);
   });
 });
 

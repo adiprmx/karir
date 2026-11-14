@@ -1,8 +1,13 @@
-/* Verifikasi ID token Firebase untuk rute admin (server-side).
+/* Verifikasi ID token Firebase untuk rute server (server-side).
  * Tanpa dependensi baru: tanda tangan RS256 diverifikasi manual pakai
  * node:crypto, mengikuti pola JWT manual yang sudah ada di
  * app/api/cron/recheck/route.js (di sana untuk menandatangani, di sini
  * untuk memverifikasi).
+ *
+ * Dua verifier memakai inti yang sama (verifyTokenCore):
+ * - verifyIdToken: token siapa pun yang masuk (dipakai rute
+ *   analitik untuk menempel UID terverifikasi ke event, SEC-07).
+ * - verifyAdminToken: token admin saja (cek klaim admin: true).
  *
  * Peran admin memakai custom claim Firebase Auth (admin: true) — satu
  * sumber kebenaran di token untuk aturan Firestore dan API. Klaim
@@ -11,12 +16,13 @@
  * bukan dari repo ini.
  *
  * Kontrak (dipakai tim lain, jangan diubah bentuknya):
- * - verifyAdminToken(idToken) -> Promise<{uid}> bila token valid dan
- *   klaim admin ada; Promise<{error, status}> bila gagal:
- *   401 token tidak ada / tidak valid / kedaluwarsa,
- *   403 token valid tapi klaim admin tidak ada,
- *   503 verifikasi tidak bisa jalan (mis. kunci Google tidak bisa
- *   diambil atau konfigurasi proyek tidak ada).
+ * - verifyIdToken(idToken) -> Promise<{uid}> bila token valid;
+ *   Promise<{error, status}> bila gagal: 401 token tidak ada /
+ *   tidak valid / kedaluwarsa, 503 verifikasi tidak bisa jalan
+ *   (mis. kunci Google tidak bisa diambil atau konfigurasi proyek
+ *   tidak ada).
+ * - verifyAdminToken(idToken) -> kontrak yang sama, ditambah 403
+ *   bila token valid tapi klaim admin tidak ada.
  * - requireAdmin(request) -> kontrak yang sama; membaca token dari
  *   header Authorization: Bearer <token>.
  * Modul ini tidak pernah mencatat token atau nilai rahasia apa pun.
@@ -99,7 +105,11 @@ function verifySignature(headerB64, payloadB64, signatureB64, jwk) {
   return verifier.verify(publicKey, signatureB64, "base64url");
 }
 
-export async function verifyAdminToken(idToken, options = {}) {
+/* Inti verifikasi ID token Firebase: tanda tangan RS256 + klaim
+ * standar (iss, aud, sub, iat, exp). TANPA cek klaim admin — itu
+ * urusan wrapper verifyAdminToken di bawah. Mengembalikan
+ * { uid, admin } bila valid, { error, status } bila gagal. */
+async function verifyTokenCore(idToken, options = {}) {
   const projectId = projectIdFromEnv(options);
   if (!projectId) {
     return { error: "Verifikasi tidak bisa jalan saat ini.", status: 503 };
@@ -174,10 +184,27 @@ export async function verifyAdminToken(idToken, options = {}) {
   if (payload.exp <= nowSec) {
     return { error: "Token sudah kedaluwarsa.", status: 401 };
   }
-  if (payload.admin !== true) {
+  return { uid: payload.sub, admin: payload.admin === true };
+}
+
+/* Verifikasi ID token siapa pun yang masuk (tanpa cek klaim admin).
+ * Dipakai rute analitik (SEC-07): UID dari token terverifikasi
+ * ditempel ke event; token yang tidak valid ditangani pemanggil
+ * sebagai tamu, bukan ditolak. */
+export async function verifyIdToken(idToken, options = {}) {
+  const result = await verifyTokenCore(idToken, options);
+  if (result.error) return result;
+  return { uid: result.uid };
+}
+
+/* Verifikasi ID token admin: verifier umum + cek klaim admin. */
+export async function verifyAdminToken(idToken, options = {}) {
+  const result = await verifyTokenCore(idToken, options);
+  if (result.error) return result;
+  if (!result.admin) {
     return { error: "Akun ini bukan akun admin.", status: 403 };
   }
-  return { uid: payload.sub };
+  return { uid: result.uid };
 }
 
 export async function requireAdmin(request, options = {}) {

@@ -53,6 +53,15 @@ const DICT = {
     "search.shareCopied": "Tautan disalin.",
     "search.shareFailed": "Tautan tidak bisa disalin otomatis. Salin alamat di bilah browser.",
     /* --- akhir T2 --- */
+    /* --- T1f (tombol salin kanal di halaman detail): hanya kunci baru
+     * di blok ini, nilai kunci lama tidak diubah. --- */
+    "detail.copyChannel": "Salin",
+    "detail.channelCopied": "Disalin.",
+    "detail.channelCopyFailed":
+      "Tidak bisa disalin otomatis. Salin manual dari layar.",
+    "detail.copyWa": "Salin nomor WhatsApp",
+    "detail.copyEmail": "Salin alamat email",
+    /* --- akhir T1f --- */
     "landing.trustLabel": "Angka ringkas",
     "landing.trustChecked": "kanal dicek",
     "landing.trustTarget": "ada lowongan",
@@ -286,6 +295,15 @@ const DICT = {
     "search.shareCopied": "Link copied.",
     "search.shareFailed": "The link could not be copied automatically. Copy the address from the browser bar.",
     /* --- end T2 --- */
+    /* --- T1f (copy channel button on the detail page): new keys only
+     * in this block, existing key values untouched. --- */
+    "detail.copyChannel": "Copy",
+    "detail.channelCopied": "Copied.",
+    "detail.channelCopyFailed":
+      "Could not be copied automatically. Copy it manually from the screen.",
+    "detail.copyWa": "Copy WhatsApp number",
+    "detail.copyEmail": "Copy email address",
+    /* --- end T1f --- */
     "landing.trustLabel": "Key numbers",
     "landing.trustChecked": "channels checked",
     "landing.trustTarget": "openings",

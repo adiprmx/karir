@@ -5,12 +5,14 @@ on:
     paths:
       - "data/daftar-link-karir.csv"
       - "web/data/companies.json"
+      - "README.md"
       - "scripts/validate.py"
       - "scripts/check-consistency.py"
   pull_request:
     paths:
       - "data/daftar-link-karir.csv"
       - "web/data/companies.json"
+      - "README.md"
       - "scripts/validate.py"
       - "scripts/check-consistency.py"
 
@@ -24,7 +26,10 @@ jobs:
           python-version: "3.12"
       - name: Validate CSV
         run: python3 scripts/validate.py
-      - name: Check CSV vs seed consistency
+      # Cek ini mencakup DOK-01 (angka README vs CSV) dalam mode
+      # non-live; README.md ada di paths pemicu di atas supaya cek
+      # jalan tiap push yang mengubah README.
+      - name: Check CSV vs seed + README consistency
         run: python3 scripts/check-consistency.py
       # Cek live hanya di main: butuh situs produksi yang sudah menayangkan
       # commit ini. Di pull request, situs live masih menayangkan main lama

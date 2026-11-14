@@ -16,6 +16,15 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.14.0",
+    date: "15 November 2026",
+    points: [
+      "Halaman perusahaan kini punya tombol salin untuk alamat email dan nomor WhatsApp.",
+      "Pengaturan kini punya pilihan untuk tidak dicatat kunjungannya.",
+      "Kebijakan Privasi kini menjelaskan dengan lebih rinci apa yang dicatat soal kunjungan.",
+    ],
+  },
+  {
     version: "2.13.0",
     date: "15 November 2026",
     points: [

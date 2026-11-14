@@ -121,8 +121,9 @@ export function validateEvent(body, verifiedUid) {
     event.results = body.results;
   }
   /* Nilai filter yang dipakai (ANALITIK-04): satu string berisi
-   * pasangan "kategori:<nilai>" dan/atau "status:<nilai>" yang
-   * dipisah "|", mis. "kategori:Logistik|status:Ada lowongan".
+   * pasangan "kategori:<nilai>", "status:<nilai>", dan/atau
+   * "kota:<nilai>" yang dipisah "|", mis.
+   * "kategori:Logistik|status:Ada lowongan|kota:Depok".
    * Nilainya berasal dari dropdown terkontrol di /cari. */
   if (body.filter !== undefined) {
     if (typeof body.filter !== "string" || body.filter.length > MAX_FILTER) {

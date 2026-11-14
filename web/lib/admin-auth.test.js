@@ -10,7 +10,7 @@ import {
   createSign,
   generateKeyPairSync,
 } from "node:crypto";
-import { verifyAdminToken, requireAdmin } from "./admin-auth.js";
+import { verifyAdminToken, verifyIdToken, requireAdmin } from "./admin-auth.js";
 
 const PROJECT_ID = "karir-9d53a";
 const KID = "kid-uji-1";
@@ -181,6 +181,58 @@ describe("verifyAdminToken", () => {
     };
     const result = await verifyAdminToken(token, failingOptions);
     assert.equal(result.status, 503);
+  });
+});
+
+describe("verifyIdToken (SEC-07, verifier umum tanpa cek admin)", () => {
+  it("token valid tanpa klaim admin mengembalikan uid (bukan 403)", async () => {
+    const { admin: _admin, ...payload } = validPayload();
+    const token = signJwt({ payload });
+    assert.deepEqual(await verifyIdToken(token, options), { uid: UID });
+  });
+
+  it("token valid dengan klaim admin juga mengembalikan uid", async () => {
+    const token = signJwt({ payload: validPayload() });
+    assert.deepEqual(await verifyIdToken(token, options), { uid: UID });
+  });
+
+  it("token kedaluwarsa ditolak 401", async () => {
+    const token = signJwt({
+      payload: validPayload({ exp: Math.floor(Date.now() / 1000) - 10 }),
+    });
+    const result = await verifyIdToken(token, options);
+    assert.equal(result.status, 401);
+  });
+
+  it("token bertanda tangan kunci lain ditolak 401", async () => {
+    const token = signJwt({
+      payload: validPayload(),
+      key: otherKeyPair.privateKey,
+    });
+    const result = await verifyIdToken(token, options);
+    assert.equal(result.status, 401);
+  });
+
+  it("token tidak ada ditolak 401", async () => {
+    const result = await verifyIdToken("", options);
+    assert.equal(result.status, 401);
+  });
+
+  it("proyek tidak dikonfigurasi ditolak 503", async () => {
+    const token = signJwt({ payload: validPayload() });
+    const saved = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    delete process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    try {
+      const result = await verifyIdToken(token, {
+        fetchKeys: mockFetchKeys,
+        projectId: "",
+      });
+      assert.equal(result.status, 503);
+    } finally {
+      if (saved !== undefined) {
+        process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = saved;
+      }
+    }
   });
 });
 

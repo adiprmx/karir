@@ -15,6 +15,7 @@ import {
   todayJakarta,
   writeAnalyticsEvent,
 } from "@/lib/analytics-server";
+import { verifyIdToken } from "@/lib/admin-auth";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
 import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 
@@ -27,7 +28,25 @@ export async function POST(request) {
   } catch {
     return NextResponse.json({ error: "body JSON tidak valid" }, { status: 400 });
   }
-  const checked = validateEvent(body);
+  /* SEC-07: UID hanya dari ID token Firebase yang terverifikasi.
+   * Token dibaca dari body (idToken, supaya tetap bekerja lewat
+   * sendBeacon yang tidak bisa memasang header kustom) atau header
+   * Authorization bila ada. Token yang tidak valid, kedaluwarsa,
+   * atau tidak bisa diverifikasi -> abaikan UID-nya dan perlakukan
+   * pengirim sebagai tamu, JANGAN 400: analitik tidak boleh merusak
+   * halaman. Token tidak pernah disimpan (validateEvent membuang
+   * field yang tidak dikenal). */
+  let verifiedUid;
+  const rawToken =
+    (typeof body.idToken === "string" && body.idToken) ||
+    /^Bearer (.+)$/.exec(
+      (request.headers.get("authorization") || "").trim(),
+    )?.[1];
+  if (rawToken) {
+    const verified = await verifyIdToken(rawToken);
+    if (!verified.error) verifiedUid = verified.uid;
+  }
+  const checked = validateEvent(body, verifiedUid);
   if (!checked.ok) {
     return NextResponse.json({ error: checked.error }, { status: 400 });
   }

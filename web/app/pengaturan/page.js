@@ -13,7 +13,12 @@
  * "karir-visited-metode" (sudah pernah membuka halaman Metode).
  * "Hapus semua data" menghapus keenamnya, dan bila sedang masuk ikut
  * menghapus tanda lamaran di akun. Akunnya sendiri tidak ikut
- * terhapus; menutup akun diminta lewat Issues di repo GitHub. */
+ * terhapus; menutup akun diminta lewat Issues di repo GitHub.
+ * Kunci ketujuh, "karir-tanpa-analitik" (pilihan menolak pencatatan
+ * kunjungan), SENGAJA tidak ikut dihapus "Hapus semua data":
+ * menghapusnya berarti diam-diam mengaktifkan lagi pencatatan yang
+ * sudah ditolak pemilik browser. Pilihan itu diubah lewat toggle
+ * di halaman ini. */
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { clearOnboarding, useOnboarding } from "@/app/onboarding";
@@ -21,6 +26,10 @@ import { clearAllTrackerStorage, todayLocal, useTracker } from "@/app/tracker";
 import { clearRecentSearch, loadRecentSearch } from "@/app/recent";
 import { Icon, showToast } from "@/app/visual";
 import { useAuthUser } from "@/app/auth-panel";
+import {
+  isAnalyticsOptedOut,
+  setAnalyticsOptOut,
+} from "@/app/analytics-track";
 import {
   VISITOR_KEY,
   buildAccountExport,
@@ -72,6 +81,7 @@ export default function Pengaturan() {
   const [recent, setRecent] = useState(null);
   const [recentReady, setRecentReady] = useState(false);
   const [visitorId, setVisitorId] = useState(null);
+  const [optedOut, setOptedOut] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [accountMsg, setAccountMsg] = useState("");
@@ -84,6 +94,7 @@ export default function Pengaturan() {
       setRecent(loadRecentSearch());
       setRecentReady(true);
       setVisitorId(readStored(VISITOR_KEY));
+      setOptedOut(isAnalyticsOptedOut());
     });
     const onChange = () => {
       setRecent(loadRecentSearch());
@@ -162,6 +173,21 @@ export default function Pengaturan() {
     }
     setVisitorId(null);
     showToast("Nomor pengunjung dihapus.");
+  }
+
+  /* Toggle opt-out analitik (ANALITIK-11): bila aktif, tidak ada
+   * event kunjungan apa pun yang dikirim dari browser ini. Pilihan
+   * ini hanya berlaku di browser ini dan tidak menghapus catatan
+   * kunjungan yang sudah terkirim sebelumnya. */
+  function toggleOptOut() {
+    const next = !optedOut;
+    setAnalyticsOptOut(next);
+    setOptedOut(next);
+    showToast(
+      next
+        ? "Kunjunganmu tidak dicatat lagi."
+        : "Kunjunganmu dicatat lagi.",
+    );
   }
 
   /* Unduh salinan data sebagai berkas JSON. Berkas dibuat di
@@ -347,6 +373,32 @@ export default function Pengaturan() {
             ) : (
               <p className="hint">Belum ada nomor pengunjung.</p>
             )}
+          </Row>
+          <Row title="Catatan kunjungan">
+            <label
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={optedOut}
+                onChange={toggleOptOut}
+              />
+              Jangan catat kunjungan saya
+            </label>
+            <p className="hint">
+              Bila dicentang, kunjunganmu tidak dicatat sama sekali:
+              halaman yang dibuka, kata yang dicari, dan klik lamar
+              tidak terkirim. Pilihan ini hanya berlaku di browser ini.
+              Catatan yang sudah terkirim sebelumnya tidak ikut
+              terhapus, dan terhapus sendiri setelah 90 hari. Yang
+              dicatat dan yang tidak dicatat ada di halaman{" "}
+              <Link href="/privasi">Kebijakan Privasi</Link>.
+            </p>
           </Row>
         </section>
       )}
