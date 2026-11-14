@@ -17,7 +17,7 @@
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start",
-    "test": "node --test lib/search.test.js lib/analytics.test.js lib/api-token.test.js lib/tracker-sync.test.js lib/index-token.test.js lib/rate-limit.test.js lib/notify.test.js lib/companies-dedup.test.js lib/companies-seed.test.js lib/admin-auth.test.js lib/check.test.js lib/require-env.test.js lib/cities.test.js lib/account-data.test.js app/admin/support-reports.test.js app/onboarding.test.js app/components.test.js lib/check-queue.test.js lib/changes.test.js lib/api-routes.test.js lib/a11y.test.js"
+    "test": "node --test lib/search.test.js lib/analytics.test.js lib/api-token.test.js lib/tracker-sync.test.js lib/index-token.test.js lib/rate-limit.test.js lib/notify.test.js lib/companies-dedup.test.js lib/companies-seed.test.js lib/admin-auth.test.js lib/check.test.js lib/require-env.test.js lib/cities.test.js lib/account-data.test.js app/admin/support-reports.test.js app/onboarding.test.js app/components.test.js lib/check-queue.test.js lib/changes.test.js lib/api-routes.test.js lib/a11y.test.js app/w1-b1.test.js"
   },
   "type": "module",
   "version": "2.15.0",

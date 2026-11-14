@@ -36,6 +36,13 @@ const DICT = {
     "footer.privacyPolicy": "Kebijakan Privasi",
     "footer.terms": "Syarat Penggunaan",
     /* --- akhir W-P0-08 --- */
+    /* --- W1-B1 (strip foto Beranda, LAND-08): teks alt ketiga foto.
+     * Hanya kunci baru di blok ini, nilai kunci lama tidak diubah. --- */
+    "landing.photoAltWarehouse": "Pekerja mengangkat kardus di dalam gudang",
+    "landing.photoAltProduction":
+      "Pekerja memeriksa mesin di lini produksi",
+    "landing.photoAltCleaning": "Petugas cleaning membersihkan lantai",
+    /* --- akhir W1-B1 --- */
     /* --- T18 --- */
     /* Detail perusahaan (DET-05): portal tidak bisa dibuka. Hanya kunci
      * baru di blok ini, nilai kunci lama tidak diubah. */
@@ -289,6 +296,15 @@ const DICT = {
     "footer.privacyPolicy": "Privacy Policy",
     "footer.terms": "Terms of Use",
     /* --- end W-P0-08 --- */
+    /* --- W1-B1 (homepage photo strip, LAND-08): alt text for the
+     * three photos. New keys only in this block, existing key values
+     * untouched. --- */
+    "landing.photoAltWarehouse":
+      "Worker lifting a cardboard box inside a warehouse",
+    "landing.photoAltProduction":
+      "Worker checking a machine on a production line",
+    "landing.photoAltCleaning": "Cleaning staff mopping the floor",
+    /* --- end W1-B1 --- */
     /* --- T18 --- */
     /* Company detail (DET-05): portal cannot be opened. New keys only
      * in this block, existing key values untouched. */

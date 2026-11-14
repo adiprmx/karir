@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { CompanyCard } from "@/app/company-card";
 import { useTracker } from "@/app/tracker";
+import { loadChanges } from "@/app/changes-feed";
 import { isNewChange } from "@/lib/notify";
 
 const GROUPS = ["Semua", "Gudang", "Cleaning", "Produksi", "Toko", "Lainnya"];
@@ -44,18 +45,16 @@ export default function TargetFilter({ targets, labels }) {
    * Bila umpan tidak bisa dimuat, tidak ada chip "Baru" — daftar
    * target tetap tampil seperti biasa. */
   const [newNos, setNewNos] = useState(null);
+  /* LAND-05 / FE-05: memakai pemuat bersama dari changes-feed.js —
+   * Beranda hanya mengambil /api/changes sekali, bukan dua kali. */
   useEffect(() => {
     let alive = true;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
-    fetch("/api/changes", { signal: controller.signal })
-      .then((res) => res.json())
+    loadChanges()
       .then((body) => {
         if (!alive) return;
-        const list = Array.isArray(body.changes) ? body.changes : [];
         setNewNos(
           new Set(
-            list
+            body.changes
               .filter((c) => isNewChange(c.createdAt))
               .map((c) => Number(c.companyNo)),
           ),
@@ -63,11 +62,9 @@ export default function TargetFilter({ targets, labels }) {
       })
       .catch(() => {
         if (alive) setNewNos(new Set());
-      })
-      .finally(() => clearTimeout(timer));
+      });
     return () => {
       alive = false;
-      controller.abort();
     };
   }, []);
   const counts = {};

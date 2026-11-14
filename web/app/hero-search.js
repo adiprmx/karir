@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCompanyIndex, rank } from "@/app/company-index";
 import { loadRecentSearch, saveRecentSearch } from "@/app/recent";
+import { loadOnboarding, hasOnboardingChoice } from "@/app/onboarding";
 import { CompanyCard, CardSkeletons } from "@/app/company-card";
 import { useTracker } from "@/app/tracker";
 import { trackEvent } from "@/app/analytics-track";
@@ -35,13 +36,34 @@ export default function HeroSearch({ labels, nos, targetMask, roles }) {
   useEffect(() => {
     const read = () => setRecent(loadRecentSearch());
     read();
+    /* ONB-12: pilihan tersimpan dari onboarding dipakai sebagai
+     * isian awal pencarian Beranda — tetapi hanya bila belum ada
+     * pencarian terakhir, karena pencarian terakhir adalah niat
+     * terbaru pengunjung dan lebih diutamakan. Isian yang sudah
+     * terisi langsung memicu muat indeks supaya hasilnya muncul.
+     * Prefill dijadwalkan sebagai microtask (pola yang sama dengan
+     * useOnboarding): setState sinkron di badan effect memicu
+     * render berantai dan ditolak lint. */
+    if (!loadRecentSearch()) {
+      const saved = loadOnboarding();
+      if (hasOnboardingChoice(saved)) {
+        queueMicrotask(() => {
+          setDomisili(saved.domisili);
+          setPosisi(saved.posisi);
+          start();
+        });
+      }
+    }
     window.addEventListener("karir-recent-change", read);
     window.addEventListener("storage", read);
     return () => {
       window.removeEventListener("karir-recent-change", read);
       window.removeEventListener("storage", read);
     };
-  }, []);
+    /* start() stabil (useCallback tanpa dependensi di
+     * useCompanyIndex), jadi effect ini tetap hanya jalan sekali
+     * saat mount. */
+  }, [start]);
 
   const hasQuery = Boolean(domisili.trim() || posisi.trim());
   const q = useMemo(() => ({ domisili, posisi }), [domisili, posisi]);
@@ -249,7 +271,19 @@ export default function HeroSearch({ labels, nos, targetMask, roles }) {
       {hasQuery && (
         <section className="hero-results" aria-label={labels.top}>
           {!ranked ? (
-            state === "error" ? null : <CardSkeletons n={3} />
+            /* LAND-06 / FE-19: saat indeks gagal dimuat, area hasil
+             * tidak lagi hilang tanpa pesan — tampilkan pesan error
+             * dan tombol "Coba lagi" (pola yang sama dengan /cari). */
+            state === "error" ? (
+              <div className="state">
+                <strong>{labels.error}</strong>
+                <button type="button" className="btn" onClick={start}>
+                  {labels.retry}
+                </button>
+              </div>
+            ) : (
+              <CardSkeletons n={3} />
+            )
           ) : (
             <>
               {!anyStrict && (
@@ -273,20 +307,63 @@ export default function HeroSearch({ labels, nos, targetMask, roles }) {
                   />
                 ))}
               </div>
-              <Link
-                className="btn ghost see-all"
-                href={`/cari?${seeAllQs.toString()}`}
-                onClick={() => saveRecentSearch(domisili, posisi)}
-              >
-                {fill(labels.seeAll, {
-                  n: anyStrict ? ranked.matched.size : ranked.results.length,
-                })}
-                <Icon name="arrow" size={18} />
-              </Link>
+              {/* LAND-09: angka tautan adalah jumlah kecocokan yang
+                * benar (matched.size), bukan panjang seluruh hasil
+                * terurut (610 saat tidak ada kecocokan). Bila tidak
+                * ada kecocokan sama sekali, tautan tidak tampil —
+                * catatan "tidak ada kecocokan" di atas sudah
+                * menjelaskan, dan tombol Cari tetap bisa dipakai
+                * untuk melihat seluruh daftar terurut di /cari. */}
+              {anyStrict && (
+                <Link
+                  className="btn ghost see-all"
+                  href={`/cari?${seeAllQs.toString()}`}
+                  onClick={() => saveRecentSearch(domisili, posisi)}
+                >
+                  {fill(labels.seeAll, { n: ranked.matched.size })}
+                  <Icon name="arrow" size={18} />
+                </Link>
+              )}
             </>
           )}
         </section>
       )}
     </div>
+  );
+}
+
+/* LAND-11: strip foto Beranda. Foto disimpan lokal di web/public/
+ * (bukan hotlink Unsplash), dan tiap gambar punya fallback onError:
+ * bila satu foto gagal dimuat, gambarnya disembunyikan dan caption
+ * tetap tampil — tidak ada ikon gambar rusak.
+ *
+ * Strip ini tinggal di modul hero karena komponen server (page.js)
+ * tidak bisa memakai event handler onError; komponen klien inilah
+ * yang menyediakan batas kliennya. Data foto (src, alt, caption)
+ * diteruskan sebagai string biasa dari page.js. */
+function PhotoFigure({ src, alt, caption }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <figure>
+      {!failed && (
+        <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />
+      )}
+      <figcaption>{caption}</figcaption>
+    </figure>
+  );
+}
+
+export function PhotoStrip({ photos }) {
+  return (
+    <>
+      {photos.map((p) => (
+        <PhotoFigure
+          key={p.src}
+          src={p.src}
+          alt={p.alt}
+          caption={p.caption}
+        />
+      ))}
+    </>
   );
 }

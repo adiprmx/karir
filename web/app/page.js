@@ -3,7 +3,7 @@ import { getCompaniesOrSeed, getTargetsOrSeed, getStatsOrSeed } from "@/lib/comp
 import { runSearch } from "@/lib/search";
 import { getLocale, t } from "@/lib/i18n";
 import { CountUp, Icon, PrintButton, Reveal } from "@/app/visual";
-import HeroSearch from "@/app/hero-search";
+import HeroSearch, { PhotoStrip } from "@/app/hero-search";
 import ChangesFeed from "@/app/changes-feed";
 import TargetFilter from "@/app/target-filter";
 import { formatDate } from "@/app/components";
@@ -83,6 +83,8 @@ export default async function Beranda() {
     legendMatch: t(locale, "hero.legendMatch"),
     legendOther: t(locale, "hero.legendOther"),
     top: t(locale, "hero.top"),
+    error: t(locale, "search.error"),
+    retry: t(locale, "search.retry"),
     seeAll: t(locale, "hero.seeAll"),
     recent: t(locale, "hero.recent"),
     noMatch: t(locale, "search.noPositionMatch"),
@@ -136,30 +138,29 @@ export default async function Beranda() {
             : "Foto pekerjaan: gudang, produksi, cleaning"
         }
       >
-        <figure>
-          <img
-            src="https://images.unsplash.com/photo-1553413077-190dd305871c?q=80&w=800&auto=format&fit=crop"
-            alt="Pekerja mengangkat kardus di dalam gudang"
-            loading="lazy"
-          />
-          <figcaption>Gudang</figcaption>
-        </figure>
-        <figure>
-          <img
-            src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=800&auto=format&fit=crop"
-            alt="Pekerja memeriksa mesin di lini produksi"
-            loading="lazy"
-          />
-          <figcaption>Produksi</figcaption>
-        </figure>
-        <figure>
-          <img
-            src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=800&auto=format&fit=crop"
-            alt="Petugas cleaning membersihkan lantai"
-            loading="lazy"
-          />
-          <figcaption>Cleaning</figcaption>
-        </figure>
+        {/* LAND-08: caption dan alt memakai kunci i18n, bukan teks
+          * Indonesia kode-keras. LAND-11: foto disimpan lokal di
+          * web/public/ (bukan hotlink Unsplash); PhotoStrip
+          * menyediakan fallback onError bila satu foto gagal dimuat. */}
+        <PhotoStrip
+          photos={[
+            {
+              src: "/foto-gudang.jpg",
+              alt: t(locale, "landing.photoAltWarehouse"),
+              caption: t(locale, "landing.photoWarehouse"),
+            },
+            {
+              src: "/foto-produksi.jpg",
+              alt: t(locale, "landing.photoAltProduction"),
+              caption: t(locale, "landing.photoProduction"),
+            },
+            {
+              src: "/foto-cleaning.jpg",
+              alt: t(locale, "landing.photoAltCleaning"),
+              caption: t(locale, "landing.photoCleaning"),
+            },
+          ]}
+        />
       </Reveal>
 
       <section className="sec" aria-labelledby="target-h">
@@ -237,6 +238,7 @@ export default async function Beranda() {
         <Reveal>
           <h2 id="changes-h">{t(locale, "landing.changesTitle")}</h2>
           <ChangesFeed
+            locale={locale}
             labels={{
               empty: t(locale, "home.changesEmpty"),
               error: t(locale, "home.changesError"),

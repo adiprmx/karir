@@ -10,6 +10,39 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusStamp } from "@/app/visual";
 import { isNewChange } from "@/lib/notify";
+import { formatDate } from "@/app/components";
+
+/* LAND-05 / FE-05: satu fetch /api/changes dipakai bersama ChangesFeed
+ * dan TargetFilter (keduanya mount di Beranda). Janji yang sama
+ * dipakai ulang selama halaman hidup, jadi hanya ada satu request
+ * jaringan; bila gagal, cache dibersihkan supaya muat berikutnya
+ * mencoba lagi. Timeout 15 detik berada di dalam pemuat bersama,
+ * bukan di komponen — membatalkan satu komponen tidak boleh
+ * membatalkan request yang dipakai komponen lain. */
+let changesPromise = null;
+
+export function loadChanges() {
+  if (!changesPromise) {
+    changesPromise = (async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const res = await fetch("/api/changes", { signal: controller.signal });
+        const body = await res.json();
+        return {
+          changes: Array.isArray(body.changes) ? body.changes : [],
+          degraded: body.degraded === true,
+        };
+      } finally {
+        clearTimeout(timer);
+      }
+    })();
+    changesPromise.catch(() => {
+      changesPromise = null;
+    });
+  }
+  return changesPromise;
+}
 
 /* Entri baru: dibuat dalam 48 jam terakhir, atau perubahannya menuju
  * "Ada lowongan". Sumber kebenaran adalah createdAt di koleksi
@@ -18,30 +51,25 @@ function isNew(c) {
   return isNewChange(c.createdAt) || c.to === "Ada lowongan";
 }
 
-export default function ChangesFeed({ labels }) {
+export default function ChangesFeed({ labels, locale }) {
   const [changes, setChanges] = useState(null);
   const [degraded, setDegraded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
-    fetch("/api/changes", { signal: controller.signal })
-      .then((res) => res.json())
+    loadChanges()
       .then((body) => {
         if (alive) {
-          setChanges(Array.isArray(body.changes) ? body.changes : []);
-          setDegraded(body.degraded === true);
+          setChanges(body.changes);
+          setDegraded(body.degraded);
         }
       })
       .catch(() => {
         if (alive) setFailed(true);
-      })
-      .finally(() => clearTimeout(timer));
+      });
     return () => {
       alive = false;
-      controller.abort();
     };
   }, []);
 
@@ -84,7 +112,13 @@ export default function ChangesFeed({ labels }) {
               <span aria-hidden="true">→</span>
               <StatusStamp status={c.to} />
             </span>
-            <span className="changes-date">{c.checkedAt}</span>
+            {/* LAND-04 / UX-11: tanggal tampil dalam format Indonesia
+              * ("14 Nov 2026"), bukan mentah ISO ("2026-11-14").
+              * Bila nilainya bukan tanggal ISO yang valid, tampilkan
+              * apa adanya daripada kosong. */}
+            <span className="changes-date">
+              {formatDate(c.checkedAt, locale) || c.checkedAt}
+            </span>
           </Link>
         </li>
       ))}
