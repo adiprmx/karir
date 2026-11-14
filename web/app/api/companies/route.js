@@ -19,8 +19,17 @@ export async function GET(request) {
       { status: 403 },
     );
   }
-  const key = hashVisitor(getClientIp(request), todayJakarta());
-  if (!(await getSharedLimiter().check(key, LIMIT_PER_MINUTE, WINDOW_MS))) {
+  /* Batas laju memakai hash IP; bila garam analitik belum dipasang,
+   * hash tidak bisa dibuat dan batas laju dilewati — tidak ada hash
+   * lemah dan tidak ada IP mentah yang disimpan. */
+  let limited = false;
+  try {
+    const key = hashVisitor(getClientIp(request), todayJakarta());
+    limited = !(await getSharedLimiter().check(key, LIMIT_PER_MINUTE, WINDOW_MS));
+  } catch {
+    console.warn("Batas laju /api/companies dilewati: env ANALYTICS_SALT belum dipasang.");
+  }
+  if (limited) {
     return NextResponse.json(
       { error: "Terlalu banyak permintaan. Coba lagi sebentar." },
       { status: 429 },

@@ -1,12 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    /* Admin = akun yang punya custom claim admin: true di Firebase
+     * Auth (dipasang owner lewat Admin API, bukan dari pendaftaran
+     * publik). Pendaftar biasa tidak punya klaim ini, jadi tidak
+     * bisa menulis data atau membaca koleksi admin. */
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
     match /companies/{doc} {
       allow read: if true;
-      // Tulis hanya untuk admin yang login, dan isi dokumen harus valid:
+      // Tulis dan hapus hanya untuk admin, dan isi dokumen harus valid:
       // no angka, nama perusahaan ada, status salah satu dari 4 nilai,
       // dan 9 kolom wajib ada.
-      allow create, update: if request.auth != null
+      allow create, update: if isAdmin()
         && request.resource.data.no is int
         && request.resource.data.perusahaan is string
         && request.resource.data.perusahaan.size() > 0
@@ -24,16 +32,16 @@ service cloud.firestore {
           'no', 'perusahaan', 'kategori', 'link_karir', 'status',
           'tanggal_cek', 'catatan', 'lokasi', 'posisi'
         ]);
-      allow delete: if request.auth != null;
+      allow delete: if isAdmin();
     }
     // Alert notifikasi (ditulis cron cek ulang harian dan dibaca watcher
     // agent-side): siapa pun boleh membaca seperti changes, tulis hanya
-    // lewat service account (melewati rules) atau admin yang login.
+    // lewat service account (melewati rules) atau admin.
     // Entri yang sudah tercatat tidak bisa diubah atau dihapus dari
     // klien, supaya status terkirim tidak bisa dipalsukan.
     match /alerts/{doc} {
       allow read: if true;
-      allow create: if request.auth != null
+      allow create: if isAdmin()
         && request.resource.data.keys().hasAll([
           'type', 'companyNo', 'perusahaan', 'sent', 'createdAt'
         ])
@@ -67,17 +75,17 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
       allow delete: if false;
     }
-    // Jejak audit: admin bisa membaca dan menulis, tidak bisa mengubah
-    // atau menghapus entri yang sudah tercatat.
+    // Jejak audit: hanya admin yang bisa membaca dan menulis, tidak
+    // bisa mengubah atau menghapus entri yang sudah tercatat.
     match /audit_logs/{doc} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if isAdmin();
+      allow create: if isAdmin();
       allow update, delete: if false;
     }
     // Laporan tautan mati dari pengunjung: siapa pun boleh mengirim satu
-    // laporan berbentuk benar, tapi tidak bisa membaca atau mengubahnya.
+    // laporan berbentuk benar, tapi hanya admin yang bisa membacanya.
     match /reports/{doc} {
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow create: if request.resource.data.keys().hasAll([
           'no', 'perusahaan', 'alasan', 'dibuat'
         ])
@@ -88,11 +96,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     // Umpan perubahan status (ditulis cron cek ulang harian): siapa pun
-    // boleh membaca, hanya admin yang login boleh mencatat, dan entri
+    // boleh membaca, hanya admin yang boleh mencatat, dan entri
     // yang sudah tercatat tidak bisa diubah atau dihapus.
     match /changes/{doc} {
       allow read: if true;
-      allow create: if request.auth != null
+      allow create: if isAdmin()
         && request.resource.data.keys().hasAll([
           'companyNo', 'perusahaan', 'from', 'to', 'checkedAt', 'createdAt'
         ])
@@ -134,11 +142,12 @@ service cloud.firestore {
         && request.resource.data.catatan is string
         && request.resource.data.catatan.size() <= 200;
     }
-    // Profil akun: tulis hanya pemiliknya, baca hanya yang login.
-    // Dipakai dasbor admin untuk menampilkan akun tanpa menyimpan
-    // email di dalam event pengunjung.
+    // Profil akun: tulis hanya pemiliknya; baca hanya pemiliknya
+    // atau admin. Dipakai dasbor admin untuk menampilkan akun tanpa
+    // menyimpan email di dalam event pengunjung.
     match /user_profiles/{uid} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+        && (request.auth.uid == uid || isAdmin());
       allow create, update: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.email is string
@@ -151,9 +160,9 @@ service cloud.firestore {
     // Event analitik pengunjung anonim: siapa pun boleh mencatat satu
     // event berbentuk benar, tanpa field IP apa pun. Hash IP (64 heksa)
     // dipakai untuk hitung pengunjung unik per hari, bukan IP mentah.
-    // Baca, ubah, dan hapus hanya untuk admin yang login.
+    // Baca, ubah, dan hapus hanya untuk admin.
     match /analytics_events/{doc} {
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isAdmin();
       allow create: if request.resource.data.keys().hasAll([
           'type', 'path', 'visitorHash', 'ts', 'day'
         ])

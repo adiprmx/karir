@@ -3,13 +3,14 @@
 /* Admin panel Karir, halaman /admin.
  * Login pakai Firebase Auth (Email/Password). Akun admin dibuat owner
  * di Firebase Console, bukan di sini, dan tidak ada pendaftaran mandiri.
- * Setelah masuk: tabel perusahaan dengan cari, filter, urutan, dan
- * halaman; panel kualitas data; impor dan unduh CSV/JSON; jejak
- * perubahan; dan cek tautan karir. Tulis hanya diizinkan untuk
- * pengguna yang sudah login (aturan Firestore).
+ * Setelah masuk, klaim admin di token diperiksa (getIdTokenResult
+ * dengan refresh paksa sekali): hanya akun dengan klaim admin yang
+ * melihat panel. Akun biasa yang masuk melihat pesan penolakan, bukan
+ * panel. Tulis hanya diizinkan untuk admin (aturan Firestore).
  */
 import { useEffect, useState } from "react";
 import {
+  getIdTokenResult,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -425,6 +426,10 @@ function formatTime(iso) {
 export default function Admin() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  /* isAdmin: null = klaim admin belum diperiksa, true/false = hasil
+   * pemeriksaan klaim admin di token (getIdTokenResult). */
+  const [isAdmin, setIsAdmin] = useState(null);
+  const [adminCheckError, setAdminCheckError] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -464,11 +469,36 @@ export default function Admin() {
   const [profilesError, setProfilesError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setAuthChecked(true);
+      if (!u) {
+        setIsAdmin(null);
+        setAdminCheckError(false);
+        return;
+      }
+      /* Periksa klaim admin di token, dengan refresh paksa sekali
+       * supaya klaim yang baru dipasang langsung terbaca. Panel baru
+       * tampil setelah pemeriksaan ini selesai. */
+      setIsAdmin(null);
+      setAdminCheckError(false);
+      getIdTokenResult(u, true).then(
+        (result) => {
+          if (cancelled) return;
+          setIsAdmin(result.claims.admin === true);
+        },
+        () => {
+          if (cancelled) return;
+          setIsAdmin(false);
+          setAdminCheckError(true);
+        },
+      );
     });
-    return unsub;
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
 
   async function loadCompanies() {
@@ -543,7 +573,7 @@ export default function Admin() {
   }
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isAdmin) return;
     /* Pemuat mengatur state awal (loading / reset error) secara sinkron,
      * jadi pemanggilannya dijadwalkan sebagai microtask: setState di
      * dalam callback, bukan sinkron di badan effect. */
@@ -554,7 +584,7 @@ export default function Admin() {
       loadVisitors();
       loadProfiles();
     });
-  }, [user]);
+  }, [user, isAdmin]);
 
   /* Kembali ke halaman 1 begitu filter berubah. Penyesuaian state saat
    * render (pola resmi React untuk state yang mengikuti perubahan nilai
@@ -1021,7 +1051,7 @@ export default function Admin() {
     );
   }
 
-  if (!authChecked) {
+  if (!authChecked || (user && isAdmin === null)) {
     return (
       <div className="wrap">
         <div className="state">
@@ -1070,6 +1100,31 @@ export default function Admin() {
             Masuk
           </button>
         </form>
+      </div>
+    );
+  }
+
+  /* Akun sudah masuk tetapi bukan admin: tampilkan pesan yang jelas,
+   * bukan panel. Aturan Firestore juga menolak akses data admin untuk
+   * akun seperti ini, jadi pesan ini hanya lapisan tampilan. */
+  if (!isAdmin) {
+    return (
+      <div className="wrap">
+        <div className="page-head">
+          <h1>Admin</h1>
+          <p className="lede">
+            {adminCheckError
+              ? "Akses akun belum bisa diperiksa. Coba muat ulang halaman ini."
+              : "Akun ini bukan akun admin, jadi halaman ini tidak bisa dibuka. Masuk dengan akun admin untuk mengelola data Karir."}
+          </p>
+        </div>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => signOut(auth)}
+        >
+          Keluar
+        </button>
       </div>
     );
   }

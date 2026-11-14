@@ -133,15 +133,15 @@ Bila Firestore tidak bisa dijangkau, rute ini mengembalikan `{ "changes": [] }` 
 
 ## GET /api/index
 
-Indeks pencarian untuk halaman Cari. Wajib token valid di header `Authorization: Bearer <token>` (lihat `/api/token` di bawah). Menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 30 permintaan per menit per hash IP. Respons memakai `Cache-Control: private, no-store`.
+Indeks pencarian untuk halaman Cari. Wajib token valid di header `Authorization: Bearer <token>` (lihat `/api/token` di bawah). Menolak user agent otomatis dengan 403 dan menjawab 429 bila melewati 30 permintaan per menit per hash IP. Respons memakai `Cache-Control: private, no-store`. Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503.
 
 ## GET /api/token
 
-Memberi token berumur 60 detik untuk `/api/index`. Token hanya diberikan bila `Referer` atau `Origin` request sama dengan origin situs; selain itu jawabannya 403. Tanpa batas laju.
+Memberi token berumur 60 detik untuk `/api/index`. Token hanya diberikan bila `Referer` atau `Origin` request sama dengan origin situs; selain itu jawabannya 403. Tanpa batas laju. Bila env `API_TOKEN_SECRET` belum dipasang, jawabannya 503 dan tidak ada token yang dikeluarkan.
 
 ## POST /api/analytics
 
-Satu event analitik pengunjung anonim (pageview, search, detail, portal_click, tracker_mark, filter). IP mentah hanya dipakai untuk hash dan batas laju, lalu dibuang; yang disimpan hanya hash IP 64 heksa. Batas 30 permintaan per menit per hash IP; jawaban 202 walau tulis ke Firestore gagal. Endpoint ini tidak menolak user agent otomatis karena ia alat ukur; request dengan user agent kosong atau berpola bot ditandai field `uaFlag` pada dokumen.
+Satu event analitik pengunjung anonim (pageview, search, detail, portal_click, tracker_mark, filter). IP mentah hanya dipakai untuk hash dan batas laju, lalu dibuang; yang disimpan hanya hash IP 64 heksa. Batas 30 permintaan per menit per hash IP; jawaban 202 walau tulis ke Firestore gagal. Endpoint ini tidak menolak user agent otomatis karena ia alat ukur; request dengan user agent kosong atau berpola bot ditandai field `uaFlag` pada dokumen. Bila env `ANALYTICS_SALT` belum dipasang, event tidak disimpan dan jawabannya 200 `{ "skipped": true }`.
 
 ## Batas laju
 
@@ -177,7 +177,7 @@ Contoh: `POST /api/admin/check-link` dengan body `{ "no": 212 }`
 
 Cek ulang harian portal perusahaan yang ada lowongannya. Dijalankan Vercel Cron tiap 18:00 UTC (01:00 WIB). Antrean diurutkan dari tanggal cek terlama dulu (rotasi), lalu portal yang sedang berstatus mati supaya ada jalan pulih; perusahaan tanpa tautan karir tidak masuk antrean. Anggaran waktu 50 detik; bila habis, sisanya dicatat terpotong.
 
-Bila `CRON_SECRET` terisi di env Vercel, request wajib membawa header `Authorization: Bearer <CRON_SECRET>`, kalau tidak jawabannya 401 `{ "error": "Tidak diizinkan." }`.
+Request wajib membawa header `Authorization: Bearer <CRON_SECRET>`; tanpa header yang cocok jawabannya 401 `{ "error": "Tidak diizinkan." }`. Bila `CRON_SECRET` belum dipasang di env, jawabannya 503 dan cron tidak berjalan sama sekali.
 
 Bila service account belum dipasang, jawabannya 503. Itu keadaan saat dokumen ini ditulis:
 

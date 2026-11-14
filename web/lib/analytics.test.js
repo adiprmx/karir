@@ -2,7 +2,7 @@
  * Dijalankan dengan: npm test
  * Yang dites: validasi event, hashing IP harian, dan rate limit.
  * IP mentah tidak pernah muncul di output fungsi apa pun. */
-import { describe, it } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import {
   EVENT_TYPES,
@@ -134,6 +134,31 @@ describe("validateEvent", () => {
 });
 
 describe("hashVisitor", () => {
+  /* hashVisitor tidak punya garam default: test memasang salt uji di
+   * env, lalu mengembalikannya seperti semula. */
+  const SALT_UJI = "garam-uji-analytics-bukan-rahasia";
+  let saltLama;
+  before(() => {
+    saltLama = process.env.ANALYTICS_SALT;
+    process.env.ANALYTICS_SALT = SALT_UJI;
+  });
+  after(() => {
+    if (saltLama === undefined) delete process.env.ANALYTICS_SALT;
+    else process.env.ANALYTICS_SALT = saltLama;
+  });
+
+  it("tanpa garam, hashVisitor melempar (tidak memakai default lemah)", () => {
+    delete process.env.ANALYTICS_SALT;
+    try {
+      assert.throws(
+        () => hashVisitor("203.0.113.7", "2026-11-07"),
+        /Variabel ANALYTICS_SALT belum dipasang/,
+      );
+    } finally {
+      process.env.ANALYTICS_SALT = SALT_UJI;
+    }
+  });
+
   it("IP dan hari yang sama menghasilkan hash yang sama", () => {
     const a = hashVisitor("203.0.113.7", "2026-11-07");
     const b = hashVisitor("203.0.113.7", "2026-11-07");
@@ -160,9 +185,9 @@ describe("hashVisitor", () => {
     assert.equal(hash.includes("203"), false);
   });
 
-  it("garam env mengubah hash", () => {
-    const a = hashVisitor("203.0.113.7", "2026-11-07", "karir");
-    const b = hashVisitor("203.0.113.7", "2026-11-07", "lain");
+  it("garam yang berbeda menghasilkan hash yang beda", () => {
+    const a = hashVisitor("203.0.113.7", "2026-11-07", "garam-satu");
+    const b = hashVisitor("203.0.113.7", "2026-11-07", "garam-dua");
     assert.notEqual(a, b);
   });
 });

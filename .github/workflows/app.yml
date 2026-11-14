@@ -51,6 +51,12 @@ jobs:
       - name: Smoke
         working-directory: web
         env:
+          # Nilai dummy untuk server asap lokal saja: /api/token memakai
+          # API_TOKEN_SECRET dan batas laju memakai ANALYTICS_SALT, dan
+          # keduanya fail-closed bila kosong. Nilai ini hanya hidup di
+          # runner CI yang dibuang setelah run; bukan secret produksi.
+          API_TOKEN_SECRET: ci-dummy-bukan-rahasia
+          ANALYTICS_SALT: ci-dummy-bukan-rahasia
           NEXT_PUBLIC_FIREBASE_API_KEY: AIzaDummyDummyDummyDummyDummyDummy12
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: karir-9d53a.firebaseapp.com
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: karir-9d53a

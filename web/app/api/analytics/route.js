@@ -32,7 +32,16 @@ export async function POST(request) {
     return NextResponse.json({ error: checked.error }, { status: 400 });
   }
   const day = todayJakarta();
-  const visitorHash = hashVisitor(getClientIp(request), day);
+  /* Tanpa garam analitik, event tidak boleh disimpan dengan garam
+   * lemah. Jawab 200 {skipped: true} supaya klien tidak retry
+   * membabi buta; tidak ada yang ditulis dan rute tidak crash. */
+  let visitorHash;
+  try {
+    visitorHash = hashVisitor(getClientIp(request), day);
+  } catch {
+    console.warn("Event analitik dilewati: env ANALYTICS_SALT belum dipasang.");
+    return NextResponse.json({ skipped: true }, { status: 200 });
+  }
   /* Batas 30/menit per hash pengunjung, lewat limiter bersama supaya
    * dihitung di semua instance, bukan per instance. */
   if (!(await getSharedLimiter().check(visitorHash, 30, 60_000))) {

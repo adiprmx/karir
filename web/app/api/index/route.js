@@ -14,12 +14,12 @@ import {
 } from "@/lib/api-guard";
 import { getSharedLimiter } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
+import { requireEnv } from "@/lib/require-env";
 
 export const dynamic = "force-dynamic";
 
 const WINDOW_MS = 60_000;
 const LIMIT_PER_MINUTE = 30;
-const DEV_ONLY_SECRET = "karir-dev-only-token-secret";
 
 function bearerToken(request) {
   const auth = request.headers.get("authorization") || "";
@@ -34,14 +34,31 @@ export async function GET(request) {
       { status: 403 },
     );
   }
-  const key = hashVisitor(getClientIp(request), todayJakarta());
-  if (!(await getSharedLimiter().check(key, LIMIT_PER_MINUTE, WINDOW_MS))) {
+  /* Batas laju memakai hash IP; bila garam analitik belum dipasang,
+   * hash tidak bisa dibuat dan batas laju dilewati — tidak ada hash
+   * lemah dan tidak ada IP mentah yang disimpan. */
+  let limited = false;
+  try {
+    const key = hashVisitor(getClientIp(request), todayJakarta());
+    limited = !(await getSharedLimiter().check(key, LIMIT_PER_MINUTE, WINDOW_MS));
+  } catch {
+    console.warn("Batas laju /api/index dilewati: env ANALYTICS_SALT belum dipasang.");
+  }
+  if (limited) {
     return NextResponse.json(
       { error: "Terlalu banyak permintaan. Coba lagi sebentar." },
       { status: 429 },
     );
   }
-  const secret = process.env.API_TOKEN_SECRET || DEV_ONLY_SECRET;
+  let secret;
+  try {
+    secret = requireEnv("API_TOKEN_SECRET");
+  } catch {
+    return NextResponse.json(
+      { error: "Layanan belum dikonfigurasi." },
+      { status: 503 },
+    );
+  }
   const token = bearerToken(request);
   if (!token || !verifyToken(token, secret, 60)) {
     return NextResponse.json(

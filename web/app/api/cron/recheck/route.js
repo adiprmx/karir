@@ -2,10 +2,11 @@
  * Dijalankan Vercel Cron tiap hari 18:00 UTC (01:00 WIB), lihat vercel.json.
  *
  * Cara kerja:
- * 1. Keamanan: bila env CRON_SECRET terisi, request wajib membawa header
- *    Authorization: Bearer <CRON_SECRET> (Vercel Cron mengirimnya sendiri
- *    bila variabel itu dipasang). Bila CRON_SECRET kosong, diizinkan —
- *    hanya untuk dev lokal.
+ * 1. Keamanan: env CRON_SECRET wajib terisi dan request wajib membawa
+ *    header Authorization: Bearer <CRON_SECRET> (Vercel Cron mengirimnya
+ *    sendiri bila variabel itu dipasang). Bila CRON_SECRET kosong, rute
+ *    menjawab 503 dan tidak pernah berjalan tanpa autentikasi.
+ *    Perbandingan secret memakai timingSafeEqual.
  * 2. Tulis ke Firestore lewat REST API memakai access token dari service
  *    account (env FIREBASE_SERVICE_ACCOUNT, string JSON). Token dibuat
  *    dari JWT RS256 yang ditandatangani node:crypto, tanpa dependensi
@@ -50,7 +51,8 @@
  *   pengiriman dilewati dan alert tetap tercatat untuk watcher
  *   agent-side (notify_watch.py). */
 import { NextResponse } from "next/server";
-import { createSign } from "node:crypto";
+import { createSign, timingSafeEqual } from "node:crypto";
+import { requireEnv } from "@/lib/require-env";
 import { getCompanies, STATUS_ORDER } from "@/lib/companies";
 import { checkUrl } from "@/lib/check";
 import {
@@ -211,14 +213,33 @@ async function createAlert(fsBase, token, alert) {
   }
 }
 
+/* Perbandingan string timing-safe: panjang beda langsung gagal, isi
+ * dibandingkan tanpa bocor lewat waktu. */
+function secretsEqual(a, b) {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
 export async function GET(request) {
-  /* 1. Keamanan cron. */
-  const secret = process.env.CRON_SECRET || "";
-  if (secret) {
-    const auth = request.headers.get("authorization") || "";
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "Tidak diizinkan." }, { status: 401 });
-    }
+  /* 1. Keamanan cron: fail-closed. Tanpa CRON_SECRET, rute tidak
+   * pernah berjalan — menjawab 503, bukan mengizinkan tanpa auth. */
+  let secret;
+  try {
+    secret = requireEnv("CRON_SECRET");
+  } catch {
+    return NextResponse.json(
+      {
+        error: "cron belum diaktifkan",
+        detail: "CRON_SECRET belum dipasang",
+      },
+      { status: 503 },
+    );
+  }
+  const auth = request.headers.get("authorization") || "";
+  if (!secretsEqual(auth, `Bearer ${secret}`)) {
+    return NextResponse.json({ error: "Tidak diizinkan." }, { status: 401 });
   }
 
   /* 2. Service account wajib ada untuk menulis. */

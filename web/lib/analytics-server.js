@@ -2,6 +2,7 @@
  * supaya bisa diuji unit tanpa Next.js. Tidak ada yang di sini
  * menyimpan IP mentah: IP hanya masuk ke hash, lalu dibuang. */
 import { createHash } from "node:crypto";
+import { requireEnv } from "./require-env.js";
 
 export const EVENT_TYPES = [
   "pageview",
@@ -89,9 +90,13 @@ export function validateEvent(body) {
 
 /* Hash IP dengan garam harian. Garam berubah tiap hari, jadi hash yang
  * sama besok tidak bisa ditautkan ke hash hari ini. Hasilnya 64 heksa,
- * dan IP mentah tidak pernah keluar dari fungsi ini. */
+ * dan IP mentah tidak pernah keluar dari fungsi ini. Garam diambil dari
+ * parameter saltBase bila diberikan, kalau tidak dari env
+ * ANALYTICS_SALT — tanpa nilai default. Bila keduanya kosong, fungsi
+ * ini melempar; pemanggil wajib menangani (jangan pernah menyimpan
+ * hash dengan garam lemah). */
 export function hashVisitor(ip, day, saltBase) {
-  const base = saltBase || process.env.ANALYTICS_SALT || "karir";
+  const base = saltBase || requireEnv("ANALYTICS_SALT");
   const salt = `${base}:${day}`;
   return createHash("sha256").update(`${salt}:${ip}`).digest("hex");
 }
