@@ -217,7 +217,7 @@ service cloud.firestore {
         && request.resource.data.companyNo >= 1
         && request.resource.data.companyNo <= 10000
         && request.resource.data.status in [
-          'Ditandai', 'Sudah dilamar', 'Dipanggil', 'Ditolak'
+          'Ditandai', 'Sudah dilamar', 'Dipanggil', 'Diterima', 'Ditolak'
         ]
         && request.resource.data.tanggal is string
         && request.resource.data.tanggal.size() <= 10

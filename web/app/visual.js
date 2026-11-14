@@ -160,7 +160,12 @@ export function Reveal({
 }
 
 /* Angka yang naik dari 0 ke nilai asli saat terlihat. Tanpa JavaScript
- * atau dengan reduced-motion, angka asli langsung tampil. */
+ * atau dengan reduced-motion, angka asli langsung tampil.
+ * DASH-11: angka TIDAK di-reset ke 0 saat mount — reset itu membuat
+ * nilai akhir hasil render server berkedip jadi 0 begitu komponen
+ * dipasang, lalu diam di 0 sampai elemen terlihat. Animasi baru
+ * dimulai dari 0 di dalam tick pertama, saat elemen sudah masuk
+ * viewport; sebelum itu angka asli tetap tampil. */
 export function CountUp({ value, duration = 800 }) {
   const ref = useRef(null);
   const [n, setN] = useState(value);
@@ -173,7 +178,6 @@ export function CountUp({ value, duration = 800 }) {
     }
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    queueMicrotask(() => setN(0));
     let raf = 0;
     const io = new IntersectionObserver(
       (entries) => {
@@ -372,6 +376,37 @@ export function Sheet({ open, onClose, title, children }) {
       </div>
     </>,
     document.body,
+  );
+}
+
+/* ---------- Dialog konfirmasi ---------- */
+
+/* Konfirmasi sebelum aksi yang tidak bisa diurungkan (LAM-07 hapus
+ * lamaran, ONB-11 hapus pilihan): Sheet yang sama dengan panel lain,
+ * jadi perilaku fokus, Escape, dan inert-nya ikut satu sistem.
+ * `message` boleh string atau elemen. Tutup lewat latar/Escape sama
+ * dengan batal (onCancel). */
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel = "Batal",
+  onConfirm,
+  onCancel,
+}) {
+  return (
+    <Sheet open={open} onClose={onCancel} title={title}>
+      <p>{message}</p>
+      <div className="actions-row" style={{ marginTop: 16 }}>
+        <button type="button" className="btn" onClick={onConfirm}>
+          {confirmLabel}
+        </button>
+        <button type="button" className="btn ghost" onClick={onCancel}>
+          {cancelLabel}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 

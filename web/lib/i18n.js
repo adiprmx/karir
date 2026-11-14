@@ -264,6 +264,10 @@ const DICT = {
     "detail.emailHrd": "Email HRD",
     "detail.waHrd": "WhatsApp HRD",
     "detail.otherChannels": "Kanal lain",
+    /* --- W1-TRACKER (DASH-08): hanya kunci baru di blok ini, nilai
+     * kunci lama tidak diubah. --- */
+    "dash.viewOnMap": "Lihat di peta",
+    /* --- akhir W1-TRACKER --- */
   },
   en: {
     "nav.home": "Home",
@@ -526,6 +530,10 @@ const DICT = {
     "detail.emailHrd": "HR email",
     "detail.waHrd": "HR WhatsApp",
     "detail.otherChannels": "Other channels",
+    /* --- W1-TRACKER (DASH-08): hanya kunci baru di blok ini, nilai
+     * kunci lama tidak diubah. --- */
+    "dash.viewOnMap": "View on map",
+    /* --- akhir W1-TRACKER --- */
   },
 };
 

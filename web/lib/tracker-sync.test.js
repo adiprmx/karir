@@ -9,14 +9,16 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  FIRESTORE_BATCH_LIMIT,
+  TRACKER_STATUSES,
   applyTombstones,
   classifySyncError,
   deleteTracker,
   mergeTrackers,
+  normalizeLocalEntries,
   pruneTombstones,
   pushTracker,
   syncTrackers,
-  TRACKER_STATUSES,
 } from "./tracker-sync.js";
 
 function entry(overrides = {}) {
@@ -103,11 +105,12 @@ describe("mergeTrackers", () => {
     assert.equal(merged[12].catatan.length, 200);
   });
 
-  it("daftar status pelacak berisi empat nilai yang dipakai tracker", () => {
+  it("daftar status pelacak berisi lima nilai yang dipakai tracker (KONTEN-07: tambah Diterima)", () => {
     assert.deepEqual(TRACKER_STATUSES, [
       "Ditandai",
       "Sudah dilamar",
       "Dipanggil",
+      "Diterima",
       "Ditolak",
     ]);
   });
@@ -605,5 +608,168 @@ describe("deleteTracker (mock Firestore)", () => {
     assert.equal(res.ok, false);
     assert.equal(res.code, "sibuk");
     assert.equal(mock.store.has("user_trackers/u1/items/12"), true);
+  });
+});
+
+/* --- W1-TRACKER: batch 500 (LAM-09), validasi entri lokal
+ * (LAM-08), status "Diterima" (KONTEN-07). --- */
+
+describe("syncTrackers memecah tulis per 500 operasi (LAM-09)", () => {
+  const UID = "u1";
+
+  function manyEntries(n, startNo = 1) {
+    const out = {};
+    for (let i = 0; i < n; i += 1) {
+      const no = startNo + i;
+      out[no] = entry({ companyNo: no, status: "Ditandai" });
+    }
+    return out;
+  }
+
+  it("501 entri: 2 commit, semua tertulis", async () => {
+    const mock = createMockFirestore();
+    const res = await syncTrackers(UID, manyEntries(501), {}, mock.client);
+    assert.equal(res.ok, true);
+    assert.equal(mock.calls.commit, 2);
+    assert.equal(mock.store.size, 501);
+    assert.equal(mock.store.get("user_trackers/u1/items/501").status, "Ditandai");
+  });
+
+  it("tepat 500 entri: 1 commit", async () => {
+    const mock = createMockFirestore();
+    const res = await syncTrackers(UID, manyEntries(500), {}, mock.client);
+    assert.equal(res.ok, true);
+    assert.equal(mock.calls.commit, 1);
+    assert.equal(mock.store.size, 500);
+  });
+
+  it("tulis + hapus dihitung bersama menuju batas 500", async () => {
+    const mock = createMockFirestore({
+      "user_trackers/u1/items/900": {
+        ...entry({ companyNo: 900 }),
+        updatedAt: "2026-11-10T10:00:00.000Z",
+      },
+      "user_trackers/u1/items/901": {
+        ...entry({ companyNo: 901 }),
+        updatedAt: "2026-11-10T10:00:00.000Z",
+      },
+    });
+    /* 499 tulis + 2 hapus = 501 operasi -> 2 commit. */
+    const res = await syncTrackers(
+      UID,
+      manyEntries(499),
+      {
+        900: "2026-11-12T10:00:00.000Z",
+        901: "2026-11-12T10:00:00.000Z",
+      },
+      mock.client,
+    );
+    assert.equal(res.ok, true);
+    assert.equal(mock.calls.commit, 2);
+    assert.equal(mock.store.size, 499);
+    assert.equal(mock.store.has("user_trackers/u1/items/900"), false);
+    assert.equal(mock.store.has("user_trackers/u1/items/901"), false);
+  });
+
+  it("batas batch adalah 500 (batas Firestore)", () => {
+    assert.equal(FIRESTORE_BATCH_LIMIT, 500);
+  });
+});
+
+describe("normalizeLocalEntries (LAM-08)", () => {
+  it("entri sah dipertahankan dalam bentuk lokal", () => {
+    const out = normalizeLocalEntries({
+      12: {
+        no: 12,
+        status: "Sudah dilamar",
+        tanggal: "2026-11-01",
+        catatan: "sudah kirim",
+        updatedAt: "2026-11-12T10:00:00.000Z",
+      },
+    });
+    assert.deepEqual(out, {
+      12: {
+        no: 12,
+        status: "Sudah dilamar",
+        tanggal: "2026-11-01",
+        catatan: "sudah kirim",
+        updatedAt: "2026-11-12T10:00:00.000Z",
+      },
+    });
+  });
+
+  it("status tak dikenal dibuang", () => {
+    const out = normalizeLocalEntries({
+      12: { no: 12, status: "Menunggu kabar", tanggal: "", catatan: "" },
+      13: { no: 13, status: "Ditandai", tanggal: "", catatan: "" },
+    });
+    assert.deepEqual(Object.keys(out), ["13"]);
+  });
+
+  it("nomor tidak sah dibuang", () => {
+    const out = normalizeLocalEntries({
+      a: { no: "bukan-angka", status: "Ditandai", tanggal: "", catatan: "" },
+      b: { no: 0, status: "Ditandai", tanggal: "", catatan: "" },
+      c: { no: 10001, status: "Ditandai", tanggal: "", catatan: "" },
+      d: { status: "Ditandai", tanggal: "", catatan: "" },
+      12: { no: 12, status: "Ditandai", tanggal: "", catatan: "" },
+    });
+    assert.deepEqual(Object.keys(out), ["12"]);
+  });
+
+  it("tanggal salah format jadi kosong, catatan dipotong 200 huruf", () => {
+    const out = normalizeLocalEntries({
+      12: {
+        no: 12,
+        status: "Ditandai",
+        tanggal: "01/11/2026",
+        catatan: "x".repeat(250),
+      },
+    });
+    assert.equal(out[12].tanggal, "");
+    assert.equal(out[12].catatan.length, 200);
+  });
+
+  it("entri bukan objek dan masukan bukan peta dibuang", () => {
+    assert.deepEqual(normalizeLocalEntries(null), {});
+    assert.deepEqual(normalizeLocalEntries("bukan-peta"), {});
+    assert.deepEqual(
+      normalizeLocalEntries({ 12: null, 13: "teks", 14: 42 }),
+      {},
+    );
+  });
+
+  it("bentuk akun (companyNo) juga diterima", () => {
+    const out = normalizeLocalEntries({
+      12: { companyNo: 12, status: "Dipanggil", tanggal: "", catatan: "" },
+    });
+    assert.deepEqual(Object.keys(out), ["12"]);
+    assert.equal(out[12].no, 12);
+  });
+});
+
+describe('status "Diterima" (KONTEN-07)', () => {
+  it("ada di TRACKER_STATUSES, sesudah Dipanggil dan sebelum Ditolak", () => {
+    assert.ok(TRACKER_STATUSES.includes("Diterima"));
+    assert.ok(
+      TRACKER_STATUSES.indexOf("Dipanggil") <
+        TRACKER_STATUSES.indexOf("Diterima"),
+    );
+    assert.ok(
+      TRACKER_STATUSES.indexOf("Diterima") <
+        TRACKER_STATUSES.indexOf("Ditolak"),
+    );
+  });
+
+  it("entri berstatus Diterima lolos gabung dan validasi lokal", () => {
+    const merged = mergeTrackers(
+      { 12: entry({ status: "Diterima" }) },
+      {},
+    );
+    assert.equal(merged[12].status, "Diterima");
+    const local = normalizeLocalEntries({
+      12: { no: 12, status: "Diterima", tanggal: "", catatan: "" },
+    });
+    assert.equal(local[12].status, "Diterima");
   });
 });

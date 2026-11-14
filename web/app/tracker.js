@@ -16,9 +16,13 @@
  * diulang saat kembali online, saat halaman kembali fokus, atau
  * lewat tombol "Sinkronkan lagi" di /lamaran (LAM-04). */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Icon, showToast } from "@/app/visual";
+import { ConfirmDialog, Icon, showToast } from "@/app/visual";
 import { trackEvent } from "@/app/analytics-track";
-import { TOMBSTONE_KEY, TRACKER_STATUSES } from "@/lib/tracker-sync";
+import {
+  TOMBSTONE_KEY,
+  TRACKER_STATUSES,
+  normalizeLocalEntries,
+} from "@/lib/tracker-sync";
 import { rovingIndex } from "@/lib/a11y";
 
 export const TRACKER_KEY = "karir-lamaran";
@@ -40,7 +44,10 @@ function readEntriesAt(key) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
-    return parsed;
+    /* LAM-08: tiap entri divalidasi saat dibaca (status, no,
+     * tanggal, catatan) lewat normalizeLocalEntries — aturan yang
+     * sama dengan jalur sinkron akun. Entri tidak sah dibuang. */
+    return normalizeLocalEntries(parsed);
   } catch {
     return {};
   }
@@ -536,6 +543,15 @@ export function useTracker() {
       } else if (cur.status === "Ditandai" && !cur.catatan) {
         remove(company.no);
         showToast("Tanda dilepas.");
+      } else {
+        /* LAM-11: lamaran yang sudah berprogres tidak bisa dilepas
+         * dari tanda — ketukan tetap memberi respons: petunjuk ke
+         * halaman Lamaran, tempat statusnya bisa diubah/dihapus. */
+        showToast(
+          "Lamaran ini sudah berprogres. Ubah dari halaman Lamaran.",
+          "/lamaran",
+          "Lihat",
+        );
       }
     },
     [save, remove],
@@ -621,6 +637,9 @@ export function TrackerControl({ company }) {
   const entry = entries[String(company.no)];
   const [tanggal, setTanggal] = useState(todayLocal());
   const [catatan, setCatatan] = useState("");
+  /* LAM-07: hapus butuh konfirmasi (dialog di bawah); tanpa ini
+   * satu ketukan langsung menghapus lamaran tanpa jalan kembali. */
+  const [confirmDelete, setConfirmDelete] = useState(false);
   /* Detail dikirim sekali saat komponen mount. Ref penjaga supaya
    * StrictMode (mount ganda di dev) tidak mengirim dua kali. */
   const detailSent = useRef(false);
@@ -756,14 +775,23 @@ export function TrackerControl({ company }) {
               <button
                 type="button"
                 className="btn ghost small"
-                onClick={() => {
-                  remove(company.no);
-                  showToast("Dihapus dari lamaran.");
-                }}
+                onClick={() => setConfirmDelete(true)}
               >
                 <Icon name="trash" size={16} />
                 Hapus dari lamaran
               </button>
+              <ConfirmDialog
+                open={confirmDelete}
+                title="Hapus lamaran ini?"
+                message={`Lamaran ke ${company.perusahaan} akan dihapus dari daftar.`}
+                confirmLabel="Ya, hapus"
+                onConfirm={() => {
+                  setConfirmDelete(false);
+                  remove(company.no);
+                  showToast("Dihapus dari lamaran.");
+                }}
+                onCancel={() => setConfirmDelete(false)}
+              />
             </div>
           ) : (
             <p className="hint">

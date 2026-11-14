@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCompaniesOrSeed, getStatsOrSeed, getTargetsOrSeed, STATUS_ORDER } from "@/lib/companies";
 import { countBy, topEntries } from "@/lib/search";
+import { largestRemainderPercents } from "@/lib/percentages";
 import { getLocale, t } from "@/lib/i18n";
 import { CountUp, Icon, Reveal, StatusStamp } from "@/app/visual";
 import { formatDate } from "@/app/components";
@@ -74,6 +75,12 @@ export default async function Dasbor() {
     getLocale(),
   ]);
   const total = stats.total;
+  /* Persentase per status memakai sisa terbesar (DASH-07) supaya
+   * jumlahnya tepat 100%; total 0 memberi 0% di semua baris. */
+  const statusPercents = largestRemainderPercents(
+    STATUS_ORDER.map((s) => stats.byStatus[s] || 0),
+    total,
+  );
   const topCats = topEntries(countBy(companies, "kategori"), 8);
   const topCatMax = topCats.length > 0 ? topCats[0].count : 1;
   const byName = (a, b) => a.perusahaan.localeCompare(b.perusahaan, "id");
@@ -126,7 +133,7 @@ export default async function Dasbor() {
             })}
           </div>
           <ul className="status-rows">
-            {STATUS_ORDER.map((s) => {
+            {STATUS_ORDER.map((s, i) => {
               const n = stats.byStatus[s] || 0;
               return (
                 <li key={s}>
@@ -137,7 +144,7 @@ export default async function Dasbor() {
                       <CountUp value={n} duration={600} />
                     </span>
                     <span className="status-pct num">
-                      {Math.round((n / total) * 100)}%
+                      {statusPercents[i]}%
                     </span>
                   </Link>
                 </li>
@@ -176,8 +183,10 @@ export default async function Dasbor() {
               {t(locale, "dash.targetCompanies")}{" "}
               <span className="num sub">({targets.length})</span>
             </h2>
+            {/* DASH-08: label menjelaskan tujuannya ("Lihat di peta"),
+              * bukan sekadar "Peta". */}
             <Link className="textlink" href="/peta">
-              {t(locale, "nav.map")}
+              {t(locale, "dash.viewOnMap")}
               <Icon name="arrow" size={16} />
             </Link>
           </div>

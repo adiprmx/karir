@@ -7,8 +7,9 @@
  * terjadi, bukan hanya saat masuk); menghapus lamaran menghapus
  * salinan akunnya juga (lihat lib/tracker-sync.js). Status bisa
  * diganti langsung dari kartu. */
-import { useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   TRACKER_STATUSES,
   syncStatusMessage,
@@ -16,7 +17,7 @@ import {
 } from "@/app/tracker";
 import { rovingIndex } from "@/lib/a11y";
 import { useCompanyIndex } from "@/app/company-index";
-import { Icon, Reveal, showToast } from "@/app/visual";
+import { ConfirmDialog, Icon, Reveal, showToast } from "@/app/visual";
 import { CompanyLogo } from "@/lib/logos";
 import { safeLink } from "@/app/components";
 
@@ -37,6 +38,31 @@ function formatSyncTime(iso) {
 }
 
 export default function Lamaran() {
+  /* DASH-05: useSearchParams wajib di dalam Suspense supaya
+   * prerender tidak gagal (Next). Fallback-nya kerangka halaman
+   * yang sama seperti saat lamaran dimuat. */
+  return (
+    <Suspense
+      fallback={
+        <div className="wrap" lang="id">
+          <div className="page-head">
+            <h1>Lamaran Saya</h1>
+          </div>
+          <p className="sr-only" role="status">Memuat lamaran…</p>
+          <div className="co-list" aria-hidden="true">
+            <div className="skeleton" style={{ height: 112 }} />
+            <div className="skeleton" style={{ height: 112 }} />
+          </div>
+        </div>
+      }
+    >
+      <LamaranContent />
+    </Suspense>
+  );
+}
+
+function LamaranContent() {
+  const searchParams = useSearchParams();
   const {
     entries,
     loaded,
@@ -50,8 +76,18 @@ export default function Lamaran() {
     mergeGuest,
   } = useTracker();
   const { index, state, start } = useCompanyIndex({ eager: true });
-  const [tab, setTab] = useState("Semua");
+  /* DASH-05: tab awal dari ?status= (ditaut ubin Dasbor). Nilai di
+   * luar kosakata status jatuh ke "Semua". */
+  const [tab, setTab] = useState(() => {
+    const s = searchParams.get("status");
+    return TRACKER_STATUSES.includes(s) ? s : "Semua";
+  });
   const [guestDismissed, setGuestDismissed] = useState(false);
+  /* LAM-07: entri yang menunggu konfirmasi hapus (null = tidak ada
+   * dialog). Dialog konfirmasi dipakai sebagai pengganti tombol
+   * urungkan di toast: toast yang ada hanya mendukung tautan,
+   * bukan aksi. */
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const byNo = useMemo(() => {
     const m = new Map();
@@ -93,8 +129,10 @@ export default function Lamaran() {
 
   /* Hapus lamaran: remove() di app/tracker.js sudah mengurus
    * penghapusan dari akun (penanda hapus + deleteTracker) bila
-   * sedang masuk; halaman ini cukup menampilkan toast. */
+   * sedang masuk; halaman ini cukup menampilkan toast. Penghapusan
+   * hanya jalan setelah dialog konfirmasi (LAM-07). */
   function handleDelete(no) {
+    setPendingDelete(null);
     remove(no);
     showToast("Dihapus dari lamaran.");
   }
@@ -303,7 +341,7 @@ export default function Lamaran() {
                     <button
                       type="button"
                       className="btn ghost small"
-                      onClick={() => handleDelete(e.no)}
+                      onClick={() => setPendingDelete(e)}
                     >
                       <Icon name="trash" size={16} />
                       Hapus
@@ -323,6 +361,18 @@ export default function Lamaran() {
             </button>
           </p>
         )}
+        <ConfirmDialog
+          open={pendingDelete !== null}
+          title="Hapus lamaran ini?"
+          message={
+            pendingDelete
+              ? `Lamaran ke ${byNo.get(Number(pendingDelete.no))?.perusahaan || `Perusahaan No. ${pendingDelete.no}`} akan dihapus dari daftar.`
+              : ""
+          }
+          confirmLabel="Ya, hapus"
+          onConfirm={() => pendingDelete && handleDelete(pendingDelete.no)}
+          onCancel={() => setPendingDelete(null)}
+        />
       </section>
     </div>
   );

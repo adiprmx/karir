@@ -37,8 +37,15 @@ export const TRACKER_STATUSES = [
   "Ditandai",
   "Sudah dilamar",
   "Dipanggil",
+  "Diterima",
   "Ditolak",
 ];
+
+/* Batas operasi per batch tulis Firestore (LAM-09): satu batch
+ * maksimal 500 operasi. syncTrackers memecah tulisnya per batas
+ * ini supaya sinkron tidak gagal total bila pengguna melacak
+ * lebih dari 500 perusahaan. */
+export const FIRESTORE_BATCH_LIMIT = 500;
 
 const MAX_COMPANY_NO = 10000;
 const MAX_CATATAN = 200;
@@ -205,6 +212,36 @@ function normalizeEntry(raw) {
   return entry;
 }
 
+/* Rapikan peta entri localStorage ke bentuk lokal baku
+ * { "<no>": { no, status, tanggal, catatan, updatedAt? } } (LAM-08).
+ * Dipakai readEntriesAt di app/tracker.js supaya entri yang dibaca
+ * dari browser selalu divalidasi: status harus salah satu dari
+ * TRACKER_STATUSES, `no` angka 1-10000, `tanggal` YYYY-MM-DD atau
+ * kosong, `catatan` string maksimal 200 huruf. Entri yang tidak sah
+ * dibuang, bukan dipertahankan setengah-setengah. Memakai ulang
+ * normalizeEntry supaya aturan validasinya satu sumber dengan jalur
+ * sinkron akun. Fungsi murni, bisa diuji unit. */
+export function normalizeLocalEntries(input) {
+  const out = {};
+  const values = Array.isArray(input)
+    ? input
+    : input && typeof input === "object"
+      ? Object.values(input)
+      : [];
+  values.forEach((raw) => {
+    const clean = normalizeEntry(raw);
+    if (!clean) return;
+    out[String(clean.companyNo)] = {
+      no: clean.companyNo,
+      status: clean.status,
+      tanggal: clean.tanggal,
+      catatan: clean.catatan,
+      ...(clean.updatedAt ? { updatedAt: clean.updatedAt } : {}),
+    };
+  });
+  return out;
+}
+
 /* Ubah peta ({ "12": {...} }) atau larik ([{...}]) jadi peta dengan
  * kunci string nomor perusahaan dan nilai entri baku. Entri yang
  * tidak sah dibuang. */
@@ -331,18 +368,33 @@ export async function syncTrackers(
     );
     const localCount = toMap(localEntries).size;
     const remoteCount = toMap(remote).size;
-    const batch = writeBatch(db);
-    Object.values(merged).forEach((entry) => {
-      batch.set(
-        doc(itemsRef, String(entry.companyNo)),
-        { ...entry, updatedAt: new Date().toISOString() },
-        { merge: true },
-      );
-    });
-    toDelete.forEach((key) => {
-      batch.delete(doc(itemsRef, key));
-    });
-    await batch.commit();
+    /* Tulis dipecah per FIRESTORE_BATCH_LIMIT operasi (LAM-09):
+     * satu batch Firestore maksimal 500 operasi, jadi gabungan
+     * tulis + hapus di atas itu harus dikirim bertahap. Tiap batch
+     * di-commit berurutan; bila satu batch gagal, sisanya tidak
+     * dikirim dan sync mengembalikan gagal (tombstone tidak
+     * dibersihkan, jadi sinkron berikutnya mengulang yang belum
+     * terkirim; tulis set memakai merge sehingga mengulang aman). */
+    const ops = [];
+    Object.values(merged).forEach((entry) =>
+      ops.push({ type: "set", entry }),
+    );
+    toDelete.forEach((key) => ops.push({ type: "delete", key }));
+    for (let i = 0; i < ops.length; i += FIRESTORE_BATCH_LIMIT) {
+      const batch = writeBatch(db);
+      for (const op of ops.slice(i, i + FIRESTORE_BATCH_LIMIT)) {
+        if (op.type === "set") {
+          batch.set(
+            doc(itemsRef, String(op.entry.companyNo)),
+            { ...op.entry, updatedAt: new Date().toISOString() },
+            { merge: true },
+          );
+        } else {
+          batch.delete(doc(itemsRef, op.key));
+        }
+      }
+      await batch.commit();
+    }
     const remaining = pruneTombstones(remainingTombstones, toDelete);
     if (fromStorage) writeTombstones(remaining, uid);
     return {

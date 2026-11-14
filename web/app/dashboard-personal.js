@@ -73,10 +73,17 @@ export default function DashboardPersonal() {
 
   const counts = {};
   for (const s of TRACKER_STATUSES) counts[s] = 0;
+  /* DASH-10: total hanya menghitung entri berstatus dikenal, sama
+   * seperti ubin per status — total tidak boleh lebih besar dari
+   * jumlah ubin. (Validasi baca LAM-08 sudah membuang entri
+   * berstatus tak dikenal; penjaga ini menjaga konsistensi bila
+   * ada entri lolos dari jalur lain.) */
   let total = 0;
   for (const e of Object.values(entries || {})) {
-    total += 1;
-    if (e && counts[e.status] !== undefined) counts[e.status] += 1;
+    if (e && counts[e.status] !== undefined) {
+      counts[e.status] += 1;
+      total += 1;
+    }
   }
 
   const steps = [
@@ -198,7 +205,9 @@ export default function DashboardPersonal() {
           ) : (
             <div className="counts">
               {TRACKER_STATUSES.map((s) => (
-                <Link href="/lamaran" key={s}>
+                /* DASH-05: tiap ubin membuka /lamaran langsung di tab
+                 * statusnya, bukan daftar polos. */
+                <Link href={`/lamaran?status=${encodeURIComponent(s)}`} key={s}>
                   <span className="count-n num">
                     <CountUp value={counts[s]} duration={600} />
                   </span>

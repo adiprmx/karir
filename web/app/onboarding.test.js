@@ -199,3 +199,46 @@ describe("simpan dan baca localStorage", () => {
     }
   });
 });
+
+/* --- W1-TRACKER (ONB-09): save/clear mengembalikan status --- */
+describe("status sukses/gagal simpan dan hapus (ONB-09)", () => {
+  it("save berhasil: true, clear berhasil: true", () => {
+    assert.equal(saveOnboarding({ domisili: "Bogor", posisi: "" }), true);
+    assert.equal(clearOnboarding(), true);
+  });
+
+  it("save gagal (storage menolak): false, tanpa event perubahan", () => {
+    installWindow({
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("storage penuh");
+      },
+      removeItem: () => {},
+    });
+    assert.equal(saveOnboarding({ domisili: "Bogor", posisi: "" }), false);
+    assert.equal(dispatched, 0);
+  });
+
+  it("clear gagal (storage menolak): false, tanpa event perubahan", () => {
+    installWindow({
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {
+        throw new Error("storage menolak");
+      },
+    });
+    assert.equal(clearOnboarding(), false);
+    assert.equal(dispatched, 0);
+  });
+
+  it("tanpa window (server): save dan clear false", () => {
+    const saved = globalThis.window;
+    try {
+      delete globalThis.window;
+      assert.equal(saveOnboarding({ domisili: "Bogor", posisi: "" }), false);
+      assert.equal(clearOnboarding(), false);
+    } finally {
+      globalThis.window = saved;
+    }
+  });
+});

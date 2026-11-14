@@ -57,8 +57,12 @@ export function loadOnboarding() {
   }
 }
 
+/* Simpan pilihan. Kembalikan true bila tersimpan, false bila
+ * browser menolak atau di luar browser (ONB-09): pemanggil wajib
+ * memeriksa hasilnya dan memberi umpan balik bila gagal, bukan
+ * diam-diam menganggap tersimpan. */
 export function saveOnboarding(data) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") return false;
   const next = {
     domisili: String(data.domisili || "").trim(),
     posisi: String(data.posisi || "").trim(),
@@ -67,19 +71,23 @@ export function saveOnboarding(data) {
   try {
     window.localStorage.setItem(ONBOARDING_KEY, JSON.stringify(next));
   } catch {
-    return;
+    return false;
   }
   window.dispatchEvent(new Event("karir-onboarding-change"));
+  return true;
 }
 
+/* Hapus pilihan. Kembalikan true bila terhapus, false bila browser
+ * menolak atau di luar browser (ONB-09). */
 export function clearOnboarding() {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") return false;
   try {
     window.localStorage.removeItem(ONBOARDING_KEY);
   } catch {
-    return;
+    return false;
   }
   window.dispatchEvent(new Event("karir-onboarding-change"));
+  return true;
 }
 
 export function useOnboarding() {
@@ -102,14 +110,19 @@ export function useOnboarding() {
     };
   }, []);
 
+  /* save/clear mengembalikan status (ONB-09) dan hanya mengubah
+   * state bila tulisnya berhasil — gagal simpan tidak boleh
+   * menimpa state dengan data lama hasil baca ulang. */
   const save = useCallback((next) => {
-    saveOnboarding(next);
-    setData(loadOnboarding());
+    const ok = saveOnboarding(next);
+    if (ok) setData(loadOnboarding());
+    return ok;
   }, []);
 
   const clear = useCallback(() => {
-    clearOnboarding();
-    setData(null);
+    const ok = clearOnboarding();
+    if (ok) setData(null);
+    return ok;
   }, []);
 
   return { data, loaded, save, clear };

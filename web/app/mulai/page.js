@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { hasOnboardingChoice, useOnboarding } from "@/app/onboarding";
 import { useCompanyIndex, rank } from "@/app/company-index";
 import { trackEvent } from "@/app/analytics-track";
-import { Icon } from "@/app/visual";
+import { ConfirmDialog, Icon, showToast } from "@/app/visual";
 
 const CITY_CHIPS = [
   "Depok",
@@ -44,6 +44,8 @@ export default function Mulai() {
   const [posisi, setPosisi] = useState("");
   const [step, setStep] = useState(1);
   const [editing, setEditing] = useState(false);
+  /* ONB-11: "Hapus pilihanku" menunggu konfirmasi dialog. */
+  const [confirmClear, setConfirmClear] = useState(false);
   /* AKSES-10: target fokus saat langkah berganti (id isian langkah
    * 1/2, atau wiz-body untuk ringkasan langkah 3). Hanya diisi oleh
    * aksi pengguna (Lanjut/Kembali/Enter) — bukan saat muat pertama. */
@@ -96,7 +98,16 @@ export default function Mulai() {
         verified++;
       }
     }
-    return { matched: r.matched.size, verified, top: r.results.slice(0, 3) };
+    /* ONB-10: tiga teratas HANYA dari yang benar-benar cocok
+     * (matched) — hasil peringkat di luar matched tidak boleh
+     * tampil sebagai "paling cocok" bila tidak ada yang cocok. */
+    return {
+      matched: r.matched.size,
+      verified,
+      top: r.results
+        .filter((e) => r.matched.has(e.company.no))
+        .slice(0, 3),
+    };
   }, [index, domisili, posisi]);
 
   function goToResults() {
@@ -105,7 +116,12 @@ export default function Mulai() {
     const p = posisi.trim();
     if (d) params.set("domisili", d);
     if (p) params.set("posisi", p);
-    if (d || p) save({ domisili: d, posisi: p });
+    /* ONB-09: gagal simpan diberi tahu lewat toast (ToastHost ada
+     * di layout, jadi toast bertahan melewati navigasi); hasil
+     * pencarian tetap dibuka karena filternya ada di URL. */
+    if ((d || p) && !save({ domisili: d, posisi: p })) {
+      showToast("Pilihan tidak bisa disimpan di browser ini.");
+    }
     const query = params.toString();
     router.push(query ? `/cari?${query}` : "/cari");
   }
@@ -135,8 +151,15 @@ export default function Mulai() {
     );
   }
 
+  /* ONB-11: hapus hanya jalan setelah dialog konfirmasi. Bila
+   * hapus gagal (ONB-09), pilihan tetap tampil dan pengguna diberi
+   * tahu — state tidak di-reset seolah sudah terhapus. */
   function onClear() {
-    clear();
+    setConfirmClear(false);
+    if (!clear()) {
+      showToast("Pilihan tidak bisa dihapus. Coba lagi.");
+      return;
+    }
     setDomisili("");
     setPosisi("");
     setStep(1);
@@ -168,7 +191,15 @@ export default function Mulai() {
         </p>
       </noscript>
 
-      {showSummary ? (
+      {/* ONB-04: sebelum data selesai dibaca, tampilkan penahan —
+        * pengguna lama tidak lagi sempat melihat wizard kosong
+        * sebelum ringkasannya muncul. */}
+      {!loaded ? (
+        <section className="panel" aria-label="Memuat pilihan" aria-busy="true">
+          <div className="skeleton" style={{ height: 28, width: "60%" }} />
+          <div className="skeleton" style={{ height: 80, marginTop: 16 }} />
+        </section>
+      ) : showSummary ? (
         <section className="panel" aria-label="Pilihanmu saat ini">
           <p className="label">Pilihanmu saat ini</p>
           <dl className="facts">
@@ -189,13 +220,25 @@ export default function Mulai() {
             <button type="button" className="btn ghost" onClick={onEdit}>
               Ubah pilihan
             </button>
-            <button type="button" className="btn ghost" onClick={onClear}>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => setConfirmClear(true)}
+            >
               Hapus pilihanku
             </button>
           </div>
           <p className="hint">
             Pilihanmu tersimpan di browser ini saja, tidak dikirim ke mana pun.
           </p>
+          <ConfirmDialog
+            open={confirmClear}
+            title="Hapus pilihanmu?"
+            message="Domisili dan posisi yang tersimpan akan dihapus dari browser ini."
+            confirmLabel="Ya, hapus"
+            onConfirm={onClear}
+            onCancel={() => setConfirmClear(false)}
+          />
         </section>
       ) : (
         <section className="panel wizard" aria-label="Tiga langkah singkat">
@@ -297,6 +340,33 @@ export default function Mulai() {
                       <p className="hint">
                         {preview.verified} di antaranya lowongan terverifikasi.
                       </p>
+                      {/* ONB-10: tiga teratas akhirnya ditampilkan —
+                        * sebelumnya dihitung tetapi tidak pernah
+                        * dipakai. Tautan ke halaman perusahaan. */}
+                      {preview.top.length > 0 && (
+                        <>
+                          <p className="label" style={{ marginTop: 16 }}>
+                            Tiga yang paling cocok
+                          </p>
+                          <ul className="mini-list">
+                            {preview.top.map((e) => (
+                              <li key={e.company.no}>
+                                <Link href={`/perusahaan/${e.company.no}`}>
+                                  <span className="mini-name">
+                                    {e.company.perusahaan}
+                                    <span className="mini-sub">
+                                      {(e.company.posisi || "").split(",")[0]}
+                                      {e.company.lokasi
+                                        ? ` · ${e.company.lokasi}`
+                                        : ""}
+                                    </span>
+                                  </span>
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
                     </>
                   ) : state === "error" ? (
                     <p className="hint">
@@ -321,6 +391,19 @@ export default function Mulai() {
               </button>
             ) : (
               <Link className="btn ghost" href="/cari" onClick={skipOnboarding}>
+                Lewati
+              </Link>
+            )}
+            {/* ONB-08: "Lewati" tersedia di semua langkah, bukan
+              * hanya langkah 1 — di langkah 2-3 ia duduk di tengah
+              * baris navigasi sebagai tautan. */}
+            {step > 1 && (
+              <Link
+                className="linkish"
+                href="/cari"
+                onClick={skipOnboarding}
+                style={{ alignSelf: "center" }}
+              >
                 Lewati
               </Link>
             )}
