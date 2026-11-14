@@ -12,6 +12,16 @@
 import { createHash, createSign } from "node:crypto";
 import { requireEnv } from "./require-env.js";
 
+/* Tipe event analitik (MKT-07 menambahkan "share"): aksi berbagi
+ * yang berhasil — tombol bagikan di halaman detail, tautan WhatsApp
+ * berbagi (wa.me tanpa nomor) di halaman detail dan beranda. Field
+ * action membawa sumbernya: "detail" (halaman detail perusahaan),
+ * "daftar_target" (tautan "Bagikan daftar lowongan" di beranda),
+ * atau "hasil_cari" (dicadangkan untuk tombol bagikan hasil di /cari
+ * bila sudah ada). Pembeda dengan portal_click: klik kanal LAMAR
+ * (portal web, wa.me/<nomor> WA HRD, mailto: email HRD) tetap
+ * portal_click; satu klik hanya menghasilkan satu event — lihat
+ * classifyPortalLink/classifyShareLink di app/analytics-track.js. */
 export const EVENT_TYPES = [
   "pageview",
   "search",
@@ -22,6 +32,7 @@ export const EVENT_TYPES = [
   "onboarding",
   "report",
   "channel_copy",
+  "share",
 ];
 
 const MAX_PATH = 200;

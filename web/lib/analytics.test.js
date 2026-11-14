@@ -64,8 +64,8 @@ describe("validateEvent", () => {
     assert.equal("extra" in event, false);
   });
 
-  it("kesembilan type sah diterima", () => {
-    assert.equal(EVENT_TYPES.length, 9);
+  it("kesepuluh type sah diterima (MKT-07 menambah share)", () => {
+    assert.equal(EVENT_TYPES.length, 10);
     for (const type of EVENT_TYPES) {
       assert.equal(validateEvent({ type, path: "/" }).ok, true);
     }
@@ -75,6 +75,49 @@ describe("validateEvent", () => {
     for (const type of ["onboarding", "report", "channel_copy"]) {
       assert.equal(EVENT_TYPES.includes(type), true);
     }
+  });
+
+  it("event share lolos dengan tiap penanda sumber (MKT-07)", () => {
+    /* action membawa sumber berbagi: detail, daftar_target, atau
+     * hasil_cari (dicadangkan). */
+    for (const action of ["detail", "daftar_target", "hasil_cari"]) {
+      const { ok, event } = validateEvent({
+        type: "share",
+        path: "/",
+        action,
+      });
+      assert.equal(ok, true);
+      assert.equal(event.type, "share");
+      assert.equal(event.action, action);
+    }
+  });
+
+  it("share dari halaman detail membawa companyNo angka", () => {
+    const { ok, event } = validateEvent({
+      type: "share",
+      path: "/perusahaan/299",
+      companyNo: 299,
+      action: "detail",
+    });
+    assert.equal(ok, true);
+    assert.equal(event.companyNo, 299);
+    /* Share daftar target di beranda tidak terikat satu perusahaan:
+     * tanpa companyNo tetap lolos. */
+    assert.equal(
+      validateEvent({ type: "share", path: "/", action: "daftar_target" })
+        .ok,
+      true,
+    );
+    /* companyNo string tetap ditolak seperti tipe lain (ANALITIK-01). */
+    assert.equal(
+      validateEvent({
+        type: "share",
+        path: "/perusahaan/299",
+        companyNo: "299",
+        action: "detail",
+      }).ok,
+      false,
+    );
   });
 
   it("type di luar daftar ditolak", () => {
@@ -454,6 +497,31 @@ describe("buildFirestoreFields (field baru)", () => {
     );
     assert.equal(fields.ts.timestampValue, "2026-11-07T03:00:00.000Z");
     assert.equal("stringValue" in fields.ts, false);
+  });
+
+  it("event share ditulis lengkap dengan action sumber (MKT-07)", () => {
+    const { fields } = buildFirestoreFields(
+      {
+        type: "share",
+        path: "/perusahaan/299",
+        companyNo: 299,
+        action: "detail",
+      },
+      "a".repeat(64),
+      "2026-11-07",
+      "2026-11-07T03:00:00.000Z",
+    );
+    assert.equal(fields.type.stringValue, "share");
+    assert.equal(fields.action.stringValue, "detail");
+    assert.equal(fields.companyNo.integerValue, "299");
+    const daftar = buildFirestoreFields(
+      { type: "share", path: "/", action: "daftar_target" },
+      "a".repeat(64),
+      "2026-11-07",
+      "2026-11-07T03:00:00.000Z",
+    );
+    assert.equal(daftar.fields.action.stringValue, "daftar_target");
+    assert.equal("companyNo" in daftar.fields, false);
   });
 });
 
@@ -966,5 +1034,349 @@ describe("trackEvent klien (idToken, SEC-07)", () => {
     trackEvent({ type: "pageview", path: "/cari" });
     assert.equal(sentBodies.length, 1);
     assert.equal("idToken" in sentBodies[0], false);
+  });
+});
+
+/* ===== Blok logika murni di berkas klien (MKT-07, FIN-08/DET-07) =====
+ * app/analytics-track.js dan app/perusahaan/[no]/actions.js tidak
+ * bisa diimpor langsung oleh node:test (impor next/navigation, alias
+ * @/, dan JSX). Fungsi murninya diuji dengan mengekstrak blok di
+ * antara penanda __PURE_START__/__PURE_END__ dari sumbernya lalu
+ * mengevaluasi blok itu — kode yang dites adalah kode yang dikirim,
+ * bukan salinan. Blok WAJIB mandiri (hanya global standar); bila
+ * seseorang menambah ketergantungan ke dalam blok, test ini gagal
+ * dengan pesan yang jelas. */
+function loadPureBlock(relativeUrl, names) {
+  const src = readFileSync(new URL(relativeUrl, import.meta.url), "utf8");
+  const startMarker = "/* __PURE_START__ */";
+  const endMarker = "/* __PURE_END__ */";
+  const start = src.indexOf(startMarker);
+  assert.notEqual(start, -1, `penanda awal blok murni hilang: ${relativeUrl}`);
+  const end = src.indexOf(endMarker, start);
+  assert.notEqual(end, -1, `penanda akhir blok murni hilang: ${relativeUrl}`);
+  const block = src
+    .slice(start + startMarker.length, end)
+    .replace(/^export /gm, "");
+  /* new Function dipakai di sini karena berkas sumbernya tidak bisa
+   * diimpor (JSX / next/navigation / alias @/) — satu-satunya cara
+   * menjalankan kode aslinya di node:test. */
+  const factory = new Function(`${block}\nreturn { ${names.join(", ")} };`);
+  return factory();
+}
+
+const trackPure = loadPureBlock("../app/analytics-track.js", [
+  "extractCompanyNo",
+  "classifyPortalLink",
+  "classifyShareLink",
+]);
+const { extractCompanyNo, classifyPortalLink, classifyShareLink } = trackPure;
+
+const actionsPure = loadPureBlock("../app/perusahaan/[no]/actions.js", [
+  "REPORT_MIN_INTERVAL_MS",
+  "REPORT_MAX_PER_SESSION",
+  "REPORT_TIMESTAMPS_KEY",
+  "checkReportThrottle",
+  "recordReportTimestamp",
+]);
+const {
+  REPORT_MIN_INTERVAL_MS,
+  REPORT_MAX_PER_SESSION,
+  REPORT_TIMESTAMPS_KEY,
+  checkReportThrottle,
+  recordReportTimestamp,
+} = actionsPure;
+
+describe("extractCompanyNo (blok murni)", () => {
+  it("path detail mengembalikan nomor", () => {
+    assert.equal(extractCompanyNo("/perusahaan/299"), 299);
+    assert.equal(extractCompanyNo("/perusahaan/1"), 1);
+  });
+
+  it("bukan path detail mengembalikan null", () => {
+    assert.equal(extractCompanyNo("/"), null);
+    assert.equal(extractCompanyNo("/cari"), null);
+    assert.equal(extractCompanyNo("/perusahaan/abc"), null);
+    assert.equal(extractCompanyNo("/perusahaan/0"), null);
+    assert.equal(extractCompanyNo("/perusahaan/299/x"), null);
+    assert.equal(extractCompanyNo(""), null);
+    assert.equal(extractCompanyNo(null), null);
+    assert.equal(extractCompanyNo(42), null);
+  });
+});
+
+describe("classifyPortalLink vs classifyShareLink (MKT-07)", () => {
+  const SITE = "karir-adiprmx.vercel.app";
+
+  it("wa.me/<nomor> tetap kanal lamar wa (portal_click)", () => {
+    assert.equal(
+      classifyPortalLink("https://wa.me/6281211559991", SITE),
+      "wa",
+    );
+    assert.equal(
+      classifyShareLink("https://wa.me/6281211559991", "/perusahaan/299"),
+      null,
+    );
+  });
+
+  it("wa.me tanpa nomor BUKAN portal_click — itu tautan berbagi", () => {
+    assert.equal(
+      classifyPortalLink("https://wa.me/?text=Lowongan", SITE),
+      null,
+    );
+    assert.equal(classifyPortalLink("https://wa.me/", SITE), null);
+    assert.equal(classifyPortalLink("https://wa.me", SITE), null);
+  });
+
+  it("wa.me tanpa nomor di halaman detail → share sumber detail", () => {
+    assert.equal(
+      classifyShareLink("https://wa.me/?text=Lowongan", "/perusahaan/299"),
+      "detail",
+    );
+  });
+
+  it("wa.me tanpa nomor di beranda → share sumber daftar_target", () => {
+    assert.equal(
+      classifyShareLink("https://wa.me/?text=Lowongan", "/"),
+      "daftar_target",
+    );
+  });
+
+  it("wa.me tanpa nomor di halaman lain bukan share", () => {
+    assert.equal(
+      classifyShareLink("https://wa.me/?text=Lowongan", "/cari"),
+      null,
+    );
+    assert.equal(
+      classifyShareLink("https://wa.me/?text=Lowongan", "/admin"),
+      null,
+    );
+  });
+
+  it("kanal lain tidak berubah: email, portal, internal, github", () => {
+    assert.equal(classifyPortalLink("mailto:hrd@contoh.com", SITE), "email");
+    assert.equal(
+      classifyPortalLink("https://lowongan-contoh.com/lamar", SITE),
+      "portal",
+    );
+    assert.equal(
+      classifyPortalLink(`https://${SITE}/perusahaan/1`, SITE),
+      null,
+    );
+    assert.equal(
+      classifyPortalLink("https://github.com/adiprmx/karir", SITE),
+      null,
+    );
+    assert.equal(classifyPortalLink("bukan-url", SITE), null);
+    assert.equal(classifyPortalLink("", SITE), null);
+    assert.equal(classifyShareLink("mailto:hrd@contoh.com", "/"), null);
+    assert.equal(
+      classifyShareLink("https://lowongan-contoh.com/lamar", "/"),
+      null,
+    );
+  });
+
+  it("ANTI-DUPLIKASI: tidak ada (href, path) yang jadi share DAN portal_click", () => {
+    const hrefs = [
+      "https://wa.me/6281211559991",
+      "https://wa.me/?text=Lowongan",
+      "https://wa.me/",
+      "https://wa.me",
+      "mailto:hrd@contoh.com",
+      "https://lowongan-contoh.com/lamar",
+      `https://${SITE}/perusahaan/1`,
+      "https://github.com/adiprmx/karir",
+      "bukan-url",
+      "",
+    ];
+    const paths = ["/", "/perusahaan/299", "/cari", "/admin"];
+    for (const href of hrefs) {
+      for (const path of paths) {
+        const portal = classifyPortalLink(href, SITE);
+        const share = classifyShareLink(href, path);
+        assert.equal(
+          portal !== null && share !== null,
+          false,
+          `klasifikasi ganda: href=${href} path=${path}`,
+        );
+      }
+    }
+  });
+});
+
+describe("throttle laporan (FIN-08/DET-07, blok murni)", () => {
+  const NOW = 1_800_000_000_000;
+
+  it("konstanta throttle: jeda 60 detik, maks 5 per sesi", () => {
+    assert.equal(REPORT_MIN_INTERVAL_MS, 60_000);
+    assert.equal(REPORT_MAX_PER_SESSION, 5);
+    assert.equal(REPORT_TIMESTAMPS_KEY, "karir-report-timestamps");
+  });
+
+  it("sesi kosong boleh kirim", () => {
+    assert.deepEqual(checkReportThrottle([], NOW), { allowed: true });
+    assert.deepEqual(checkReportThrottle(null, NOW), { allowed: true });
+    assert.deepEqual(checkReportThrottle(undefined, NOW), { allowed: true });
+  });
+
+  it("kirim terakhir 60 detik lalu atau lebih boleh kirim lagi", () => {
+    assert.deepEqual(checkReportThrottle([NOW - 60_000], NOW), {
+      allowed: true,
+    });
+    assert.deepEqual(checkReportThrottle([NOW - 61_000], NOW), {
+      allowed: true,
+    });
+  });
+
+  it("kirim terakhir kurang dari 60 detik ditolak dengan sisa detik", () => {
+    assert.deepEqual(checkReportThrottle([NOW - 59_000], NOW), {
+      allowed: false,
+      reason: "terlalu_cepat",
+      waitSeconds: 1,
+    });
+    assert.deepEqual(checkReportThrottle([NOW - 1_000], NOW), {
+      allowed: false,
+      reason: "terlalu_cepat",
+      waitSeconds: 59,
+    });
+    /* Stempel terbaru yang dipakai, bukan yang tertua. */
+    assert.deepEqual(
+      checkReportThrottle([NOW - 300_000, NOW - 10_000], NOW),
+      {
+        allowed: false,
+        reason: "terlalu_cepat",
+        waitSeconds: 50,
+      },
+    );
+  });
+
+  it("5 laporan dalam satu sesi mencapai batas walau jeda terpenuhi", () => {
+    const five = [
+      NOW - 300_000,
+      NOW - 240_000,
+      NOW - 180_000,
+      NOW - 120_000,
+      NOW - 61_000,
+    ];
+    assert.deepEqual(checkReportThrottle(five, NOW), {
+      allowed: false,
+      reason: "batas_sesi",
+      waitSeconds: 0,
+    });
+    /* 4 laporan masih boleh. */
+    assert.deepEqual(checkReportThrottle(five.slice(0, 4), NOW), {
+      allowed: true,
+    });
+  });
+
+  it("nilai rusak dan stempel masa depan diabaikan, bukan dihitung", () => {
+    assert.deepEqual(
+      checkReportThrottle(["x", null, -5, 1.5, NOW + 60_000], NOW),
+      { allowed: true },
+    );
+    /* Nilai rusak tidak ikut menghabiskan kuota 5. */
+    const mixed = ["x", NOW - 300_000, NOW - 240_000, NOW - 180_000, null];
+    assert.deepEqual(checkReportThrottle(mixed, NOW), { allowed: true });
+  });
+
+  it("recordReportTimestamp menambah stempel dan memangkas ke 5", () => {
+    assert.deepEqual(recordReportTimestamp([], NOW), [NOW]);
+    assert.deepEqual(recordReportTimestamp([NOW - 120_000], NOW), [
+      NOW - 120_000,
+      NOW,
+    ]);
+    const five = [
+      NOW - 300_000,
+      NOW - 240_000,
+      NOW - 180_000,
+      NOW - 120_000,
+      NOW - 61_000,
+    ];
+    const recorded = recordReportTimestamp(five, NOW);
+    assert.equal(recorded.length, 5);
+    assert.equal(recorded[recorded.length - 1], NOW);
+    assert.equal(recorded.includes(NOW - 300_000), false);
+  });
+});
+
+describe("kontrak wiring share + throttle (teks sumber)", () => {
+  /* share() dan submitReport() memakai JSX/navigator/sessionStorage
+   * sehingga tidak bisa dievaluasi di node:test — yang diuji di sini
+   * adalah titik wiring-nya di sumber: panggilan trackEvent share,
+   * pemakaian throttle, dan pesan batas ke pengguna. */
+  const actionsSrc = readFileSync(
+    new URL("../app/perusahaan/[no]/actions.js", import.meta.url),
+    "utf8",
+  );
+  const trackSrc = readFileSync(
+    new URL("../app/analytics-track.js", import.meta.url),
+    "utf8",
+  );
+
+  function region(src, startMarker, endMarker) {
+    const start = src.indexOf(startMarker);
+    assert.notEqual(start, -1, `penanda tidak ditemukan: ${startMarker}`);
+    const end = src.indexOf(endMarker, start);
+    assert.notEqual(end, -1, `penanda akhir tidak ditemukan: ${endMarker}`);
+    return src.slice(start, end);
+  }
+
+  it("share() mengirim event share di kedua jalur sukses (MKT-07)", () => {
+    const shareFn = region(
+      actionsSrc,
+      "async function share() {",
+      "const waHref =",
+    );
+    /* Dua jalur sukses: navigator.share dan salin tautan. */
+    assert.equal((shareFn.match(/type: "share"/g) || []).length, 2);
+    assert.equal(shareFn.includes('action: "detail"'), true);
+    /* Batal (AbortError) tetap return tanpa melacak. */
+    assert.match(shareFn, /AbortError/);
+  });
+
+  it("submitReport memeriksa throttle sebelum tulis dan mencatat kirim berhasil", () => {
+    const submitFn = region(
+      actionsSrc,
+      "async function submitReport(e) {",
+      "return (",
+    );
+    const checkAt = submitFn.indexOf("checkReportThrottle(");
+    const addDocAt = submitFn.indexOf("await addDoc(");
+    assert.notEqual(checkAt, -1);
+    assert.notEqual(addDocAt, -1);
+    assert.ok(checkAt < addDocAt, "throttle harus dicek sebelum addDoc");
+    assert.equal(submitFn.includes("recordReportTimestamp("), true);
+    assert.equal(submitFn.includes("saveReportTimestamps("), true);
+  });
+
+  it("pesan batas throttle jelas dan ditampilkan ke pengguna", () => {
+    assert.equal(
+      actionsSrc.includes(
+        "Batas laporan untuk sesi ini tercapai (5 laporan). Coba lagi nanti.",
+      ),
+      true,
+    );
+    assert.equal(
+      actionsSrc.includes("Tunggu ${check.waitSeconds} detik"),
+      true,
+    );
+    assert.equal(actionsSrc.includes("throttleMsg"), true);
+    /* Pesan throttle dirender sebagai alert (diumumkan pembaca layar),
+     * sama seperti pesan gagal kirim. */
+    assert.match(
+      actionsSrc,
+      /\{throttleMsg && \(\s*<p className="note-line" role="alert">\s*\{throttleMsg\}/,
+    );
+  });
+
+  it("listener klik mengirim share lewat classifyShareLink (MKT-07)", () => {
+    assert.equal(trackSrc.includes("classifyShareLink(a.href, path)"), true);
+    assert.equal(trackSrc.includes('type: "share"'), true);
+    /* Share diperiksa SEBELUM portal_click, dengan return di antara
+     * — jaminan satu klik satu event. */
+    const shareAt = trackSrc.indexOf("classifyShareLink(a.href, path)");
+    const portalAt = trackSrc.indexOf("classifyPortalLink(a.href");
+    assert.ok(shareAt !== -1 && portalAt !== -1 && shareAt < portalAt);
+    const between = trackSrc.slice(shareAt, portalAt);
+    assert.equal(between.includes("return;"), true);
   });
 });

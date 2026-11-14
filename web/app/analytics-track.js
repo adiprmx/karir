@@ -4,8 +4,18 @@
  * tim inti (export getVisitorId() + trackEvent()). Bentuk event:
  * {type, path, q?, results?, filter?, companyNo?, action?}; type:
  * pageview, search, detail, portal_click, tracker_mark, filter,
- * onboarding, report, channel_copy. Dikirim dengan sendBeacon,
+ * onboarding, report, channel_copy, share. Dikirim dengan sendBeacon,
  * tanpa await yang memblokir, tanpa throw.
+ *
+ * Aturan anti-duplikasi share vs portal_click (MKT-07): klik kanal
+ * LAMAR (portal web, wa.me/<nomor> WA HRD, mailto: email HRD) tercatat
+ * sebagai portal_click; klik/tindakan BERBAGI (tombol bagikan,
+ * tautan wa.me TANPA nomor) tercatat sebagai share dengan penanda
+ * sumber di field action ("detail" / "daftar_target" / "hasil_cari").
+ * Satu klik hanya menghasilkan satu event — klasifikasinya saling
+ * lepas, dan listener memeriksa share dulu lalu berhenti (return)
+ * sebelum memeriksa portal_click. Pembeda wa.me adalah path-nya:
+ * ada nomor → kanal lamar, tanpa nomor (wa.me/?text=...) → berbagi.
  *
  * Semua pengirim event di aplikasi mengimpor trackEvent dari file
  * ini (bukan dari lib/analytics langsung), jadi pembungkus
@@ -50,6 +60,15 @@ export function trackEvent(event) {
   trackEventBase(event);
 }
 
+/* ============ BLOK LOGIKA MURNI (MKT-07) ============
+ * Fungsi-fungsi di antara penanda __PURE_START__ dan __PURE_END__
+ * diuji unit lewat ekstraksi sumber di lib/analytics.test.js:
+ * berkas ini tidak bisa diimpor langsung oleh node:test karena
+ * impor next/navigation. Blok ini WAJIB mandiri: hanya memakai
+ * global standar (URL, Number), tanpa impor atau state lain.
+ * Jangan menambah ketergantungan di dalam blok ini.
+/* __PURE_START__ */
+
 /* Nomor perusahaan dari path /perusahaan/<no>; null bila path bukan
  * halaman detail atau nomornya bukan bilangan bulat (ANALITIK-01:
  * server menolak companyNo string, jadi klien WAJIB mengirim angka
@@ -62,20 +81,12 @@ export function extractCompanyNo(path) {
   return Number.isInteger(no) && no >= 1 ? no : null;
 }
 
-/* Halaman admin tidak dilacak (ANALITIK-07): kunjungan pengelola
- * sendiri tidak boleh mencemari statistik pengunjung. */
-export function isAdminPath(path) {
-  return (
-    path === "/admin" ||
-    (typeof path === "string" && path.startsWith("/admin/"))
-  );
-}
-
 /* Klasifikasi tautan keluar di halaman detail untuk portal_click
  * (ANALITIK-01/05). Kembalikan kanal ("portal" | "wa" | "email")
  * atau null bila tautan bukan klik lamar: tautan internal, tautan
- * github.com (bukan kanal lamar), atau skema lain. Klik ke WA HRD
- * (wa.me) dan email (mailto:) ikut terhitung dengan penanda
+ * github.com (bukan kanal lamar), skema lain, atau tautan BERBAGI
+ * (wa.me tanpa nomor — lihat classifyShareLink). Klik ke WA HRD
+ * (wa.me/<nomor>) dan email (mailto:) ikut terhitung dengan penanda
  * kanalnya di field action, supaya perusahaan yang kanal utamanya
  * WA/email tidak tampak tidak diminati. */
 export function classifyPortalLink(href, siteHostname) {
@@ -90,16 +101,63 @@ export function classifyPortalLink(href, siteHostname) {
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   if (siteHostname && url.hostname === siteHostname) return null;
   if (url.hostname === "github.com") return null;
-  if (url.hostname === "wa.me") return "wa";
+  if (url.hostname === "wa.me") {
+    /* MKT-07: wa.me/<nomor> adalah kanal lamar WA HRD; wa.me tanpa
+     * nomor (wa.me/?text=...) adalah tautan berbagi, bukan lamar —
+     * kembalikan null supaya tidak tercatat sebagai portal_click
+     * (pencatatan ganda). Tautan berbagi ditangani
+     * classifyShareLink. */
+    return /^\/\d/.test(url.pathname) ? "wa" : null;
+  }
   return "portal";
 }
 
-/* Satu komponen kecil untuk dua hal: pageview sekali per navigasi
+/* Klasifikasi tautan berbagi (MKT-07). Kembalikan sumber
+ * ("detail" | "daftar_target") atau null bila tautan bukan aksi
+ * berbagi. Satu-satunya bentuk tautan berbagi saat ini adalah
+ * wa.me TANPA nomor: tombol "WhatsApp" di halaman detail dan
+ * tautan "Bagikan daftar lowongan" di beranda sama-sama memakai
+ * wa.me/?text=.... Nilai "hasil_cari" dicadangkan untuk tombol
+ * bagikan hasil di /cari bila sudah ada (pengirim langsung
+ * trackEvent, bukan lewat listener ini). */
+export function classifyShareLink(href, path) {
+  if (typeof href !== "string" || !href) return null;
+  let url;
+  try {
+    url = new URL(href);
+  } catch {
+    return null;
+  }
+  if (url.hostname !== "wa.me") return null;
+  /* Ada path bernomor (wa.me/<nomor>) berarti kanal lamar WA HRD,
+   * bukan berbagi — ditangani classifyPortalLink. */
+  if (url.pathname !== "/" && url.pathname !== "") return null;
+  if (extractCompanyNo(path) !== null) return "detail";
+  if (path === "/") return "daftar_target";
+  return null;
+}
+
+/* __PURE_END__ */
+/* ============ AKHIR BLOK LOGIKA MURNI ============ */
+
+/* Halaman admin tidak dilacak (ANALITIK-07): kunjungan pengelola
+ * sendiri tidak boleh mencemari statistik pengunjung. */
+export function isAdminPath(path) {
+  return (
+    path === "/admin" ||
+    (typeof path === "string" && path.startsWith("/admin/"))
+  );
+}
+
+/* Satu komponen kecil untuk tiga hal: pageview sekali per navigasi
  * (kecuali halaman admin), dan satu delegated click listener untuk
- * klik lamar di halaman detail. Listener membaca tautan yang diklik
- * (a[href^="http"] atau a[href^="mailto:"]) dan hanya mengirim bila
- * sedang di /perusahaan/<no> dan tautan itu kanal lamar (portal web,
- * wa.me, atau email). Halaman detail tidak disentuh sama sekali. */
+ * klik lamar di halaman detail plus klik berbagi (MKT-07). Listener
+ * membaca tautan yang diklik (a[href^="http"] atau a[href^="mailto:"]):
+ * tautan berbagi (wa.me tanpa nomor) di halaman detail atau beranda
+ * tercatat sebagai share; tautan kanal lamar (portal web, wa.me/<nomor>,
+ * email) di halaman detail tercatat sebagai portal_click. Satu klik
+ * hanya menghasilkan satu event — share diperiksa dulu, lalu return.
+ * Halaman detail tidak disentuh sama sekali. */
 export default function AnalyticsTrack() {
   const pathname = usePathname();
   const pathRef = useRef(pathname);
@@ -116,12 +174,26 @@ export default function AnalyticsTrack() {
     function onClick(e) {
       try {
         const path = pathRef.current || "";
-        const companyNo = extractCompanyNo(path);
-        if (companyNo === null) return;
         const a = e.target && e.target.closest
           ? e.target.closest('a[href^="http"], a[href^="mailto:"]')
           : null;
         if (!a) return;
+        const companyNo = extractCompanyNo(path);
+        /* Berbagi dulu (MKT-07): tautan wa.me tanpa nomor di halaman
+         * detail ("WhatsApp") atau beranda ("Bagikan daftar lowongan")
+         * tercatat sebagai share — dan return di sini menjamin klik
+         * itu TIDAK ikut tercatat sebagai portal_click. */
+        const shareSource = classifyShareLink(a.href, path);
+        if (shareSource) {
+          trackEvent({
+            type: "share",
+            path,
+            ...(companyNo !== null ? { companyNo } : {}),
+            action: shareSource,
+          });
+          return;
+        }
+        if (companyNo === null) return;
         const channel = classifyPortalLink(a.href, window.location.hostname);
         if (!channel) return;
         trackEvent({

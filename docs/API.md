@@ -149,7 +149,7 @@ Memberi token berumur 60 detik untuk `/api/index`. Responsnya `{ "token": "...",
 
 ## POST /api/analytics
 
-Satu event analitik pengunjung anonim (pageview, search, detail, portal_click, tracker_mark, filter, onboarding, report, channel_copy). IP mentah hanya dipakai untuk hash dan batas laju, lalu dibuang; yang disimpan hanya hash IP 64 heksa. Batas 30 permintaan per menit per hash IP (cakupan `analytics`); jawaban 429 berbentuk `{ "error": "Terlalu banyak permintaan. Coba lagi sebentar." }`. Jawaban 202 walau tulis ke Firestore gagal. Endpoint ini tidak menolak user agent otomatis karena ia alat ukur; request dengan user agent kosong atau berpola bot ditandai field `uaFlag` pada dokumen. Bila env `ANALYTICS_SALT` belum dipasang, event tidak disimpan dan jawabannya 200 `{ "skipped": true }`.
+Satu event analitik pengunjung anonim (pageview, search, detail, portal_click, tracker_mark, filter, onboarding, report, channel_copy, share). IP mentah hanya dipakai untuk hash dan batas laju, lalu dibuang; yang disimpan hanya hash IP 64 heksa. Batas 30 permintaan per menit per hash IP (cakupan `analytics`); jawaban 429 berbentuk `{ "error": "Terlalu banyak permintaan. Coba lagi sebentar." }`. Jawaban 202 walau tulis ke Firestore gagal. Endpoint ini tidak menolak user agent otomatis karena ia alat ukur; request dengan user agent kosong atau berpola bot ditandai field `uaFlag` pada dokumen. Bila env `ANALYTICS_SALT` belum dipasang, event tidak disimpan dan jawabannya 200 `{ "skipped": true }`.
 
 ## Batas laju
 
