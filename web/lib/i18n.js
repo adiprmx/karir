@@ -15,7 +15,6 @@ const DICT = {
     "nav.method": "Metode",
     "nav.faq": "FAQ",
     "nav.changelog": "Perubahan",
-    "nav.admin": "Admin",
     "header.count": "{n} perusahaan",
     "footer.note":
       "Data dicek berkala langsung di browser; tiap perusahaan mencatat tanggal cek terbarunya. Lowongan bisa berubah setelah tanggal cek, selalu periksa portal resminya.",
@@ -27,9 +26,7 @@ const DICT = {
     "footer.faq": "Pertanyaan umum",
     "footer.support": "Dukungan",
     "footer.changelog": "Riwayat perubahan",
-    "footer.lamaran": "Lamaran",
     "footer.map": "Peta",
-    "footer.mulai": "Mulai",
     "footer.settings": "Pengaturan",
     /* --- W-P0-08 (kebijakan privasi + syarat penggunaan): hanya kunci
      * baru di blok ini, nilai kunci lama tidak diubah. --- */
@@ -80,42 +77,18 @@ const DICT = {
     "search.noJsFilters":
       "Filter status, urutan, dan tombol lainnya butuh JavaScript.",
     /* --- akhir T13 --- */
-    "landing.trustLabel": "Angka ringkas",
-    "landing.trustChecked": "kanal dicek",
-    "landing.trustTarget": "ada lowongan",
     "landing.trustDead": "portal tidak bisa dibuka",
-    "landing.problemTitle": "Masalah dan hasil",
-    "landing.problemLabel": "Masalah",
     "landing.problem1":
       "Kanal karir perusahaan berserakan di mana-mana, dan susah membedakan mana portal resmi dan mana bukan.",
     "landing.problem2":
       "Lowongan yang disalin dari satu situs ke situs lain sering sudah basi atau palsu.",
-    "landing.outcomeLabel": "Hasil",
-    "landing.outcome1":
-      "{n} kanal karir resmi dibuka dan dicek langsung di browser.",
-    "landing.outcome2": "{n} di antaranya ada lowongan.",
-    "landing.outcome3":
-      "Tiap baris dicatat tanggal ceknya, supaya kamu tahu seberapa segar datanya.",
-    "landing.recentLabel": "Terakhir",
     "landing.freshLabel": "Terakhir dicek ulang {date}",
     "landing.freshOk": "Segar",
     "landing.freshStale": "Sudah lama, perlu dicek ulang",
     "landing.changesTitle": "Yang berubah",
-    "landing.photosTitle": "Kerja yang dicari",
     "landing.photoWarehouse": "Helper Gudang",
     "landing.photoProduction": "Operator Produksi",
     "landing.photoCleaning": "Cleaning Service",
-    "landing.step1": "Ketik domisili dan posisi yang kamu cari.",
-    "landing.step2": "Buka kanal resminya dari hasil pencarian.",
-    "landing.step3": "Lacak lamaranmu supaya tidak ada yang terlewat.",
-    "landing.featuresTitle": "Yang bisa kamu lakukan",
-    "landing.featureSearchTitle": "Cari",
-    "landing.featureSearchDesc":
-      "Cari kanal karir berdasarkan domisili dan posisi, diurutkan dari yang paling cocok.",
-    "landing.featureTrackTitle": "Lacak lamaran",
-    "landing.featureTrackDesc":
-      "Tandai perusahaan yang sudah kamu lamar dan lihat perkembangannya. Tersimpan di browser, dan tersinkron ke akunmu bila kamu masuk.",
-    "landing.featureMapTitle": "Peta lowongan",
     "landing.featureMapDesc":
       "Lihat {n} perusahaan yang ada lowongan di peta, dikelompokkan per kota.",
     "landing.faqTitle": "Pertanyaan umum",
@@ -129,9 +102,6 @@ const DICT = {
     "landing.faq3a":
       "Kanal karir resmi tiap perusahaan dibuka langsung di browser, dan tanggal cek terakhirnya dicatat, supaya kamu tahu seberapa baru datanya.",
     "landing.faqMore": "Lihat semua pertanyaan",
-    "landing.ctaText":
-      "Cari loker dari kanal resmi, tanpa daftar dan tanpa biaya.",
-    "landing.ctaStart": "Mulai cari kerja",
     "home.title": "Lowongan yang dicek, bukan yang dicopas.",
     "home.intro": "{n} kanal karir resmi, dicek langsung di browser.",
     "home.domisili": "Domisili",
@@ -140,21 +110,10 @@ const DICT = {
     "home.posisiPerusahaan": "Posisi/perusahaan",
     "home.posisiPh": "mis. Helper Gudang",
     "home.searchBtn": "Cari loker",
-    "home.try": "Coba:",
     "home.targets": "Lowongan terverifikasi",
     "home.targetsHeading": "{n} perusahaan punya lowongan yang kamu cari",
-    "home.howTitle": "Cara kerja",
-    "home.how1": "Ketik domisili dan posisimu.",
-    "home.how2": "Pilih kanal yang paling cocok.",
-    "home.how3": "Buka portal resminya dan lamar lewat kanal resmi.",
-    "home.applyStep": "Buka portalnya dan lamar.",
-    "home.stats": "Angka data",
-    "home.dataState": "Keadaan data",
-    "home.checked": "perusahaan dicek",
-    "home.hasTarget": "ada lowongan",
     "home.freshNote":
       "{count} perusahaan dicek dalam 7 hari terakhir, terakhir {date}. Lowongan bisa berubah setelah tanggal cek.",
-    "home.viewDashboard": "Lihat dasbor",
     "search.title": "Cari kanal karir",
     "search.category": "Kategori",
     "search.allCategories": "Semua kategori",
@@ -165,7 +124,6 @@ const DICT = {
     "search.orderName": "Nama A-Z",
     "search.submit": "Cari",
     "search.reset": "Atur ulang",
-    "search.results": "hasil",
     "search.sortNote":
       "Hasil diurutkan berdasarkan kecocokan posisi, domisili, dan status verifikasi.",
     "search.domisiliPh": "Misal: Depok",
@@ -178,17 +136,11 @@ const DICT = {
     "search.metaTitle": "Cari",
     "dash.title": "Dasbor data",
     "dash.byStatus": "Sebaran status",
-    "dash.byCategory": "Kategori terbanyak",
-    "dash.targets": "Ada lowongan",
-    "dash.totalLabel": "Perusahaan dicek",
     "dash.recheck": "Perlu dicek ulang",
-    "dash.freshness": "Kesegaran data",
     "dash.numbersNote":
       "Semua angka dihitung langsung dari data {n} perusahaan. Tidak ada angka contoh.",
-    "dash.statusHeading": "Status {n} perusahaan",
     "dash.topCategories": "{n} kategori teratas",
     "dash.targetCompanies": "Perusahaan yang ada lowongan",
-    "dash.whenChecked": "Kapan dicek",
     "dash.andMore": "dan {n} lainnya di data perusahaan.",
     "dash.metaTitle": "Dasbor",
     "detail.portalBtn": "Buka portal karir",
@@ -211,7 +163,6 @@ const DICT = {
     "nav.menu": "Menu",
     "nav.settings": "Pengaturan",
     "nav.theme": "Ganti tema terang atau gelap",
-    "nav.more": "Lainnya",
     "hero.rolesLabel": "Posisi populer",
     "dash.statusQuestion": "Dari {n} kanal, apa hasil cek-nya?",
     "hero.vizQuestion": "Dari {n} kanal, berapa yang cocok denganmu?",
@@ -558,7 +509,6 @@ const DICT = {
     "nav.method": "Method",
     "nav.faq": "FAQ",
     "nav.changelog": "Changelog",
-    "nav.admin": "Admin",
     "header.count": "{n} companies",
     "footer.note":
       "Data is checked regularly, directly in the browser; each company records its latest check date. Openings can change after the check date, always verify on the official portal.",
@@ -570,9 +520,7 @@ const DICT = {
     "footer.faq": "FAQ",
     "footer.support": "Support",
     "footer.changelog": "Changelog",
-    "footer.lamaran": "Applications",
     "footer.map": "Map",
-    "footer.mulai": "Start",
     "footer.settings": "Settings",
     /* --- W-P0-08 (privacy policy + terms of use): new keys only in
      * this block, existing key values untouched. --- */
@@ -625,42 +573,18 @@ const DICT = {
     "search.noJsFilters":
       "Status and sort filters and other buttons need JavaScript.",
     /* --- end T13 --- */
-    "landing.trustLabel": "Key numbers",
-    "landing.trustChecked": "channels checked",
-    "landing.trustTarget": "openings",
     "landing.trustDead": "portals unreachable",
-    "landing.problemTitle": "The problem and the result",
-    "landing.problemLabel": "The problem",
     "landing.problem1":
       "Company career channels are scattered everywhere, and it is hard to tell which portal is official and which is not.",
     "landing.problem2":
       "Openings copied from one site to another are often stale or fake.",
-    "landing.outcomeLabel": "The result",
-    "landing.outcome1":
-      "{n} official career channels opened and checked directly in the browser.",
-    "landing.outcome2": "{n} of them have openings.",
-    "landing.outcome3":
-      "Every row records its check date, so you know how fresh the data is.",
-    "landing.recentLabel": "Last search",
     "landing.freshLabel": "Last rechecked {date}",
     "landing.freshOk": "Fresh",
     "landing.freshStale": "Stale, needs rechecking",
     "landing.changesTitle": "What changed",
-    "landing.photosTitle": "The work people look for",
     "landing.photoWarehouse": "Warehouse Helper",
     "landing.photoProduction": "Production Operator",
     "landing.photoCleaning": "Cleaning Service",
-    "landing.step1": "Type the location and role you are looking for.",
-    "landing.step2": "Open the official channel from the search results.",
-    "landing.step3": "Track your applications so nothing gets missed.",
-    "landing.featuresTitle": "What you can do",
-    "landing.featureSearchTitle": "Search",
-    "landing.featureSearchDesc":
-      "Search career channels by location and role, ranked by best match.",
-    "landing.featureTrackTitle": "Track applications",
-    "landing.featureTrackDesc":
-      "Mark the companies you applied to and follow their progress. Saved in your browser, and synced to your account when you sign in.",
-    "landing.featureMapTitle": "Openings map",
     "landing.featureMapDesc":
       "See {n} companies with openings on a map, grouped by city.",
     "landing.faqTitle": "Frequently asked questions",
@@ -674,9 +598,6 @@ const DICT = {
     "landing.faq3a":
       "Each company's official career channel is opened directly in the browser, and its latest check date is recorded, so you know how fresh the data is.",
     "landing.faqMore": "See all questions",
-    "landing.ctaText":
-      "Find openings from official channels, with no sign-up and no fees.",
-    "landing.ctaStart": "Start looking for work",
     "home.title": "Openings that were checked, not copied.",
     "home.intro": "{n} official career channels, checked directly in the browser.",
     "home.domisili": "Location",
@@ -685,21 +606,10 @@ const DICT = {
     "home.posisiPerusahaan": "Role/company",
     "home.posisiPh": "e.g. Warehouse Helper",
     "home.searchBtn": "Search jobs",
-    "home.try": "Try:",
     "home.targets": "Verified openings",
     "home.targetsHeading": "{n} companies have the opening you are looking for",
-    "home.howTitle": "How it works",
-    "home.how1": "Type your location and role.",
-    "home.how2": "Pick the best matching channel.",
-    "home.how3": "Open the official portal and apply through the official channel.",
-    "home.applyStep": "Open the portal and apply.",
-    "home.stats": "Data in numbers",
-    "home.dataState": "The state of the data",
-    "home.checked": "companies checked",
-    "home.hasTarget": "have an opening",
     "home.freshNote":
       "{count} companies checked in the last 7 days, most recently on {date}. Openings can change after the check date.",
-    "home.viewDashboard": "View dashboard",
     "search.title": "Search career channels",
     "search.category": "Category",
     "search.allCategories": "All categories",
@@ -710,7 +620,6 @@ const DICT = {
     "search.orderName": "Name A-Z",
     "search.submit": "Search",
     "search.reset": "Reset",
-    "search.results": "results",
     "search.sortNote":
       "Results are ranked by role match, location match, and verification status.",
     "search.domisiliPh": "E.g. Depok",
@@ -723,17 +632,11 @@ const DICT = {
     "search.metaTitle": "Search",
     "dash.title": "Data dashboard",
     "dash.byStatus": "Status breakdown",
-    "dash.byCategory": "Top categories",
-    "dash.targets": "Openings",
-    "dash.totalLabel": "Companies checked",
     "dash.recheck": "Needs re-checking",
-    "dash.freshness": "Data freshness",
     "dash.numbersNote":
       "Every number is computed directly from the data of {n} companies. No sample numbers.",
-    "dash.statusHeading": "Status of {n} companies",
     "dash.topCategories": "Top {n} categories",
     "dash.targetCompanies": "Companies with openings",
-    "dash.whenChecked": "When checked",
     "dash.andMore": "and {n} more in the company data.",
     "dash.metaTitle": "Dashboard",
     "detail.portalBtn": "Open career portal",
@@ -756,7 +659,6 @@ const DICT = {
     "nav.menu": "Menu",
     "nav.settings": "Settings",
     "nav.theme": "Switch light or dark theme",
-    "nav.more": "More",
     "hero.rolesLabel": "Popular roles",
     "dash.statusQuestion": "Out of {n} channels, what did the checks find?",
     "hero.vizQuestion": "Out of {n} channels, how many fit you?",
