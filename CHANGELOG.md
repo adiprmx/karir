@@ -2,6 +2,13 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.16.2 — 2026-11-15
+
+Perbaikan footer halaman pendek di HP yang tertutup bilah navigasi bawah.
+
+- Footer halaman pendek di HP tidak lagi tertutup bilah navigasi bawah: /admin dan /mulai kini menampilkan footer secara utuh, dan perbaikan yang sama berlaku untuk semua halaman pendek lainnya.
+- Akar masalah: bilah bawah tingginya 67px (66px + garis batas 1px) tetapi ruang bawah halaman hanya 66px; `main` halaman pendek juga terlalu pendek sehingga footer menjulur ke belakang bilah. Perbaikan: variabel `--tabbar` (67px) dipakai untuk ruang bawah halaman dan posisi toast, dan `main` di HP memakai `min-height: calc(100dvh - var(--bar))` sehingga tepi atas footer selalu jatuh di bawah lipatan viewport. Desktop tidak berubah.
+
 ## 2.16.1 — 2026-11-15
 
 Perbaikan tombol Salin kanal lain + dua perbaikan tampilan.

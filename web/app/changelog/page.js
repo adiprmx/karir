@@ -24,6 +24,14 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.16.2",
+    date: "15 November 2026",
+    points: [
+      "Footer halaman pendek di HP tidak lagi tertutup bilah navigasi bawah: halaman Admin dan Mulai kini menampilkan footer secara utuh, dan perbaikan yang sama berlaku untuk semua halaman pendek lainnya.",
+      "Ruang bawah halaman kini mengikuti tinggi bilah navigasi yang sebenarnya, termasuk garis batasnya, sehingga tidak ada lagi bagian footer yang tersembunyi di belakang bilah.",
+    ],
+  },
+  {
     version: "2.16.1",
     date: "15 November 2026",
     points: [
