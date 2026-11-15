@@ -683,7 +683,7 @@ describe("/api/companies/[no] dan seed-first", () => {
     assert.equal(body.company.no, 1);
   });
 
-  it("/api/companies saat marker 429: 200 dari seed 610 baris (S4)", async () => {
+  it("/api/companies saat marker 429: 200 dari seed 639 baris (S4)", async () => {
     modes.marker = "429";
     const res = await getCompanies(
       apiRequest("/api/companies", { ip: IP.misc }),
@@ -691,7 +691,7 @@ describe("/api/companies/[no] dan seed-first", () => {
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.source, "seed");
-    assert.equal(body.total, 610);
+    assert.equal(body.total, 639);
   });
 
   it("/api/companies saat Firestore sehat: source live + 2 baris tiruan", async () => {
@@ -710,7 +710,7 @@ describe("/api/companies/[no] dan seed-first", () => {
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.source, "seed");
-    assert.equal(body.total, 610);
+    assert.equal(body.total, 639);
   });
 });
 
