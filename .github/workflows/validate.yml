@@ -7,6 +7,7 @@ on:
       - "web/data/companies.json"
       - "README.md"
       - "scripts/validate.py"
+      - "scripts/test_validate.py"
       - "scripts/check-consistency.py"
   pull_request:
     paths:
@@ -14,6 +15,7 @@ on:
       - "web/data/companies.json"
       - "README.md"
       - "scripts/validate.py"
+      - "scripts/test_validate.py"
       - "scripts/check-consistency.py"
 
 jobs:
@@ -26,6 +28,13 @@ jobs:
           python-version: "3.12"
       - name: Validate CSV
         run: python3 scripts/validate.py
+      # Test atas validatornya sendiri (QA-14): CSV contoh sah/cacat
+      # di scripts/test_validate.py. pytest dipasang dulu karena
+      # image ubuntu-latest tidak membawanya secara bawaan.
+      - name: Test validator (pytest)
+        run: |
+          pip install pytest
+          python3 -m pytest scripts/test_validate.py -q
       # Cek ini mencakup DOK-01 (angka README vs CSV) dalam mode
       # non-live; README.md ada di paths pemicu di atas supaya cek
       # jalan tiap push yang mengubah README.

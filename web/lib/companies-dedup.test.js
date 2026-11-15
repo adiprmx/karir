@@ -202,14 +202,69 @@ describe("deduplikasi getCompanies() (seed-first)", () => {
   });
 
   it("revalidateCompanies saat fetch berjalan membuat panggilan berikutnya memulai fetch baru", async () => {
+    /* QA-10: janji dikendalikan manual, bukan setTimeout(1 ms) yang
+     * harus jatuh di tengah fetch 5 ms. Mock di bawah menahan
+     * halaman daftar pertama di balik gerbang yang hanya dibuka
+     * test; pemanggilan kedua baru dibuat SESUDAH mock mencatat
+     * fetch daftar pertama berjalan — urutannya eksplisit, bukan
+     * tebakan waktu. */
     const rec = rekamanBaru();
-    const mode = { gagal: false, rev: 1 };
-    pasangMock(rec, mode);
+    let lepaskanDaftar;
+    const gerbangDaftar = new Promise((r) => {
+      lepaskanDaftar = r;
+    });
+    let daftarKeduaDimulai;
+    const janjiDaftarKedua = new Promise((r) => {
+      daftarKeduaDimulai = r;
+    });
+    globalThis.fetch = async (url, options = {}) => {
+      const u = String(url);
+      if (options.method === "PATCH" && u.includes("meta/lastChange")) {
+        rec.patch.push(u);
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      if (u.includes("meta/lastChange")) {
+        rec.marker.push(u);
+        return { ok: true, status: 200, json: async () => markerDoc(1) };
+      }
+      rec.list.push(u);
+      if (u.includes("pageToken=")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ documents: HALAMAN_2 }),
+        };
+      }
+      /* Halaman pertama: beri tahu test bahwa fetch sudah berjalan,
+       * lalu tunggu gerbang dibuka test. */
+      if (rec.list.length === 2) daftarKeduaDimulai();
+      await gerbangDaftar;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          documents: HALAMAN_1,
+          nextPageToken: "hal2",
+        }),
+      };
+    };
     revalidateCompanies();
     const pertama = getCompanies();
-    await new Promise((r) => setTimeout(r, 1));
+    /* Tunggu sampai fetch daftar pertama benar-benar berjalan
+     * (bukan setTimeout: mock sendiri yang memberi tahu). */
+    await new Promise((r) => {
+      const cek = () => {
+        if (rec.list.length >= 1) r();
+        else setImmediate(cek);
+      };
+      cek();
+    });
     revalidateCompanies();
     const kedua = getCompanies();
+    /* Tunggu sampai fetch daftar kedua juga berjalan, baru buka
+     * gerbang untuk keduanya. */
+    await janjiDaftarKedua;
+    lepaskanDaftar();
     const [a, b] = await Promise.all([pertama, kedua]);
     assert.deepEqual(
       a.map((x) => x.no),

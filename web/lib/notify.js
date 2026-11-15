@@ -219,29 +219,43 @@ export function collectNewTargetAlerts(previousNos, currentTargets, todayIso) {
 
 /* Peringatan batas lamar: perusahaan yang ada lowongannya dan
  * batas_lamar-nya 0-3 hari ke depan (hari ini sampai 3 hari lagi).
- * Yang sudah lewat atau lebih dari 3 hari lagi tidak masuk. */
+ * Yang sudah lewat atau lebih dari 3 hari lagi tidak masuk.
+ *
+ * Kontrak batas_lamar (QA-11): nilainya WAJIB ISO "YYYY-MM-DD"
+ * (scripts/validate.py menolak non-ISO di CSV). Bila nilai non-ISO
+ * tetap masuk lewat jalur lain (mis. Firestore), yang BISA diparse
+ * tanpa ragu ("31 Des 2026", "06/11/2026") dinormalisasi ke ISO
+ * lewat parseBatasLamar supaya alert-nya tidak hilang diam-diam;
+ * id alert dan field batasLamar memakai ISO hasil normalisasi itu.
+ * Yang TIDAK bisa diparse dilewati (tidak ada alert, tidak ada
+ * tanggal yang dikarang). */
 export function collectDeadlineAlerts(targets, todayIso) {
   return (targets || [])
     .filter((c) => typeof c.batas_lamar === "string" && c.batas_lamar)
-    .map((c) => ({
-      company: c,
-      daysLeft: daysUntil(c.batas_lamar, todayIso),
-    }))
+    .map((c) => {
+      const iso = parseBatasLamar(c.batas_lamar);
+      return {
+        company: c,
+        iso,
+        daysLeft: iso === null ? null : daysUntil(iso, todayIso),
+      };
+    })
     .filter(
       (x) =>
+        x.iso !== null &&
         x.daysLeft !== null &&
         x.daysLeft >= 0 &&
         x.daysLeft <= DEADLINE_WINDOW_DAYS,
     )
     .sort((a, b) => Number(a.company.no) - Number(b.company.no))
-    .map(({ company: c, daysLeft }) => ({
-      id: deadlineAlertId(c.no, c.batas_lamar),
+    .map(({ company: c, iso, daysLeft }) => ({
+      id: deadlineAlertId(c.no, iso),
       type: "deadline",
       companyNo: Number(c.no),
       perusahaan: c.perusahaan || "",
       posisi: c.posisi || "",
       link: c.link_karir || "",
-      batasLamar: c.batas_lamar,
+      batasLamar: iso,
       daysLeft,
       createdAt: todayIso,
     }));

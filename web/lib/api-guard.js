@@ -33,15 +33,23 @@ export function issueToken(secret, nowSec = Math.floor(Date.now() / 1000)) {
 /* Periksa token. Benar hanya bila bentuknya utuh, tanda tangannya cocok
  * dengan secret, dan umurnya tidak lebih dari maxAgeSec detik.
  * Token dari masa depan ditolak: jam terbit dan jam periksa sama-sama
- * jam server, jadi tidak ada alasan token lebih baru dari sekarang. */
-export function verifyToken(token, secret, maxAgeSec = TOKEN_MAX_AGE_SEC) {
+ * jam server, jadi tidak ada alasan token lebih baru dari sekarang.
+ * Parameter nowSec opsional (default jam sekarang) supaya test bisa
+ * mengunci batas umur tanpa bergantung pada detik yang berganti di
+ * antara dua pemanggilan Date.now() (QA-10); perilaku produksi
+ * tidak berubah bila parameter ini tidak diisi. */
+export function verifyToken(
+  token,
+  secret,
+  maxAgeSec = TOKEN_MAX_AGE_SEC,
+  nowSec = Math.floor(Date.now() / 1000),
+) {
   if (typeof token !== "string") return false;
   const parts = token.split(".");
   if (parts.length !== 2) return false;
   const [tsText, sig] = parts;
   if (!/^\d+$/.test(tsText) || !/^[0-9a-f]{64}$/.test(sig)) return false;
   const issuedAt = Number(tsText);
-  const nowSec = Math.floor(Date.now() / 1000);
   if (issuedAt > nowSec) return false;
   if (nowSec - issuedAt > maxAgeSec) return false;
   const expected = createHmac("sha256", secret)

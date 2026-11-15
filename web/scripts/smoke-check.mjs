@@ -3,9 +3,13 @@
  *   BASE_URL=http://localhost:3000 node scripts/smoke-check.mjs
  * BASE_URL bawaan: http://localhost:3000.
  *
- * Lima cek: Beranda 200 + judul utama, /api/stats 200 + total sesuai
+ * Delapan cek: Beranda 200 + judul utama, /api/stats 200 + total sesuai
  * seed, /api/companies?q=Novell 200 + Novell di hasil, /api/index 200
  * dengan token dari /api/token, /changelog 200 + versi kini.
+ * Tiga cek tambahan (T16-B, PETA-06/AKUN-14/NOTIF-12): /peta 200 +
+ * judul halaman, /pengaturan 200 + judul halaman, /api/changes 200 +
+ * larik changes (degraded boleh true — rute itu memang menjawab 200
+ * dengan daftar kosong saat Firestore bermasalah).
  * Jumlah perusahaan yang diharapkan dibaca dari seed repo
  * (web/data/companies.json), bukan angka yang dikode keras — data
  * bertambah lewat hunting harian, dan smoke test harus ikut.
@@ -19,7 +23,7 @@
  * /api/token, lalu memanggil /api/index dengan header Authorization
  * Bearer. Semua fetch memakai User-Agent browser biasa dan Referer
  * asal situs sendiri, supaya lolos gerbang token + UA.
- * Kelima cek WAJIB berjalan di semua lingkungan, termasuk CI.
+ * Kedelapan cek WAJIB berjalan di semua lingkungan, termasuk CI.
  * Arsitektur seed-first membuat rute data tidak lagi menjawab 503
  * saat Firestore tak terjangkau (mis. CI memakai kunci dummy):
  * rute-rute itu jatuh ke seed dan menjawab 200 dengan data seed,
@@ -278,11 +282,89 @@ async function checkChangelog() {
   pass(name, `200, ${EXPECTED_VERSION} ada`);
 }
 
+/* PETA-06: halaman peta tersaji (data dari seed bila Firestore
+ * tidak terjangkau, jadi 200 tetap diharapkan di CI). */
+async function checkPeta() {
+  const name = "GET /peta";
+  let res;
+  try {
+    res = await fetchText("/peta");
+  } catch (err) {
+    fail(name, err.name === "AbortError" ? "timeout 10 dtk" : String(err));
+    return;
+  }
+  if (res.status !== 200) {
+    fail(name, statusDetail(res.status));
+    return;
+  }
+  if (!res.text.includes("Peta lowongan")) {
+    fail(name, "judul halaman tidak ditemukan");
+    return;
+  }
+  pass(name, "200, judul halaman ada");
+}
+
+/* AKUN-14: halaman pengaturan tersaji. Isi datanya dirender klien,
+ * jadi yang diperiksa hanya status + judul halaman. */
+async function checkPengaturan() {
+  const name = "GET /pengaturan";
+  let res;
+  try {
+    res = await fetchText("/pengaturan");
+  } catch (err) {
+    fail(name, err.name === "AbortError" ? "timeout 10 dtk" : String(err));
+    return;
+  }
+  if (res.status !== 200) {
+    fail(name, statusDetail(res.status));
+    return;
+  }
+  if (!res.text.includes("Pengaturan")) {
+    fail(name, "judul halaman tidak ditemukan");
+    return;
+  }
+  pass(name, "200, judul halaman ada");
+}
+
+/* NOTIF-12: umpan perubahan menjawab 200 dengan larik changes.
+ * Bila Firestore bermasalah, rute menjawab degraded true dengan
+ * larik kosong — itu tetap lolos, karena yang diperiksa di sini
+ * adalah rute dan bentuk responsnya, bukan isi Firestore. */
+async function checkChanges() {
+  const name = "GET /api/changes";
+  let res;
+  try {
+    res = await fetchText("/api/changes");
+  } catch (err) {
+    fail(name, err.name === "AbortError" ? "timeout 10 dtk" : String(err));
+    return;
+  }
+  if (res.status !== 200) {
+    fail(name, statusDetail(res.status));
+    return;
+  }
+  let data;
+  try {
+    data = JSON.parse(res.text);
+  } catch {
+    fail(name, "bukan JSON");
+    return;
+  }
+  if (!Array.isArray(data.changes)) {
+    fail(name, "tidak ada larik changes");
+    return;
+  }
+  pass(name, `200, ${data.changes.length} perubahan`);
+}
+
 await checkHome();
 await checkStats();
 await checkCompanies();
 await checkIndex();
 await checkChangelog();
+await checkPeta();
+await checkPengaturan();
+await checkChanges();
 
 const passed = results.filter((r) => r.outcome === "PASS").length;
 const failed = results.filter((r) => r.outcome === "FAIL").length;

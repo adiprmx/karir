@@ -157,6 +157,65 @@ describe("collectDeadlineAlerts", () => {
     );
     assert.equal(alerts[0].id, "deadline-1-2026-11-08");
   });
+
+  it("batas_lamar non-ISO yang bisa diparse dinormalisasi ke ISO (QA-11)", () => {
+    /* Kontrak: CSV wajib ISO (validate.py), tetapi nilai non-ISO
+     * yang masuk lewat jalur lain tidak boleh membuat alert hilang
+     * diam-diam bila tanggalnya bisa diparse tanpa ragu. Id alert
+     * dan field batasLamar memakai ISO hasil normalisasi. */
+    const alerts = collectDeadlineAlerts(
+      [
+        target({ no: 1, batas_lamar: "10 Nov 2026" }),
+        target({ no: 2, batas_lamar: "11/11/2026" }),
+        target({ no: 3, batas_lamar: "11 November 2026" }),
+      ],
+      "2026-11-08",
+    );
+    assert.deepEqual(
+      alerts.map((a) => a.companyNo),
+      [1, 2, 3],
+    );
+    assert.deepEqual(
+      alerts.map((a) => a.batasLamar),
+      ["2026-11-10", "2026-11-11", "2026-11-11"],
+    );
+    assert.deepEqual(
+      alerts.map((a) => a.id),
+      [
+        "deadline-1-2026-11-10",
+        "deadline-2-2026-11-11",
+        "deadline-3-2026-11-11",
+      ],
+    );
+    assert.deepEqual(
+      alerts.map((a) => a.daysLeft),
+      [2, 3, 3],
+    );
+  });
+
+  it("batas_lamar non-ISO di luar jendela tetap tidak masuk alert", () => {
+    const alerts = collectDeadlineAlerts(
+      [target({ no: 1, batas_lamar: "20 Des 2026" })],
+      "2026-11-08",
+    );
+    assert.deepEqual(alerts, []);
+  });
+
+  it("batas_lamar yang tidak bisa diparse dilewati tanpa alert (QA-11)", () => {
+    /* "segera", "31 Feb 2026", dan "batas 10 Nov 2026" tidak bisa
+     * diparse tanpa ragu oleh parseBatasLamar: tidak ada tanggal
+     * yang dikarang, dan tidak ada alert untuknya. */
+    const alerts = collectDeadlineAlerts(
+      [
+        target({ no: 1, batas_lamar: "segera" }),
+        target({ no: 2, batas_lamar: "31 Feb 2026" }),
+        target({ no: 3, batas_lamar: "batas 10 Nov 2026" }),
+        target({ no: 4, batas_lamar: "10 Foo 2026" }),
+      ],
+      "2026-11-08",
+    );
+    assert.deepEqual(alerts, []);
+  });
 });
 
 describe("formatTelegramMessage", () => {

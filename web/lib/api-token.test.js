@@ -41,11 +41,26 @@ describe("issueToken dan verifyToken", () => {
   });
 
   it("token kedaluwarsa ditolak", () => {
-    const nowSec = Math.floor(Date.now() / 1000);
+    /* Jam disuntik eksplisit (QA-10): batas 60 detik diuji pada jam
+     * yang sama untuk penerbitan dan pemeriksaan, jadi pergantian
+     * detik di antara dua pemanggilan Date.now() tidak bisa
+     * menggagalkan test padahal kodenya benar. */
+    const nowSec = 1_800_000_000;
     const old = craftToken(SECRET, nowSec - 61);
-    assert.equal(verifyToken(old, SECRET, 60), false);
+    assert.equal(verifyToken(old, SECRET, 60, nowSec), false);
     const justInside = craftToken(SECRET, nowSec - 60);
-    assert.equal(verifyToken(justInside, SECRET, 60), true);
+    assert.equal(verifyToken(justInside, SECRET, 60, nowSec), true);
+    /* Batas inklusif juga di detik 61: 61 detik lewat batas. */
+    assert.equal(
+      verifyToken(craftToken(SECRET, nowSec - 61), SECRET, 60, nowSec),
+      false,
+    );
+  });
+
+  it("tanpa jam eksplisit, verifyToken memakai jam sekarang", () => {
+    const token = issueToken(SECRET);
+    assert.equal(verifyToken(token, SECRET), true);
+    assert.equal(verifyToken(token, SECRET, 60), true);
   });
 
   it("token dengan secret lain ditolak", () => {

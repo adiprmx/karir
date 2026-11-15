@@ -1,0 +1,346 @@
+"""Test watcher notifikasi Karir (NOTIF-12), memakai unittest stdlib.
+Dijalankan dengan: python3 web/scripts/notify-watch.test.py
+
+Watcher diimpor langsung dari /home/hatch/workspace/.claude-v280/
+notify_watch.py — tanpa jaringan, tanpa Firestore live, tanpa token
+asli: call_curl/send_telegram/marker_exists diganti tiruan di tiap
+test yang menyentuh transport. main() TIDAK dites (butuh token +
+jaringan). check_cron_run selalu dipanggil dengan dry_run=True,
+supaya tidak ada time.sleep(180) dan tidak ada kirim Telegram.
+Bila berkas watcher tidak ada (mis. di CI), seluruh test dilewati.
+"""
+import importlib.util
+import io
+import os
+import sys
+import unittest
+from contextlib import redirect_stdout
+
+WATCHER_PATH = "/home/hatch/workspace/.claude-v280/notify_watch.py"
+
+
+@unittest.skipIf(
+    not os.path.exists(WATCHER_PATH),
+    "berkas watcher tidak ada di mesin ini",
+)
+class TestNotifyWatch(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location(
+            "notify_watch", WATCHER_PATH
+        )
+        cls.w = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.w)
+
+    def setUp(self):
+        self.w = self.__class__.w
+        # Pulihkan tiruan antar test.
+        self._asli = {
+            "call_curl": self.w.call_curl,
+            "send_telegram": self.w.send_telegram,
+            "marker_exists": self.w.marker_exists,
+            "write_marker": self.w.write_marker,
+            "ensure_token": self.w.ensure_token,
+        }
+
+    def tearDown(self):
+        for k, v in self._asli.items():
+            setattr(self.w, k, v)
+
+    # --- pembantu tiruan transport ---
+
+    def pasang_call_curl(self, peta):
+        """peta: substring URL -> (http, dict) atau daftar berurutan
+        jawaban bila URL yang sama dipanggil berkali-kali."""
+        panggilan = []
+
+        def tiruan(method, url, body=None):
+            panggilan.append((method, url, body))
+            for kunci, jawaban in peta.items():
+                if kunci in url:
+                    if isinstance(jawaban, list):
+                        return jawaban.pop(0)
+                    return jawaban
+            return "404", {}
+
+        self.w.call_curl = tiruan
+        return panggilan
+
+    def dokumen_alert(self, id_, tipe="new-target", sent=False, **lebih):
+        fields = {
+            "type": {"stringValue": tipe},
+            "companyNo": {"integerValue": "1"},
+            "perusahaan": {"stringValue": "Perusahaan Uji Satu"},
+            "posisi": {"stringValue": "Helper Gudang"},
+            "link": {"stringValue": "https://contoh.test/karir"},
+            "batasLamar": {"stringValue": ""},
+            "createdAt": {"stringValue": "2026-11-15T01:00:00Z"},
+            "sent": {"booleanValue": sent},
+        }
+        for k, v in lebih.items():
+            if isinstance(v, int):
+                fields[k] = {"integerValue": str(v)}
+            elif isinstance(v, bool):
+                fields[k] = {"booleanValue": v}
+            else:
+                fields[k] = {"stringValue": v}
+        return {
+            "name": f"projects/karir-9d53a/databases/(default)/documents/alerts/{id_}",
+            "fields": fields,
+        }
+
+    # --- doc_to_alert ---
+
+    def test_doc_to_alert_memetakan_semua_field(self):
+        a = self.w.doc_to_alert(
+            self.dokumen_alert(
+                "abc123", batasLamar="2026-11-20", daysLeft=5,
+            )
+        )
+        self.assertEqual(a["id"], "abc123")
+        self.assertEqual(a["type"], "new-target")
+        self.assertEqual(a["companyNo"], 1)
+        self.assertEqual(a["perusahaan"], "Perusahaan Uji Satu")
+        self.assertEqual(a["posisi"], "Helper Gudang")
+        self.assertEqual(a["batasLamar"], "2026-11-20")
+        self.assertEqual(a["daysLeft"], 5)
+        self.assertFalse(a["sent"])
+
+    def test_doc_to_alert_field_hilang_jadi_kosong(self):
+        a = self.w.doc_to_alert({"name": "x/alerts/z9", "fields": {}})
+        self.assertEqual(a["id"], "z9")
+        self.assertEqual(a["companyNo"], 0)
+        self.assertEqual(a["perusahaan"], "")
+        self.assertIsNone(a["daysLeft"])
+        self.assertFalse(a["sent"])
+
+    # --- days_left_on / format ---
+
+    def test_days_left_on(self):
+        self.assertEqual(self.w.days_left_on("2026-11-16", "2026-11-15"), 1)
+        self.assertEqual(self.w.days_left_on("2026-11-15", "2026-11-15"), 0)
+        self.assertEqual(self.w.days_left_on("2026-11-14", "2026-11-15"), -1)
+        self.assertIsNone(self.w.days_left_on("bukan-tanggal", "2026-11-15"))
+        self.assertIsNone(self.w.days_left_on("", "2026-11-15"))
+        self.assertIsNone(self.w.days_left_on("2026-11-16", None))
+
+    def test_format_tanggal(self):
+        self.assertEqual(self.w.format_tanggal("2026-11-15"), "15 Nov 2026")
+        self.assertEqual(self.w.format_tanggal("2026-01-05"), "5 Jan 2026")
+        self.assertEqual(self.w.format_tanggal("rusak"), "rusak")
+
+    def test_format_angka_gaya_indonesia(self):
+        self.assertEqual(self.w.format_angka(35000), "35.000")
+        self.assertEqual(self.w.format_angka(50000), "50.000")
+        self.assertEqual(self.w.format_angka(0), "0")
+
+    # --- format_message (NOTIF-09) ---
+
+    def test_format_message_hitung_ulang_days_left_dari_tanggal_kirim(self):
+        """daysLeft tersimpan beku di waktu pembuatan alert; pesan
+        menghitung ulang dari batasLamar terhadap tanggal kirim."""
+        alert = {
+            "id": "d1", "type": "deadline", "companyNo": 1,
+            "perusahaan": "Perusahaan Uji Satu", "posisi": "Helper Gudang",
+            "link": "", "batasLamar": "2026-11-18",
+            "daysLeft": 1,  # nilai lama, sudah tidak benar
+            "createdAt": "2026-11-15T01:00:00Z", "sent": False,
+        }
+        teks = self.w.format_message([alert], "2026-11-15")
+        self.assertIn("3 hari lagi", teks)
+        self.assertIn("18 Nov 2026", teks)
+        self.assertNotIn("1 hari lagi", teks)
+
+    def test_format_message_batas_lewat_dilewati(self):
+        alert = {
+            "id": "d1", "type": "deadline", "companyNo": 1,
+            "perusahaan": "Perusahaan Uji Satu", "posisi": "",
+            "link": "", "batasLamar": "2026-11-10",
+            "daysLeft": -5,
+            "createdAt": "2026-11-15T01:00:00Z", "sent": False,
+        }
+        teks = self.w.format_message([alert], "2026-11-15")
+        self.assertNotIn("Perusahaan Uji Satu", teks)
+
+    def test_format_message_target_baru_dan_blok_kuota_di_atas(self):
+        baru = {
+            "id": "n1", "type": "new-target", "companyNo": 1,
+            "perusahaan": "Perusahaan Uji Satu", "posisi": "Helper Gudang",
+            "link": "https://contoh.test/karir",
+            "batasLamar": "", "daysLeft": None,
+            "createdAt": "2026-11-15T01:00:00Z", "sent": False,
+        }
+        kuota = {
+            "id": "q1", "type": "quota", "companyNo": 0,
+            "perusahaan": "", "posisi": "", "link": "",
+            "batasLamar": "", "daysLeft": None,
+            "createdAt": "2026-11-15T01:00:00Z", "sent": False,
+            "readsEstimate": 35000, "percent": None,
+        }
+        teks = self.w.format_message([baru, kuota], "2026-11-15")
+        self.assertIn("70%", teks)
+        self.assertIn("35.000 dari 50.000 baca", teks)
+        self.assertIn("lowongan target baru", teks)
+        # Blok kuota di atas blok perusahaan.
+        self.assertLess(teks.index("70%"), teks.index("lowongan target baru"))
+
+    def test_format_message_posisi_panjang_dipotong_140(self):
+        alert = {
+            "id": "n1", "type": "new-target", "companyNo": 1,
+            "perusahaan": "Perusahaan Uji Satu", "posisi": "X" * 200,
+            "link": "", "batasLamar": "", "daysLeft": None,
+            "createdAt": "2026-11-15T01:00:00Z", "sent": False,
+        }
+        teks = self.w.format_message([alert], "2026-11-15")
+        self.assertIn("…", teks)
+        self.assertNotIn("X" * 200, teks)
+
+    # --- split_message (NOTIF-08) ---
+
+    def test_split_message(self):
+        self.assertEqual(self.w.split_message(""), [])
+        self.assertEqual(self.w.split_message("pendek"), ["pendek"])
+        panjang = "\n".join(f"baris {i} " + "x" * 100 for i in range(100))
+        potongan = self.w.split_message(panjang)
+        self.assertTrue(all(len(p) <= 4096 for p in potongan))
+        self.assertEqual("\n".join(potongan), panjang)
+        self.assertGreater(len(potongan), 1)
+
+    # --- list_unsent ---
+
+    def test_list_unsent_paginasi_saring_urut(self):
+        halaman1 = {
+            "documents": [
+                self.dokumen_alert("b2", createdAt="2026-11-15T02:00:00Z"),
+                self.dokumen_alert("a1", createdAt="2026-11-15T01:00:00Z"),
+                self.dokumen_alert("sudah", sent=True),
+                self.dokumen_alert("penanda", tipe="cron-miss"),
+            ],
+            "nextPageToken": "hal2",
+        }
+        halaman2 = {
+            "documents": [
+                self.dokumen_alert("c3", tipe="deadline",
+                                   createdAt="2026-11-15T01:30:00Z"),
+            ],
+        }
+        self.pasang_call_curl({
+            "pageToken=hal2": ("200", halaman2),
+            "/alerts?": ("200", halaman1),
+        })
+        hasil = self.w.list_unsent()
+        self.assertEqual([a["id"] for a in hasil], ["a1", "c3", "b2"])
+
+    def test_list_unsent_401_retry_token_sekali(self):
+        self.w.ensure_token = lambda: True
+        jawaban = [
+            ("401", {}),
+            ("200", {"documents": [self.dokumen_alert("a1")]}),
+        ]
+        self.w.call_curl = lambda m, u, body=None: jawaban.pop(0)
+        hasil = self.w.list_unsent()
+        self.assertEqual([a["id"] for a in hasil], ["a1"])
+
+    def test_list_unsent_baca_gagal_jadi_none(self):
+        self.pasang_call_curl({"/alerts?": ("500", {})})
+        self.assertIsNone(self.w.list_unsent())
+
+    # --- kesehatan cron (OPS-01) ---
+
+    def test_get_run_doc_tiga_status(self):
+        self.pasang_call_curl({
+            "/cron-runs/2026-11-15": ("200", {"fields": {"openSkipped": {"integerValue": "0"}}}),
+            "/cron-runs/2026-11-14": ("404", {}),
+            "/cron-runs/2026-11-13": ("429", {}),
+        })
+        self.assertEqual(
+            self.w.get_run_doc("2026-11-15"),
+            ("ok", {"openSkipped": {"integerValue": "0"}}),
+        )
+        self.assertEqual(self.w.get_run_doc("2026-11-14"), ("missing", None))
+        self.assertEqual(self.w.get_run_doc("2026-11-13"), ("error", None))
+
+    def test_run_open_skipped(self):
+        self.assertEqual(self.w.run_open_skipped({}), 0)
+        self.assertEqual(
+            self.w.run_open_skipped({"openSkipped": {"integerValue": "3"}}), 3
+        )
+        self.assertEqual(
+            self.w.run_open_skipped({"openSkipped": {"integerValue": "rusak"}}), 0
+        )
+
+    def test_check_cron_run_heartbeat_hilang_dry_run_alarm(self):
+        self.pasang_call_curl({"/cron-runs/2026-11-15": ("404", {})})
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True)
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])  # dry-run tidak mengirim
+        self.assertIn("Cron recheck Karir belum tercatat berjalan", out.getvalue())
+
+    def test_check_cron_run_sehat_tanpa_alarm(self):
+        self.pasang_call_curl({
+            "/cron-runs/2026-11-15": (
+                "200", {"fields": {"openSkipped": {"integerValue": "0"}}}
+            ),
+        })
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        self.assertTrue(self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True))
+        self.assertEqual(terkirim, [])
+
+    def test_check_cron_run_terpotong_dua_hari_dry_run_alarm(self):
+        self.pasang_call_curl({
+            "/cron-runs/2026-11-15": (
+                "200", {"fields": {"openSkipped": {"integerValue": "2"}}}
+            ),
+            "/cron-runs/2026-11-14": (
+                "200", {"fields": {"openSkipped": {"integerValue": "1"}}}
+            ),
+        })
+        self.w.marker_exists = lambda mid: False
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True)
+        self.assertTrue(hasil)
+        self.assertIn("2 hari berturut-turut", out.getvalue())
+
+    def test_check_cron_run_terpotong_satu_hari_belum_alarm(self):
+        self.pasang_call_curl({
+            "/cron-runs/2026-11-15": (
+                "200", {"fields": {"openSkipped": {"integerValue": "2"}}}
+            ),
+            "/cron-runs/2026-11-14": (
+                "200", {"fields": {"openSkipped": {"integerValue": "0"}}}
+            ),
+        })
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True)
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("belum alarm", out.getvalue())
+
+    def test_check_cron_run_penanda_sudah_ada_tidak_kirim_lagi(self):
+        self.pasang_call_curl({"/cron-runs/2026-11-15": ("404", {})})
+        self.w.marker_exists = lambda mid: True
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        self.assertTrue(self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True))
+        self.assertEqual(terkirim, [])
+
+    def test_check_cron_run_baca_gagal_dilewati_tanpa_alarm_palsu(self):
+        self.pasang_call_curl({"/cron-runs/2026-11-15": ("429", {})})
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        self.assertTrue(self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True))
+        self.assertEqual(terkirim, [])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

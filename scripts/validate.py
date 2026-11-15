@@ -309,6 +309,9 @@ def main() -> int:
 
     if not rows:
         errors.append("CSV kosong")
+        print("VALIDASI GAGAL: 1 masalah")
+        print(" - CSV kosong")
+        return 1
     numbers = [int(r["no"]) for r in rows if r["no"].isdigit()]
     if numbers != list(range(1, len(rows) + 1)):
         errors.append("kolom no tidak berurutan mulai dari 1")
