@@ -24,6 +24,16 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.16.0",
+    date: "15 November 2026",
+    points: [
+      "Banyak perbaikan kecil di seluruh situs: tampilan, tulisan, dan alur yang lebih rapi.",
+      "Dua kanal lamaran baru tercatat: email rekrutmen Pertamina dan formulir lamaran Guardian.",
+      "Lowongan Train Attendant Angkasa Pura Supports dikonfirmasi masih buka sampai 18 November 2026.",
+      "Pengujian otomatis bertambah banyak, supaya perubahan berikutnya lebih aman.",
+    ],
+  },
+  {
     version: "2.15.0",
     date: "15 November 2026",
     points: [

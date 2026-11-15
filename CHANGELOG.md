@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.16.0 — 2026-11-15
+
+Poles Fase 5 (125 temuan P2) + terapan kanal baris lama (HUNT-10) + pengujian menyeluruh (T16). Satu bump konsolidasi untuk seluruh Fase 5, tanpa bump per batch.
+
+- Poles: dokumen produk dan pemulihan data, lisensi, template kontribusi; panel admin dipecah dari 2476 menjadi 884 baris (+11 modul); header keamanan dan gerbang API; shell/PWA (noindex /lamaran + /mulai, pemulihan global, kartu pasang); data dan validator (catatan 421 baris, dokumen perusahaan 406 → 610 entri); dasbor dan pelacak (ubin bertaut, persentase, sinkron batch, status "Diterima"); kuota dan retensi (pembersihan 4 koleksi, /api/index terpangkas 13 → 8 field); berbagi dan throttle laporan; beranda (foto lokal, satu pemuatan perubahan, penanganan error).
+- Copy dan bahasa: 207 kunci i18n baru, laporan masalah 3 jenis, 4 halaman info hanya bahasa Indonesia saat locale=en, lisensi CC BY 4.0 di Tentang; SEO (canonical per halaman, JSON-LD, /feed.xml); admin dan akun (timeout cek tautan 20 dtk, lupa kata sandi, muat bertahap per 200, pengukur kekuatan kata sandi); DevOps/CI (cadangan Firestore mingguan, smoke tanpa SKIP, tag versi otomatis, .env.example 17 variabel).
+- Kunci i18n dibersihkan 435 → 391 (44 kunci mati dihapus, paritas id↔en 0 selisih); peta kini menjelaskan saat memuat dan saat kosong; canonical ditambahkan untuk /dukungan, /privasi, /syarat.
+- Data (W2d/HUNT-10): kanal baru Pertamina (email rekrutmen resmi + Instagram @pertaminacareer, status tetap) dan Guardian (formulir Store Crew Festive Nataru-Lebaran, status → Ada lowongan); cek ulang langsung Angkasa Pura Supports — TRAIN ATTENDANT masih buka sampai 18 Nov 2026 (batas_lamar diperbarui). Total 639 perusahaan, 301 ada lowongan.
+- Tes (T16): 243 test baru — 1039 node:test (796 + 243), 48 pytest untuk scripts/validate.py, 21 unittest untuk watcher notifikasi; 2 test rapuh waktu diperbaiki (parameter jam di verifyToken, gerbang janji di dedup); offset zona waktu todayJakarta dikunci (17:00Z vs 18:00Z); kontrak batas_lamar non-ISO ditegaskan (yang bisa diparse dinormalisasi, yang tidak dilewati); validate.py tidak lagi crash pada CSV kosong. Smoke kini 8 cek (+/peta, /pengaturan, /api/changes).
+- Catatan: rules reports ketat (kolom `jenis` wajib) diterbitkan SETELAH deploy kode ini live (16 Nov), bukan sebelumnya — klien produksi lama belum mengirim kolom itu.
+
 ## 2.15.0 — 2026-11-15
 
 Aksesibilitas (T13, Fase 4): manajemen fokus, ketahanan tanpa JavaScript, umpan balik pembaca layar, kontras, dan target sentuh.
