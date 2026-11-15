@@ -191,12 +191,21 @@ export default async function CompanyDetail({ params }) {
           size={64}
         />
         <div className="d-head-text">
-          {company.kategori && <p className="co-cat">{company.kategori}</p>}
+          {/* DET-10: kategori diberi label supaya tidak tampil sebagai
+            * kata gantung tanpa konteks. */}
+          {company.kategori && (
+            <p className="co-cat">
+              {t(locale, "detail.category")}: {company.kategori}
+            </p>
+          )}
           <h1>{company.perusahaan}</h1>
           <StatusStamp status={company.status} />
         </div>
       </header>
 
+      {/* DET-10: penjelasan status diberi judul supaya tidak tampil
+        * sebagai paragraf tanpa konteks. */}
+      <h2 className="section-label">{t(locale, "detail.explain")}</h2>
       <p className="d-explain">
         {STATUS_EXPLAIN[company.status] || ""}
       </p>
@@ -249,10 +258,22 @@ export default async function CompanyDetail({ params }) {
           url={url}
           labels={{
             share: t(locale, "detail.share"),
+            shareFailed: t(locale, "search.shareFailed"),
             copied: t(locale, "detail.copied"),
             report: t(locale, "detail.report"),
             reportHint: t(locale, "detail.reportHint"),
             reportSent: t(locale, "detail.reportSent"),
+            reportFailed: t(locale, "detail.reportFailed"),
+            reportTooSoon: t(locale, "detail.reportTooSoon"),
+            reportSessionLimit: t(locale, "detail.reportSessionLimit"),
+            reportTypeLabel: t(locale, "detail.reportTypeLabel"),
+            reportReasonLabel: t(locale, "detail.reportReasonLabel"),
+            reportTypeDead: t(locale, "detail.reportTypeDead"),
+            reportTypeWrong: t(locale, "detail.reportTypeWrong"),
+            reportTypeOther: t(locale, "detail.reportTypeOther"),
+            reportPhDead: t(locale, "detail.reportPhDead"),
+            reportPhWrong: t(locale, "detail.reportPhWrong"),
+            reportPhOther: t(locale, "detail.reportPhOther"),
             loading: t(locale, "common.loading"),
             newTab: t(locale, "common.newTab"),
           }}
@@ -368,7 +389,7 @@ export default async function CompanyDetail({ params }) {
                 <dt>{t(locale, "detail.checked")}</dt>
                 <dd>
                   {formatDate(company.tanggal_cek, locale) ||
-                    "Belum ada tanggal cek."}
+                    t(locale, "detail.noCheckDate")}
                   {ago && <span className="ago"> · {ago}</span>}
                 </dd>
               </div>
@@ -410,7 +431,38 @@ export default async function CompanyDetail({ params }) {
         </Reveal>
 
         <Reveal className="d-col" delay={80}>
-          <TrackerControl company={company} />
+          <TrackerControl
+            company={company}
+            labels={{
+              title: t(locale, "tracker.title"),
+              loading: t(locale, "tracker.loading"),
+              statusLabel: t(locale, "tracker.statusLabel"),
+              dateLabel: t(locale, "tracker.dateLabel"),
+              noteLabel: t(locale, "tracker.noteLabel"),
+              notePlaceholder: t(locale, "tracker.notePlaceholder"),
+              remove: t(locale, "tracker.remove"),
+              deleteTitle: t(locale, "tracker.deleteTitle"),
+              deleteMessage: t(locale, "tracker.deleteMessage"),
+              deleteConfirm: t(locale, "common.deleteConfirm"),
+              cancel: t(locale, "common.cancel"),
+              close: t(locale, "common.close"),
+              saved: t(locale, "tracker.saved"),
+              saveFailed: t(locale, "tracker.saveFailed"),
+              deleted: t(locale, "tracker.deleted"),
+              hint: t(locale, "tracker.hint"),
+              sync: {
+                saved: t(locale, "sync.saved"),
+                sending: t(locale, "sync.sending"),
+                pending: t(locale, "sync.pending"),
+                offline: t(locale, "sync.offline"),
+                busy: t(locale, "sync.busy"),
+                session: t(locale, "sync.session"),
+                denied: t(locale, "sync.denied"),
+                failed: t(locale, "sync.failed"),
+                guest: t(locale, "sync.guest"),
+              },
+            }}
+          />
         </Reveal>
       </div>
 

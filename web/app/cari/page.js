@@ -84,6 +84,12 @@ export default async function Cari({ searchParams }) {
     share: t(locale, "search.share"),
     shareCopied: t(locale, "search.shareCopied"),
     shareFailed: t(locale, "search.shareFailed"),
+    /* W2a (KONTEN-04/UX-08): chip "Baru" dan chip alasan kecocokan
+     * di kartu perusahaan, serta label tutup lembar filter. */
+    new: t(locale, "common.new"),
+    matchPosition: t(locale, "search.matchPosition"),
+    matchLocation: t(locale, "search.matchLocation"),
+    close: t(locale, "common.close"),
   };
   /* Nilai kota dari alamat hanya diterima bila kota itu dikenal
    * (daftar lib/cities.js); nilai asing diabaikan jadi tanpa filter. */

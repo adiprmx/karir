@@ -275,7 +275,7 @@ function focusableIn(root) {
  * di mana pun Sheet diletakkan (menu di navigasi, filter di /cari).
  * onClose dibaca lewat ref supaya efek tidak jalan ulang tiap render
  * pemanggil yang mengoper onClose inline. */
-export function Sheet({ open, onClose, title, children }) {
+export function Sheet({ open, onClose, title, closeLabel = "Tutup", children }) {
   const panel = useRef(null);
   const back = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -367,7 +367,7 @@ export function Sheet({ open, onClose, title, children }) {
             type="button"
             className="icon-btn"
             onClick={onClose}
-            aria-label="Tutup"
+            aria-label={closeLabel}
           >
             <Icon name="x" />
           </button>
@@ -392,11 +392,12 @@ export function ConfirmDialog({
   message,
   confirmLabel,
   cancelLabel = "Batal",
+  closeLabel = "Tutup",
   onConfirm,
   onCancel,
 }) {
   return (
-    <Sheet open={open} onClose={onCancel} title={title}>
+    <Sheet open={open} onClose={onCancel} title={title} closeLabel={closeLabel}>
       <p>{message}</p>
       <div className="actions-row" style={{ marginTop: 16 }}>
         <button type="button" className="btn" onClick={onConfirm}>

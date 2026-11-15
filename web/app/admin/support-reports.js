@@ -240,10 +240,18 @@ export default function SupportReports({ db }) {
         shown.map((r) => {
           const status = getReportStatus(r);
           const handled = status === "ditangani";
+          /* Jenis laporan (DUKUNG-06, W2a): dokumen lama tanpa kolom
+           * jenis dianggap laporan tautan mati. */
+          const jenisLabel =
+            {
+              tautan_mati: "Tautan mati",
+              data_salah: "Data salah",
+              lainnya: "Lainnya",
+            }[r.jenis || "tautan_mati"] || "Lainnya";
           return h(
             "li",
             { key: r.id },
-            `${formatReportTime(r.dibuat)} · ${r.no}. ${r.perusahaan} · ${r.alasan}`,
+            `${formatReportTime(r.dibuat)} · ${r.no}. ${r.perusahaan} · ${jenisLabel} · ${r.alasan}`,
             !handled &&
               h(
                 "span",

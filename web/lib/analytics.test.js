@@ -1311,6 +1311,14 @@ describe("kontrak wiring share + throttle (teks sumber)", () => {
     new URL("../app/analytics-track.js", import.meta.url),
     "utf8",
   );
+  /* W2a (DUKUNG-06/UX-08): pesan throttle pindah dari string
+   * kode-keras di actions.js ke kunci i18n — yang dicek di sini
+   * adalah wiring-nya (actions.js memakai label) dan isi pesannya
+   * (kunci ID/EN di i18n.js). */
+  const i18nSrc = readFileSync(
+    new URL("./i18n.js", import.meta.url),
+    "utf8",
+  );
 
   function region(src, startMarker, endMarker) {
     const start = src.indexOf(startMarker);
@@ -1349,14 +1357,31 @@ describe("kontrak wiring share + throttle (teks sumber)", () => {
   });
 
   it("pesan batas throttle jelas dan ditampilkan ke pengguna", () => {
+    /* W2a: actions.js memakai label i18n, bukan string kode-keras. */
+    assert.equal(actionsSrc.includes("labels.reportSessionLimit"), true);
     assert.equal(
       actionsSrc.includes(
+        'labels.reportTooSoon.replace("{n}", String(check.waitSeconds))',
+      ),
+      true,
+    );
+    /* Isi pesannya tetap jelas, di kedua bahasa. */
+    assert.equal(
+      i18nSrc.includes(
         "Batas laporan untuk sesi ini tercapai (5 laporan). Coba lagi nanti.",
       ),
       true,
     );
     assert.equal(
-      actionsSrc.includes("Tunggu ${check.waitSeconds} detik"),
+      i18nSrc.includes(
+        "Laporan baru saja dikirim. Tunggu {n} detik sebelum mengirim lagi.",
+      ),
+      true,
+    );
+    assert.equal(
+      i18nSrc.includes(
+        "The report limit for this session is reached (5 reports). Try again later.",
+      ),
       true,
     );
     assert.equal(actionsSrc.includes("throttleMsg"), true);

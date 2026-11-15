@@ -1,14 +1,14 @@
-import { getLocale } from "@/lib/i18n";
+import { getLocale, t } from "@/lib/i18n";
 
 export const metadata = {
   title: "Riwayat perubahan",
   description:
-    "Apa yang berubah di tiap versi Karir, dari versi pertama sampai versi full stack.",
+    "Apa yang berubah di tiap versi Karir, dari versi pertama sampai versi terbaru.",
   /* SEO-05: blok openGraph; SEO-04: kanonis /changelog (W2b). */
   openGraph: {
     title: "Riwayat perubahan",
     description:
-      "Apa yang berubah di tiap versi Karir, dari versi pertama sampai versi full stack.",
+      "Apa yang berubah di tiap versi Karir, dari versi pertama sampai versi terbaru.",
     url: "/changelog",
   },
   alternates: { canonical: "/changelog" },
@@ -58,7 +58,7 @@ const VERSIONS = [
     points: [
       "Pencatatan kunjungan kini lebih aman: hanya server yang boleh menulis, dan catatan lama dihapus otomatis setelah 90 hari.",
       "Situs lebih tahan saat koneksi bermasalah: halaman tetap tampil dari data cadangan bila server data tidak bisa dijangkau.",
-      "Umpan perubahan kini menjelaskan bila sedang tidak bisa dimuat, bukan tampil kosong.",
+      "Bagian Yang berubah kini menjelaskan bila sedang tidak bisa dimuat, bukan tampil kosong.",
       "Peta kini menandai lebih banyak perusahaan; tanggal cek di dasbor selalu mengikuti data terbaru.",
       "Cek ulang harian kini mendahulukan lowongan yang batas lamarnya sudah dekat.",
       "Laporan tautan mati dari pengunjung kini bisa ditindaklanjuti dari panel admin.",
@@ -99,9 +99,9 @@ const VERSIONS = [
     version: "2.8.2",
     date: "8 November 2026",
     points: [
-      "Notifikasi lowongan target: cron harian membandingkan daftar target dengan hasil cek sebelumnya. Target baru dan batas lamar yang tinggal 0-3 hari tercatat sebagai alert dan dikirim sekali sebagai satu pesan Telegram.",
-      "Chip Baru menandai perusahaan yang berubah dalam 48 jam terakhir di Beranda, Dasbor, dan daftar target.",
-      "Batas laju API kini dibagikan antar instance: Redis Upstash dulu, lalu Firestore, lalu memori. IP klien dibaca dari x-real-ip, lalu elemen terakhir x-forwarded-for.",
+      "Notifikasi lowongan target: setiap hari, daftar target dibandingkan dengan hasil cek sebelumnya. Target baru dan batas lamar yang tinggal 0-3 hari dikirim sekali sebagai satu pesan Telegram.",
+      "Tanda Baru menandai perusahaan yang berubah dalam 48 jam terakhir di Beranda, Dasbor, dan daftar target.",
+      "Batas akses kini berlaku sama di semua server.",
     ],
   },
   {
@@ -110,8 +110,8 @@ const VERSIONS = [
     points: [
       "22 perusahaan target dicek ulang satu per satu di portal resminya. Yang masih punya lowongan target kini 9, dari sebelumnya 22.",
       "Masuk jadi pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap jalan. Yang masuk bisa menyimpan tanda lamaran di akun supaya tidak hilang bila data browser dihapus.",
-      "Indeks perusahaan kini dijaga token dan batas akses, supaya situs tidak dipakai diam-diam sebagai layanan data oleh program otomatis.",
-      "Halaman tetap tampil dari data cadangan bila basis data lambat atau mati, dan tidak lagi menampilkan galat 500.",
+      "Daftar perusahaan kini dilindungi supaya tidak dipakai diam-diam sebagai layanan data oleh program otomatis.",
+      "Halaman tetap tampil dari data cadangan bila basis data lambat atau mati, dan tidak lagi menampilkan halaman galat.",
     ],
   },
   {
@@ -132,7 +132,7 @@ const VERSIONS = [
     points: [
       "Halaman hidup: tiap seksi muncul pelan saat di-scroll, angka naik saat terlihat, tombol dan baris merespons sentuhan.",
       "Header menempel saat scroll, navigasi HP jadi satu baris yang bisa digeser, tidak melipat lagi.",
-      "Seksi Angka data yang menduplikasi trust strip dihapus.",
+      "Seksi Angka data yang mengulang ringkasan angka di Beranda dihapus.",
       "Daftar 22 target bisa disaring per kelompok (Gudang, Cleaning, Produksi, Toko, Lainnya) dan barisnya dua baris supaya tidak terpotong di HP.",
       "Foto membesar sedikit saat disentuh.",
     ],
@@ -141,21 +141,21 @@ const VERSIONS = [
     version: "2.6.0",
     date: "6 November 2026",
     points: [
-      "Karir Hidup: cron mengecek ulang 22 portal target tiap jam 1 pagi, dan perubahan status masuk umpan Yang berubah.",
+      "Pengecekan ulang otomatis: 22 portal target dicek ulang tiap jam 1 pagi, dan perubahan status masuk ke bagian Yang berubah di Beranda.",
       "Logo asli tiap perusahaan dari domain resminya, di daftar target dan halaman detail.",
-      "Tiga foto asli di Beranda (gudang, produksi, cleaning), hitam-putih.",
-      "Cap Terakhir dicek ulang di Beranda dan Dasbor, dengan penanda Segar atau Sudah lama.",
-      "Cek massal admin ikut mencatat perubahan portal yang mati ke umpan yang sama.",
+      "Tiga foto di Beranda (gudang, produksi, cleaning), hitam-putih.",
+      "Penanda Terakhir dicek ulang di Beranda dan Dasbor, dengan status Segar atau Sudah lama.",
+      "Cek massal admin ikut mencatat perubahan portal yang mati ke bagian yang sama.",
     ],
   },
   {
     version: "2.5.0",
     date: "6 November 2026",
     points: [
-      "Landing nambah seksi Masalah dan hasil: kanal berserakan dan lowongan copas lawan 406 kanal resmi yang dicek langsung.",
+      "Beranda menambah bagian Masalah dan hasil: kanal yang berserakan dan lowongan hasil salinan, dibandingkan dengan 406 kanal resmi yang dicek langsung.",
       "Pencarian terakhir: Beranda, Cari, dan Dasbor mengingat pencarianmu dan bisa diulang dengan satu ketukan.",
       "Pengaturan di /pengaturan: lihat apa yang tersimpan di browsermu dan hapus sebagian atau semuanya.",
-      "Dasbor bilang kalau semua langkah sudah selesai, dan FAQ sekarang bisa dicari.",
+      "Dasbor memberi tahu kalau semua langkah sudah selesai, dan FAQ sekarang bisa dicari.",
     ],
   },
   {
@@ -163,9 +163,9 @@ const VERSIONS = [
     date: "6 November 2026",
     points: [
       "Beranda jadi landing page lengkap: angka kepercayaan, cara kerja, fitur, cuplikan FAQ, dan penutup.",
-      "Onboarding di /mulai: isi domisili dan posisi, langsung diarahkan ke hasil yang cocok. Tersimpan di browser saja.",
+      "Halaman Mulai baru: isi domisili dan posisi, langsung diarahkan ke hasil yang cocok. Pilihan tersimpan di browser saja.",
       "Dasbor jadi ruang kerja pribadi: sapaan sesuai pilihanmu, langkah berikutnya, dan ringkasan lamaran.",
-      "Tombol Mulai di header, dan alur pengguna tertulis di PRODUCT.md.",
+      "Tombol Mulai di bagian atas halaman.",
     ],
   },
   {
@@ -177,7 +177,7 @@ const VERSIONS = [
       "Bagikan daftar target lewat WhatsApp dan cetak daftar target.",
       "Pencarian langsung bisa dipilih dengan panah keyboard.",
       "Gambar pratinjau dinamis per perusahaan saat tautan dibagikan.",
-      "Pencarian mengerti sinonim peran, dan admin bisa cek massal 22 tautan target.",
+      "Pencarian mengerti sinonim peran, dan admin bisa memeriksa 22 tautan target sekaligus.",
     ],
   },
   {
@@ -187,8 +187,8 @@ const VERSIONS = [
       "Pencarian langsung di Beranda: ketik domisili dan posisi, 6 hasil teratas muncul di bawah kolom tanpa pindah halaman.",
       "Angka naik saat halaman muncul, grafik donat dan bar tumbuh, titik hijau berdenyut untuk lowongan target, ikon garis per kategori.",
       "Dasbor dirombak jadi visual: donat sebaran status, bar animasi kategori terbanyak, angka besar yang naik.",
-      "Copy dipangkas: lede Beranda satu kalimat, FAQ jadi lipat-buka, Metode memakai legenda status dengan jumlah asli.",
-      "Build tidak lagi gagal bila Firestore tidak bisa dijangkau dari mesin build: halaman data di-render saat request.",
+      "Tulisan dipangkas: pengantar Beranda jadi satu kalimat, FAQ jadi lipat-buka, Metode memakai keterangan status dengan jumlah asli.",
+      "Halaman data kini disiapkan saat dibuka, bukan saat situs dibangun, supaya pembaruan situs tidak gagal bila basis data sedang bermasalah.",
     ],
   },
   {
@@ -196,22 +196,22 @@ const VERSIONS = [
     date: "6 November 2026",
     points: [
       "Halaman detail tiap perusahaan: portal, lokasi, posisi, perusahaan sejenis, bagikan, dan laporkan tautan mati.",
-      "Halaman Tentang, Metode, FAQ, dan Riwayat perubahan, plus sitemap dan robots.",
-      "Antarmuka dua bahasa (Indonesia dan Inggris) lewat saklar di header.",
-      "Admin panel ditulis ulang: tabel, kualitas data, impor dan ekspor CSV, jejak perubahan, dan cek tautan.",
-      "Aturan Firestore diperketat: validasi 9 kolom, laporan tautan mati, dan jejak audit.",
+      "Halaman Tentang, Metode, FAQ, dan Riwayat perubahan.",
+      "Antarmuka dua bahasa (Indonesia dan Inggris) lewat pilihan bahasa di bagian atas halaman.",
+      "Panel admin ditulis ulang: tabel perusahaan, pemeriksaan kualitas data, impor dan ekspor data, catatan perubahan, dan pemeriksaan tautan.",
+      "Keamanan data diperketat: setiap perubahan diperiksa sebelum disimpan, laporan tautan mati dicatat, dan semua perubahan terekam.",
     ],
   },
   {
     version: "2.0.0",
     date: "6 November 2026",
     points: [
-      "Aplikasi web dibangun ulang jadi full stack: Next.js 15 dengan React 19 di Vercel.",
-      "Database Firebase Firestore: 406 perusahaan di koleksi companies, diimpor dari CSV.",
-      "API pencarian server di /api/companies, dengan logika skor yang sama seperti halaman Cari.",
-      "Admin panel di /admin untuk tambah, ubah, dan hapus perusahaan.",
-      "Supabase tidak dipakai karena akun sudah mencapai batas 2 proyek gratis yang aktif.",
-      "Versi statis lama di folder docs tidak lagi jadi aplikasi live.",
+      "Aplikasi web dibangun ulang dari nol.",
+      "Data 406 perusahaan kini tersimpan di basis data, bukan lagi berkas statis.",
+      "Pencarian server ditambahkan, dengan urutan hasil yang sama seperti halaman Cari.",
+      "Panel admin baru untuk menambah, mengubah, dan menghapus perusahaan.",
+      "Penyimpanan data dipindah ke layanan baru karena layanan lama sudah mencapai batas gratisnya.",
+      "Versi lama yang statis tidak lagi dipakai.",
     ],
   },
   {
@@ -227,7 +227,7 @@ const VERSIONS = [
     version: "1.2.0",
     date: "5 November 2026",
     points: [
-      "Repo dirombak dari daftar gudang Bogor jadi alat cari loker untuk semua orang.",
+      "Karir dirombak dari daftar gudang Bogor jadi alat cari loker untuk semua orang.",
       "Aplikasi web baru dengan rekomendasi berdasarkan skor.",
       "PGN masuk sebagai No. 406, kanal rekrutmennya lewat E-Recruitment Pertamina dan minta login.",
       "README ditulis ulang untuk cakupan universal.",
@@ -248,7 +248,7 @@ const VERSIONS = [
     points: [
       "Versi pertama: 299 perusahaan, semuanya dicek langsung di browser.",
       "81 perusahaan dicek 4 November 2026, 218 perusahaan dicek 5 November 2026.",
-      "Kolom baru di semua baris: lokasi dan posisi.",
+      "Setiap perusahaan kini mencatat lokasi dan posisi.",
     ],
   },
 ];
@@ -261,6 +261,11 @@ export default async function Changelog() {
       <div className="page-head">
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
+        {/* INFO-11: isi halaman ini hanya Bahasa Indonesia; beri tahu
+          * pengunjung mode Inggris, bukan pura-pura diterjemahkan. */}
+        {locale === "en" && (
+          <p className="note-line">{t(locale, "info.idOnly")}</p>
+        )}
       </div>
 
       {VERSIONS.map((v) => (

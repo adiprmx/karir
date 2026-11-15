@@ -92,7 +92,8 @@ export default function TargetFilter({ targets, labels }) {
             aria-pressed={active === g}
             onClick={() => setActive(g)}
           >
-            {g} <span className="chip-count num">{counts[g]}</span>
+            {g === "Semua" ? labels.all || "Semua" : g}{" "}
+            <span className="chip-count num">{counts[g]}</span>
           </button>
         ))}
       </div>

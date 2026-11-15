@@ -197,8 +197,8 @@ export default function SiteNav({ labels, locale }) {
         </button>
       </nav>
 
-      <Sheet open={menu} onClose={close} title={labels.menu}>
-        <AuthPanel />
+      <Sheet open={menu} onClose={close} title={labels.menu} closeLabel={labels.close}>
+        <AuthPanel labels={labels.auth} />
         <ul className="menu-list">
           {more.map((m) => (
             <li key={m.href}>

@@ -597,7 +597,7 @@ export default function SearchApp({ initial, initialResults, categories, statuse
         </div>
       </div>
 
-      <Sheet open={sheet} onClose={() => setSheet(false)} title={labels.filters}>
+      <Sheet open={sheet} onClose={() => setSheet(false)} title={labels.filters} closeLabel={labels.close}>
         <FilterControls
           idp="m"
           state={state}

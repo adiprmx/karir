@@ -54,6 +54,11 @@ export default async function Tentang() {
       <div className="page-head anim-fade-up">
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
+        {/* INFO-11: isi halaman ini hanya Bahasa Indonesia; beri tahu
+          * pengunjung mode Inggris, bukan pura-pura diterjemahkan. */}
+        {locale === "en" && (
+          <p className="note-line">{t(locale, "info.idOnly")}</p>
+        )}
       </div>
 
       {source === "seed" && (
@@ -90,7 +95,8 @@ export default async function Tentang() {
 
       <section className="dash-section anim-fade-up" aria-label="Apa itu Karir">
         <p className="section-label">Apa itu Karir</p>
-        <h2>Karir itu apa</h2>
+        {/* UX-17: judul lama "Karir itu apa" mengulang label seksi. */}
+        <h2>Cara memakai Karir</h2>
         <ul className="recheck-list">
           <li>
             Ketik domisili dan posisi yang kamu cari, lalu buka portal resmi
@@ -110,8 +116,15 @@ export default async function Tentang() {
             >
               repo terbuka
             </a>
-            , dan siapa pun bisa mengusulkan koreksi lewat issue dan pull
-            request.
+            , dan siapa pun bisa mengusulkan koreksi lewat{" "}
+            <a
+              href="https://github.com/adiprmx/karir/issues/new?template=koreksi.md"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              formulir Koreksi data
+            </a>
+            .
           </li>
         </ul>
       </section>
@@ -126,6 +139,31 @@ export default async function Tentang() {
           Status ditulis sesuai keadaan pada tanggal cek. Portal yang tidak
           bisa dibuka berarti aksesnya gagal, bukan bukti tidak ada lowongan,
           dan skor cuma mengurutkan kanal, bukan janji lowongan masih ada.
+        </p>
+      </section>
+
+      {/* LEGAL-07: penyebutan lisensi di aplikasi — data boleh dipakai
+        * ulang dengan atribusi. Versi dokumennya ada di data/README.md
+        * (W1-DOCS). */}
+      <section
+        className="dash-section anim-fade-up"
+        aria-label="Lisensi data"
+      >
+        <p className="section-label">Lisensi data</p>
+        <h2>Data boleh dipakai ulang</h2>
+        <p>
+          Data kanal karir di situs ini berlisensi{" "}
+          <a
+            href="https://creativecommons.org/licenses/by/4.0/deed.id"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Creative Commons Atribusi 4.0 (CC BY 4.0)
+          </a>
+          : siapa pun boleh menyalin, membagikan, dan mengolahnya,
+          selama mencantumkan sumbernya — Data kanal karir dari Karir
+          (https://github.com/adiprmx/karir) oleh ADIP RMX, berlisensi
+          CC BY 4.0.
         </p>
       </section>
     </div>

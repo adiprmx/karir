@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import "leaflet/dist/leaflet.css";
 import { CompanyLogo } from "@/lib/logos";
@@ -10,8 +10,26 @@ import { mapFlyDurationMs } from "@/lib/a11y";
 /* Peta Leaflet + daftar kota. Memilih kota (ketuk titik di peta atau chip
  * kota) menggeser peta ke sana dan menampilkan perusahaannya di bawah.
  * Leaflet dimuat dinamis di browser saja (tidak tahan SSR). Bila peta
- * gagal dimuat, chip kota dan daftar tetap berfungsi. */
-export default function MapClient({ groups, other }) {
+ * gagal dimuat, chip kota dan daftar tetap berfungsi.
+ *
+ * W2a (UX-08): label diteruskan halaman Peta (server) lewat props;
+ * tanpa props, teks Indonesia di bawah dipakai sebagai cadangan. */
+const MAP_DEFAULTS = {
+  chooseCity: "Pilih kota",
+  label: "Peta perusahaan yang ada lowongan",
+  marker: "{city}, {n} perusahaan ada lowongan",
+  failed:
+    "Peta tidak bisa dimuat. Pilih kota di atas untuk melihat daftarnya.",
+  otherLocations: "Lokasi lain (tidak cocok dengan kota di peta)",
+};
+
+export default function MapClient({ groups, other, labels: labelsProp }) {
+  /* Objek label dimemo: effect peta bergantung padanya, dan identitas
+   * yang berubah tiap render akan membuat peta dibuat ulang terus. */
+  const labels = useMemo(
+    () => ({ ...MAP_DEFAULTS, ...(labelsProp || {}) }),
+    [labelsProp],
+  );
   const el = useRef(null);
   const mapRef = useRef(null);
   const markers = useRef(new Map());
@@ -57,7 +75,9 @@ export default function MapClient({ groups, other }) {
             node.setAttribute("role", "button");
             node.setAttribute(
               "aria-label",
-              `${g.city.name}, ${g.companies.length} perusahaan ada lowongan`,
+              labels.marker
+                .replace("{city}", g.city.name)
+                .replace("{n}", String(g.companies.length)),
             );
           }
           m.on("click", () => setSelected(g.city.name));
@@ -81,7 +101,7 @@ export default function MapClient({ groups, other }) {
         mapRef.current = null;
       }
     };
-  }, [groups]);
+  }, [groups, labels]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -109,9 +129,8 @@ export default function MapClient({ groups, other }) {
   const current = groups.find((g) => g.city.name === selected);
 
   return (
-    /* AKSES-12: seluruh blok ini teks Indonesia kode-keras. */
-    <div lang="id">
-      <div className="chips-scroll" role="group" aria-label="Pilih kota">
+    <div>
+      <div className="chips-scroll" role="group" aria-label={labels.chooseCity}>
         {groups.map((g) => (
           <button
             key={g.city.name}
@@ -133,12 +152,12 @@ export default function MapClient({ groups, other }) {
         ref={el}
         className="karir-map"
         role="region"
-        aria-label="Peta perusahaan yang ada lowongan"
+        aria-label={labels.label}
       />
       {failed && (
         <p className="note-line">
           <Icon name="info" size={16} />
-          Peta tidak bisa dimuat. Pilih kota di atas untuk melihat daftarnya.
+          {labels.failed}
         </p>
       )}
 
@@ -170,7 +189,7 @@ export default function MapClient({ groups, other }) {
       {other.length > 0 && (
         <details className="fold" style={{ marginTop: 16 }}>
           <summary>
-            <span>Lokasi lain (tidak cocok dengan kota di peta)</span>
+            <span>{labels.otherLocations}</span>
             <span className="num fold-n">{other.length}</span>
             <Icon name="chevron" size={18} className="fold-ic" />
           </summary>

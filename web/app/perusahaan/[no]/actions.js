@@ -1,12 +1,16 @@
 "use client";
 
 /* Aksi di halaman detail perusahaan: bagikan tautan (menu bagikan bawaan
- * HP bila ada, kalau tidak salin) dan laporkan tautan mati. Label sudah
- * diterjemahkan di server (page.js) dan dikirim lewat props, supaya file
- * ini tidak mengimpor lib/i18n yang memakai next/headers.
+ * HP bila ada, kalau tidak salin) dan laporkan masalah (DUKUNG-06:
+ * tautan mati, data salah, atau lainnya — dulu hanya tautan mati).
+ * Label sudah diterjemahkan di server (page.js) dan dikirim lewat
+ * props, supaya file ini tidak mengimpor lib/i18n yang memakai
+ * next/headers.
  *
  * Berbagi yang berhasil tercatat sebagai event analitik "share"
  * (MKT-07); laporan dibatasi throttle per sesi (FIN-08/DET-07).
+ * Jenis laporan dicatat di dokumen (kolom "jenis") dan di event
+ * report (action = jenisnya), supaya admin bisa memilah.
  *
  * Tombol salin kanal (CopyChannelButton) menerima label lewat props
  * dari page.js (server), sama seperti DetailActions — file ini tidak
@@ -142,6 +146,7 @@ export function CopyChannelButton({ value, channel, companyNo, labels }) {
 
 export function DetailActions({ company, url, labels }) {
   const [alasan, setAlasan] = useState("");
+  const [jenis, setJenis] = useState("tautan_mati");
   const [sent, setSent] = useState(false);
   const [reportError, setReportError] = useState(false);
   const [throttleMsg, setThrottleMsg] = useState("");
@@ -169,7 +174,7 @@ export function DetailActions({ company, url, labels }) {
        * menu bagikan — tercatat sebagai share juga. */
       trackEvent({ type: "share", path, companyNo, action: "detail" });
     } catch {
-      showToast("Tautan tidak bisa disalin otomatis. Salin alamat di bilah browser.");
+      showToast(labels.shareFailed);
     }
   }
 
@@ -188,8 +193,8 @@ export function DetailActions({ company, url, labels }) {
     if (!check.allowed) {
       setThrottleMsg(
         check.reason === "batas_sesi"
-          ? "Batas laporan untuk sesi ini tercapai (5 laporan). Coba lagi nanti."
-          : `Laporan baru saja dikirim. Tunggu ${check.waitSeconds} detik sebelum mengirim lagi.`,
+          ? labels.reportSessionLimit
+          : labels.reportTooSoon.replace("{n}", String(check.waitSeconds)),
       );
       return;
     }
@@ -205,18 +210,19 @@ export function DetailActions({ company, url, labels }) {
       await addDoc(collection(db, "reports"), {
         no: Number(company.no),
         perusahaan: company.perusahaan,
+        jenis,
         alasan: text,
         dibuat: new Date().toISOString(),
       });
       /* Hanya kirim BERHASIL yang dicatat ke throttle. */
       saveReportTimestamps(recordReportTimestamp(loadReportTimestamps()));
       /* Laporan berhasil terkirim: catat event report (hanya jenis
-       * event + nomor perusahaan; isi alasan tidak ikut). */
+       * laporan + nomor perusahaan; isi alasan tidak ikut). */
       trackEvent({
         type: "report",
         path: `/perusahaan/${company.no}`,
         companyNo: Number(company.no),
-        action: "tautan_mati",
+        action: jenis,
       });
       setSent(true);
       setAlasan("");
@@ -248,9 +254,34 @@ export function DetailActions({ company, url, labels }) {
 
       <details className="report">
         <summary>{labels.reportHint}</summary>
+        {/* DUKUNG-07: setelah terkirim, seluruh formulir dinonaktifkan
+          * supaya laporan yang sama tidak dikirim dua kali. */}
         <form onSubmit={submitReport}>
+          <fieldset disabled={sent}>
+            <legend>{labels.reportTypeLabel}</legend>
+            {/* Pilihan jenis memakai pola chip tombol yang sama dengan
+              * chip kota/posisi di /mulai: aria-pressed menandai yang
+              * terpilih (CSS .chip-btn[aria-pressed="true"]). */}
+            <div className="chip-row" role="group">
+              {[
+                ["tautan_mati", labels.reportTypeDead],
+                ["data_salah", labels.reportTypeWrong],
+                ["lainnya", labels.reportTypeOther],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="chip-btn"
+                  aria-pressed={jenis === value}
+                  onClick={() => setJenis(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
           <div className="field">
-            <label htmlFor="report-alasan">{labels.report}</label>
+            <label htmlFor="report-alasan">{labels.reportReasonLabel}</label>
             <input
               id="report-alasan"
               type="text"
@@ -261,7 +292,14 @@ export function DetailActions({ company, url, labels }) {
               }}
               maxLength={500}
               required
-              placeholder="Misal: halaman tidak bisa dibuka"
+              disabled={sent}
+              placeholder={
+                jenis === "tautan_mati"
+                  ? labels.reportPhDead
+                  : jenis === "data_salah"
+                    ? labels.reportPhWrong
+                    : labels.reportPhOther
+              }
               autoComplete="off"
             />
           </div>
@@ -274,7 +312,7 @@ export function DetailActions({ company, url, labels }) {
           )}
           {reportError && (
             <p className="note-line" role="alert">
-              Laporan gagal terkirim. Periksa koneksi lalu coba lagi.
+              {labels.reportFailed}
             </p>
           )}
           {throttleMsg && (
@@ -282,7 +320,7 @@ export function DetailActions({ company, url, labels }) {
               {throttleMsg}
             </p>
           )}
-          <button className="btn small" type="submit" disabled={sending}>
+          <button className="btn small" type="submit" disabled={sending || sent}>
             {sending ? labels.loading : labels.report}
           </button>
         </form>

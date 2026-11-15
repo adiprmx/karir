@@ -103,7 +103,7 @@ export default function ChangesFeed({ labels, locale }) {
               {c.perusahaan}
               {isNew(c) && (
                 <span className="chip match" style={{ marginLeft: 8 }}>
-                  Baru
+                  {labels.new || "Baru"}
                 </span>
               )}
             </span>

@@ -7,11 +7,8 @@ export default async function NotFound() {
   return (
     <div className="wrap narrow">
       <div className="page-head">
-        <h1>Halaman tidak ditemukan</h1>
-        <p className="lede">
-          Alamat yang kamu buka tidak ada di Karir. Mungkin tautannya salah
-          ketik, atau halamannya sudah tidak ada.
-        </p>
+        <h1>{t(locale, "notfound.title")}</h1>
+        <p className="lede">{t(locale, "notfound.lede")}</p>
       </div>
       <div className="actions-row">
         <Link href="/" className="btn">

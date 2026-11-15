@@ -74,6 +74,13 @@ export default async function Peta() {
           link_karir: c.link_karir,
           lokasi: c.lokasi,
         }))}
+        labels={{
+          chooseCity: t(locale, "map.chooseCity"),
+          label: t(locale, "map.label"),
+          marker: t(locale, "map.marker"),
+          failed: t(locale, "map.failed"),
+          otherLocations: t(locale, "map.otherLocations"),
+        }}
       />
     </div>
   );

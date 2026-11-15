@@ -156,17 +156,33 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if false;
     }
-    // Laporan tautan mati dari pengunjung: siapa pun boleh mengirim satu
-    // laporan berbentuk benar, tapi hanya admin yang bisa membacanya.
+    // Laporan masalah dari pengunjung (DUKUNG-06/DUKUNG-08): siapa pun
+    // boleh mengirim satu laporan berbentuk benar, tapi hanya admin
+    // yang bisa membacanya. Aturan create memvalidasi SEMUA kolom
+    // yang ditulis klien — termasuk jenis (harus salah satu dari tiga
+    // nilai), perusahaan (string tidak kosong), dan dibuat (string
+    // tanggal ISO). Stempel waktu yang berbentuk benar tapi PALSU
+    // masih bisa lolos; pencegahan penuh butuh serverTimestamp()
+    // + migrasi admin (keputusan terpisah).
     match /reports/{doc} {
       allow read: if isAdmin();
       allow create: if request.resource.data.keys().hasAll([
-          'no', 'perusahaan', 'alasan', 'dibuat'
+          'no', 'perusahaan', 'jenis', 'alasan', 'dibuat'
         ])
         && request.resource.data.no is int
+        && request.resource.data.perusahaan is string
+        && request.resource.data.perusahaan.size() > 0
+        && request.resource.data.perusahaan.size() <= 200
+        && request.resource.data.jenis in [
+          'tautan_mati', 'data_salah', 'lainnya'
+        ]
         && request.resource.data.alasan is string
         && request.resource.data.alasan.size() > 0
-        && request.resource.data.alasan.size() < 500;
+        && request.resource.data.alasan.size() < 500
+        && request.resource.data.dibuat is string
+        && request.resource.data.dibuat.matches(
+          '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$'
+        );
       // Status tindak lanjut hanya boleh diubah admin, dan hanya
       // field status + ditanganiPada (DUKUNG-02, komponen
       // support-reports.js). Publik tidak bisa mengubah laporan;

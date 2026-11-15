@@ -8,6 +8,7 @@ import { getLocale, t } from "@/lib/i18n";
 import SiteNav from "./site-nav";
 import AnalyticsTrack from "./analytics-track";
 import { InstallPromptListener } from "./install-prompt";
+import { LabelsProvider } from "./labels-provider";
 import { Icon, ToastHost } from "./visual";
 
 /* Plus Jakarta Sans: huruf rancangan studio Indonesia (Tokotype), dibuat
@@ -91,6 +92,68 @@ export default async function RootLayout({ children }) {
     menu: t(locale, "nav.menu"),
     theme: t(locale, "nav.theme"),
     count: total ? t(locale, "header.count", { n: total }) : "",
+    close: t(locale, "common.close"),
+    /* W2a: label panel akun (UX-08) — diteruskan SiteNav ke AuthPanel.
+     * Kunci invalidEmail..verifySent adalah pesan lib/account-data.js
+     * (authErrorMessage dkk. menerima objek pesan sebagai argumen
+     * kedua; tanpa itu pesan Indonesia dipakai sebagai bawaan). */
+    auth: {
+      account: t(locale, "settings.account"),
+      loadingStatus: t(locale, "auth.loadingStatus"),
+      signedInAs: t(locale, "settings.signedInAs"),
+      syncNote: t(locale, "auth.syncNote"),
+      notVerifiedNote: t(locale, "auth.notVerifiedNote"),
+      resendVerify: t(locale, "auth.resendVerify"),
+      checkAgain: t(locale, "settings.checkAgain"),
+      verified: t(locale, "settings.emailVerified"),
+      signingOut: t(locale, "auth.signingOut"),
+      signOut: t(locale, "auth.signOut"),
+      signInChoice: t(locale, "auth.signInChoice"),
+      modeLabel: t(locale, "auth.modeLabel"),
+      signIn: t(locale, "auth.signIn"),
+      signUp: t(locale, "auth.signUp"),
+      displayName: t(locale, "auth.displayName"),
+      displayNameLabel: t(locale, "auth.displayNameLabel"),
+      displayNamePh: t(locale, "auth.displayNamePh"),
+      email: t(locale, "auth.email"),
+      password: t(locale, "auth.password"),
+      passwordPh: t(locale, "auth.passwordPh"),
+      passwordPhSignUp: t(locale, "auth.passwordPhSignUp"),
+      wait: t(locale, "auth.wait"),
+      createAccount: t(locale, "auth.createAccount"),
+      sending: t(locale, "settings.sending"),
+      forgotPassword: t(locale, "auth.forgotPassword"),
+      writeEmailFirst: t(locale, "auth.writeEmailFirst"),
+      verifyStillNot: t(locale, "settings.verifyStillNot"),
+      verifyCheckFailed: t(locale, "settings.verifyCheckFailed"),
+      close: t(locale, "common.close"),
+      invalidEmail: t(locale, "auth.errInvalidEmail"),
+      wrongCredentials: t(locale, "auth.errWrongCredentials"),
+      cannotRegister: t(locale, "auth.errCannotRegister"),
+      weakPassword: t(locale, "auth.errWeakPassword"),
+      tooManyRequests: t(locale, "auth.errTooManyRequests"),
+      noConnection: t(locale, "auth.errNoConnection"),
+      cannotSignIn: t(locale, "auth.errCannotSignIn"),
+      resetSent: t(locale, "auth.resetSent"),
+      cannotSendReset: t(locale, "auth.errCannotSendReset"),
+      noAccount: t(locale, "auth.noAccount"),
+      verifySent: t(locale, "auth.verifySent"),
+    },
+  };
+  /* W2a: label bersama untuk komponen klien di dalam <main> (UX-08,
+   * KONTEN-04, KONTEN-08) — toast pelacak (dipakai useTracker di
+   * Beranda, /cari, dan halaman detail) dan halaman error. Label
+   * halaman (Lamaran, Mulai, Pengaturan) ditambah layout rutenya
+   * masing-masing lewat provider bersarang. */
+  const sharedLabels = {
+    trackerMarked: t(locale, "tracker.marked"),
+    trackerView: t(locale, "tracker.view"),
+    trackerSaveRefused: t(locale, "tracker.saveRefused"),
+    trackerUnmarked: t(locale, "tracker.unmarked"),
+    trackerInProgress: t(locale, "tracker.inProgress"),
+    errorTitle: t(locale, "error.title"),
+    errorMessage: t(locale, "error.message"),
+    retry: t(locale, "search.retry"),
   };
   return (
     <html lang={locale} className={jakarta.variable} suppressHydrationWarning>
@@ -131,7 +194,9 @@ export default async function RootLayout({ children }) {
         <InstallPromptListener />
         {/* tabIndex -1: target skip link dan cadangan fokus pindah
           * rute (AKSES-01); tidak menambah tab stop. */}
-        <main id="main" tabIndex={-1}>{children}</main>
+        <LabelsProvider locale={locale} labels={sharedLabels}>
+          <main id="main" tabIndex={-1}>{children}</main>
+        </LabelsProvider>
         <footer className="foot">
           <div className="wrap foot-inner">
             <p className="foot-note">{t(locale, "footer.note")}</p>

@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getCompanyByIdOrSeed } from "@/lib/companies";
+import { OG_COLORS, OG_FONT } from "@/lib/og-theme";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -18,10 +19,10 @@ export default async function Image({ params }) {
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          background: "#ffffff",
-          color: "#0a0a0a",
+          background: OG_COLORS.background,
+          color: OG_COLORS.ink,
           padding: 80,
-          fontFamily: "system-ui, sans-serif",
+          fontFamily: OG_FONT,
         }}
       >
         <div
@@ -36,7 +37,7 @@ export default async function Image({ params }) {
         {status ? (
           <div style={{ fontSize: 32, marginTop: 28 }}>{status}</div>
         ) : null}
-        <div style={{ fontSize: 28, color: "#52525b", marginTop: 16 }}>
+        <div style={{ fontSize: 28, color: OG_COLORS.muted, marginTop: 16 }}>
           Karir
         </div>
       </div>

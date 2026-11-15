@@ -2247,7 +2247,9 @@ select:focus {
 }
 .stat-stack {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /* INFO-13: kolom minimum 280px — di 150px, baris status di halaman
+   * Metode terjepit jadi dua kolom sempit yang sulit dibaca. */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 0 24px;
 }
 .stat-row {

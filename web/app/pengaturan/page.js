@@ -26,6 +26,7 @@ import { clearAllTrackerStorage, todayLocal, useTracker } from "@/app/tracker";
 import { clearRecentSearch, loadRecentSearch } from "@/app/recent";
 import { Icon, showToast } from "@/app/visual";
 import InstallPrompt from "@/app/install-prompt";
+import { useLabels } from "@/app/labels-provider";
 import { useAuthUser } from "@/app/auth-panel";
 import {
   isAnalyticsOptedOut,
@@ -71,7 +72,108 @@ function Row({ title, children, action }) {
   );
 }
 
+/* Label halaman (W2a, UX-08): diteruskan layout rute lewat konteks;
+ * nilai di bawah adalah cadangan Bahasa Indonesia bila halaman
+ * dipakai di luar provider. Kunci invalidEmail..verifySent adalah
+ * pesan lib/account-data.js untuk sendVerificationEmail. */
+const DEFAULT_LABELS = {
+  title: "Pengaturan",
+  lede: "Yang tersimpan di browser ini, dan cara menghapusnya.",
+  loading: "Memuat pengaturan",
+  browserData: "Data di browser",
+  choices: "Pilihanmu",
+  noChoices: "Belum ada pilihan tersimpan.",
+  deleteChoices: "Hapus pilihan domisili dan posisi",
+  delete: "Hapus",
+  tracked: "Lamaran yang dilacak",
+  noTracked: "Belum ada lamaran yang dilacak.",
+  trackedCount: "{n} lamaran dilacak.",
+  deleteAllTracked: "Hapus semua lamaran yang dilacak",
+  deleteAll: "Hapus semua",
+  recentSearch: "Pencarian terakhir",
+  noRecent: "Belum ada pencarian tersimpan.",
+  deleteRecent: "Hapus pencarian terakhir",
+  visitorNo: "Nomor pengunjung",
+  visitorHint:
+    "Nomor acak yang dibuat browser ini untuk menghitung pengunjung tanpa nama. Nomor ini ikut terkirim bersama catatan kunjungan, tanpa nama dan tanpa alamat email. Menghapusnya membuat nomor baru saat kamu berkunjung lagi.",
+  noVisitor: "Belum ada nomor pengunjung.",
+  deleteVisitor: "Hapus nomor pengunjung",
+  visitRecords: "Catatan kunjungan",
+  optOut: "Jangan catat kunjungan saya",
+  optOutHint:
+    "Bila dicentang, kunjunganmu tidak dicatat sama sekali: halaman yang dibuka, kata yang dicari, dan klik lamar tidak terkirim. Pilihan ini hanya berlaku di browser ini. Catatan yang sudah terkirim sebelumnya tidak ikut terhapus, dan terhapus sendiri setelah 90 hari. Yang dicatat dan yang tidak dicatat ada di halaman ",
+  optOutHintAfter: ".",
+  privacyPolicy: "Kebijakan Privasi",
+  account: "Akun",
+  signedInAs: "Masuk sebagai",
+  emailVerified: "Email sudah terverifikasi.",
+  emailNotVerified:
+    "Email belum terverifikasi. Ketuk tautan di email verifikasi supaya akun ini dikenali sebagai milikmu.",
+  verifyEmail: "Verifikasi email",
+  verifyHint:
+    "Email verifikasi dikirim saat daftar. Bila tidak sampai, kirim ulang dari sini.",
+  sending: "Mengirim…",
+  resendEmail: "Kirim ulang email",
+  checkAgain: "Periksa lagi",
+  verifyStillNot:
+    "Email masih belum terverifikasi. Ketuk tautan di email yang dikirim, lalu periksa lagi.",
+  verifyCheckFailed:
+    "Status verifikasi belum bisa diperiksa. Coba lagi sebentar lagi.",
+  closeAccount: "Tutup akun",
+  askOnGithub: "Minta di GitHub",
+  newTab: "(membuka tab baru)",
+  closeHint:
+    "Menutup akun belum bisa dari situs. Minta lewat Issues di repo GitHub, pengelola akan menghapus akun dan datanya.",
+  notSignedIn:
+    "Kamu belum masuk. Masuk itu pilihan, semua fitur tetap bisa dipakai tanpa masuk. Buka menu untuk masuk atau daftar.",
+  downloadData: "Unduh data",
+  downloadMine: "Unduh dataku",
+  downloadHint:
+    "Salinan datamu dalam satu berkas JSON: profil akun, tanda lamaran, dan pengaturan di browser ini. Berkas dibuat di perangkatmu, tidak dikirim ke mana pun.",
+  downloadJson: "Unduh data (JSON)",
+  wipeAll: "Hapus semua data",
+  wipeHint:
+    "Menghapus semua data di atas dari browser ini. Bila kamu masuk, tanda lamaran di akun ikut dihapus. Akunnya sendiri tetap ada. Menghapus tidak bisa dibatalkan.",
+  confirmWipeAll: "Ya, hapus semuanya",
+  wipeAllBtn: "Hapus semua dataku",
+  toastTrackedDeleted: "Semua lamaran dihapus.",
+  toastVisitorDeleted: "Nomor pengunjung dihapus.",
+  toastChoicesDeleted: "Pilihan dihapus.",
+  toastRecentDeleted: "Pencarian terakhir dihapus.",
+  toastOptOutOn: "Kunjunganmu tidak dicatat lagi.",
+  toastOptOutOff: "Kunjunganmu dicatat lagi.",
+  toastDownloaded: "Data sudah diunduh.",
+  toastWiped: "Semua data di browser ini dihapus.",
+  toastWipedAccount:
+    "Semua data di browser ini dihapus, dan tanda lamaran di akun ikut dihapus.",
+  deleteConfirm: "Ya, hapus",
+  cancel: "Batal",
+  close: "Tutup",
+  install: {
+    title: "Pasang aplikasi",
+    hint: "Buka Karir langsung dari layar utama, tanpa membuka browser dulu. Ukurannya kecil dan tidak mengubah apa pun di data yang tersimpan.",
+    installing: "Memasang…",
+    install: "Pasang aplikasi",
+    later: "Nanti saja",
+  },
+  invalidEmail: "Alamat email tidak dikenal. Periksa lagi tulisannya.",
+  wrongCredentials: "Email atau kata sandi salah.",
+  cannotRegister: "Tidak bisa mendaftar sekarang. Coba lagi sebentar lagi.",
+  weakPassword: "Kata sandi terlalu pendek, minimal 6 huruf.",
+  tooManyRequests: "Terlalu sering mencoba. Tunggu sebentar lalu coba lagi.",
+  noConnection: "Tidak ada koneksi. Periksa internet lalu coba lagi.",
+  cannotSignIn: "Tidak bisa masuk sekarang. Coba lagi sebentar lagi.",
+  resetSent:
+    "Tautan untuk membuat kata sandi baru sudah dikirim ke email itu. Periksa kotak masuk, lalu ikuti tautannya.",
+  cannotSendReset:
+    "Tidak bisa mengirim tautan sekarang. Coba lagi sebentar lagi.",
+  noAccount: "Tidak ada akun yang masuk.",
+  verifySent:
+    "Email verifikasi sudah dikirim. Buka email itu, ketuk tautannya, lalu tekan Periksa lagi.",
+};
+
 export default function Pengaturan() {
+  const labels = useLabels(DEFAULT_LABELS);
   const {
     data: onboarding,
     loaded: onboardingLoaded,
@@ -166,7 +268,7 @@ export default function Pengaturan() {
     clearAllTrackerStorage();
     nos.forEach((no) => recordTombstone(no, uid));
     deleteTrackedFromAccount(nos);
-    showToast("Semua lamaran dihapus.");
+    showToast(labels.toastTrackedDeleted);
   }
 
   function clearVisitor() {
@@ -176,7 +278,7 @@ export default function Pengaturan() {
       /* Abaikan. */
     }
     setVisitorId(null);
-    showToast("Nomor pengunjung dihapus.");
+    showToast(labels.toastVisitorDeleted);
   }
 
   /* AKSES-04 + AKSES-05: aksi hapus yang dikonfirmasi (dipanggil
@@ -186,13 +288,13 @@ export default function Pengaturan() {
   function clearChoicesConfirmed() {
     clearChoices();
     setConfirmKey(null);
-    showToast("Pilihan dihapus.");
+    showToast(labels.toastChoicesDeleted);
   }
 
   function clearRecentConfirmed() {
     clearRecentSearch();
     setConfirmKey(null);
-    showToast("Pencarian terakhir dihapus.");
+    showToast(labels.toastRecentDeleted);
   }
 
   function clearTrackedConfirmed() {
@@ -213,11 +315,7 @@ export default function Pengaturan() {
     const next = !optedOut;
     setAnalyticsOptOut(next);
     setOptedOut(next);
-    showToast(
-      next
-        ? "Kunjunganmu tidak dicatat lagi."
-        : "Kunjunganmu dicatat lagi.",
-    );
+    showToast(next ? labels.toastOptOutOn : labels.toastOptOutOff);
   }
 
   /* Unduh salinan data sebagai berkas JSON. Berkas dibuat di
@@ -250,14 +348,14 @@ export default function Pengaturan() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    showToast("Data sudah diunduh.");
+    showToast(labels.toastDownloaded);
   }
 
   async function resendVerification() {
     if (!user) return;
     setAccountMsg("");
     setVerifyBusy(true);
-    const result = await sendVerificationEmail(user);
+    const result = await sendVerificationEmail(user, labels);
     setAccountMsg(result.message);
     setVerifyBusy(false);
   }
@@ -270,15 +368,10 @@ export default function Pengaturan() {
       await user.reload();
       setVerifyChecked((n) => n + 1);
       setAccountMsg(
-        user.emailVerified
-          ? "Email sudah terverifikasi."
-          : "Email masih belum terverifikasi. Ketuk tautan di email yang " +
-              "dikirim, lalu periksa lagi.",
+        user.emailVerified ? labels.emailVerified : labels.verifyStillNot,
       );
     } catch {
-      setAccountMsg(
-        "Status verifikasi belum bisa diperiksa. Coba lagi sebentar lagi.",
-      );
+      setAccountMsg(labels.verifyCheckFailed);
     }
     setVerifyBusy(false);
   }
@@ -305,22 +398,21 @@ export default function Pengaturan() {
     deleteTrackedFromAccount(nos);
     setConfirmAll(false);
     showToast(
-      hadAccountTrackers
-        ? "Semua data di browser ini dihapus, dan tanda lamaran di akun ikut dihapus."
-        : "Semua data di browser ini dihapus.",
+      hadAccountTrackers ? labels.toastWipedAccount : labels.toastWiped,
     );
   }
 
   return (
-    /* AKSES-12: seluruh halaman ini teks Indonesia kode-keras. */
-    <div className="wrap narrow" lang="id">
+    <div className="wrap narrow">
       <div className="page-head">
-        <h1>Pengaturan</h1>
-        <p className="lede">Yang tersimpan di browser ini, dan cara menghapusnya.</p>
+        <h1>{labels.title}</h1>
+        <p className="lede">{labels.lede}</p>
       </div>
       {/* AKSES-02: pesan jujur tanpa JavaScript — halaman ini membaca
         * dan menghapus data dari browser, jadi tidak bisa jalan
-        * tanpa JavaScript. */}
+        * tanpa JavaScript. Teks di dalam noscript sengaja tetap
+        * Indonesia: tanpa JavaScript konteks bahasa tidak bisa
+        * dibaca (W2a). */}
       <noscript>
         <p className="note-line">
           <Icon name="info" size={16} />
@@ -335,12 +427,12 @@ export default function Pengaturan() {
           className="skeleton"
           style={{ height: 200 }}
           role="status"
-          aria-label="Memuat pengaturan"
+          aria-label={labels.loading}
         />
       ) : (
-        <section className="panel settings" aria-label="Data di browser">
+        <section className="panel settings" aria-label={labels.browserData}>
           <Row
-            title="Pilihanmu"
+            title={labels.choices}
             action={
               onboarding &&
               (confirmKey === "pilihan" ? (
@@ -350,25 +442,25 @@ export default function Pengaturan() {
                     className="btn small warn-btn"
                     onClick={clearChoicesConfirmed}
                   >
-                    Ya, hapus
+                    {labels.deleteConfirm}
                   </button>
                   <button
                     type="button"
                     className="btn ghost small"
                     onClick={() => setConfirmKey(null)}
                   >
-                    Batal
+                    {labels.cancel}
                   </button>
                 </span>
               ) : (
                 <button
                   type="button"
                   className="btn ghost small"
-                  aria-label="Hapus pilihan domisili dan posisi"
+                  aria-label={labels.deleteChoices}
                   onClick={() => setConfirmKey("pilihan")}
                 >
                   <Icon name="trash" size={16} />
-                  Hapus
+                  {labels.delete}
                 </button>
               ))
             }
@@ -378,11 +470,11 @@ export default function Pengaturan() {
                 {onboarding.domisili} · {onboarding.posisi}
               </p>
             ) : (
-              <p className="hint">Belum ada pilihan tersimpan.</p>
+              <p className="hint">{labels.noChoices}</p>
             )}
           </Row>
           <Row
-            title="Lamaran yang dilacak"
+            title={labels.tracked}
             action={
               trackedCount > 0 &&
               (confirmKey === "lamaran" ? (
@@ -392,37 +484,37 @@ export default function Pengaturan() {
                     className="btn small warn-btn"
                     onClick={clearTrackedConfirmed}
                   >
-                    Ya, hapus
+                    {labels.deleteConfirm}
                   </button>
                   <button
                     type="button"
                     className="btn ghost small"
                     onClick={() => setConfirmKey(null)}
                   >
-                    Batal
+                    {labels.cancel}
                   </button>
                 </span>
               ) : (
                 <button
                   type="button"
                   className="btn ghost small"
-                  aria-label="Hapus semua lamaran yang dilacak"
+                  aria-label={labels.deleteAllTracked}
                   onClick={() => setConfirmKey("lamaran")}
                 >
                   <Icon name="trash" size={16} />
-                  Hapus semua
+                  {labels.deleteAll}
                 </button>
               ))
             }
           >
             {trackedCount === 0 ? (
-              <p className="hint">Belum ada lamaran yang dilacak.</p>
+              <p className="hint">{labels.noTracked}</p>
             ) : (
-              <p>{trackedCount} lamaran dilacak.</p>
+              <p>{labels.trackedCount.replace("{n}", String(trackedCount))}</p>
             )}
           </Row>
           <Row
-            title="Pencarian terakhir"
+            title={labels.recentSearch}
             action={
               recent &&
               recentParts.length > 0 &&
@@ -433,25 +525,25 @@ export default function Pengaturan() {
                     className="btn small warn-btn"
                     onClick={clearRecentConfirmed}
                   >
-                    Ya, hapus
+                    {labels.deleteConfirm}
                   </button>
                   <button
                     type="button"
                     className="btn ghost small"
                     onClick={() => setConfirmKey(null)}
                   >
-                    Batal
+                    {labels.cancel}
                   </button>
                 </span>
               ) : (
                 <button
                   type="button"
                   className="btn ghost small"
-                  aria-label="Hapus pencarian terakhir"
+                  aria-label={labels.deleteRecent}
                   onClick={() => setConfirmKey("pencarian")}
                 >
                   <Icon name="trash" size={16} />
-                  Hapus
+                  {labels.delete}
                 </button>
               ))
             }
@@ -461,11 +553,11 @@ export default function Pengaturan() {
                 <Link href={recentHref}>{recentParts.join(" + ")}</Link>
               </p>
             ) : (
-              <p className="hint">Belum ada pencarian tersimpan.</p>
+              <p className="hint">{labels.noRecent}</p>
             )}
           </Row>
           <Row
-            title="Nomor pengunjung"
+            title={labels.visitorNo}
             action={
               visitorId &&
               (confirmKey === "pengunjung" ? (
@@ -475,41 +567,36 @@ export default function Pengaturan() {
                     className="btn small warn-btn"
                     onClick={clearVisitorConfirmed}
                   >
-                    Ya, hapus
+                    {labels.deleteConfirm}
                   </button>
                   <button
                     type="button"
                     className="btn ghost small"
                     onClick={() => setConfirmKey(null)}
                   >
-                    Batal
+                    {labels.cancel}
                   </button>
                 </span>
               ) : (
                 <button
                   type="button"
                   className="btn ghost small"
-                  aria-label="Hapus nomor pengunjung"
+                  aria-label={labels.deleteVisitor}
                   onClick={() => setConfirmKey("pengunjung")}
                 >
                   <Icon name="trash" size={16} />
-                  Hapus
+                  {labels.delete}
                 </button>
               ))
             }
           >
             {visitorId ? (
-              <p className="hint">
-                Nomor acak yang dibuat browser ini untuk menghitung
-                pengunjung tanpa nama. Nomor ini ikut terkirim bersama
-                catatan kunjungan, tanpa nama dan tanpa alamat email.
-                Menghapusnya membuat nomor baru saat kamu berkunjung lagi.
-              </p>
+              <p className="hint">{labels.visitorHint}</p>
             ) : (
-              <p className="hint">Belum ada nomor pengunjung.</p>
+              <p className="hint">{labels.noVisitor}</p>
             )}
           </Row>
-          <Row title="Catatan kunjungan">
+          <Row title={labels.visitRecords}>
             <label
               style={{
                 display: "flex",
@@ -523,44 +610,34 @@ export default function Pengaturan() {
                 checked={optedOut}
                 onChange={toggleOptOut}
               />
-              Jangan catat kunjungan saya
+              {labels.optOut}
             </label>
             <p className="hint">
-              Bila dicentang, kunjunganmu tidak dicatat sama sekali:
-              halaman yang dibuka, kata yang dicari, dan klik lamar
-              tidak terkirim. Pilihan ini hanya berlaku di browser ini.
-              Catatan yang sudah terkirim sebelumnya tidak ikut
-              terhapus, dan terhapus sendiri setelah 90 hari. Yang
-              dicatat dan yang tidak dicatat ada di halaman{" "}
-              <Link href="/privasi">Kebijakan Privasi</Link>.
+              {labels.optOutHint}
+              <Link href="/privasi">{labels.privacyPolicy}</Link>
+              {labels.optOutHintAfter}
             </p>
           </Row>
         </section>
       )}
 
-      <section className="panel settings" aria-label="Akun">
+      <section className="panel settings" aria-label={labels.account}>
         {user ? (
           <>
-            <Row title="Akun">
+            <Row title={labels.account}>
               <p>
-                Masuk sebagai <strong>{user.email}</strong>
+                {labels.signedInAs} <strong>{user.email}</strong>
                 {user.displayName ? ` (${user.displayName})` : ""}
               </p>
               {user.emailVerified ? (
-                <p className="hint">Email sudah terverifikasi.</p>
+                <p className="hint">{labels.emailVerified}</p>
               ) : (
-                <p className="hint">
-                  Email belum terverifikasi. Ketuk tautan di email
-                  verifikasi supaya akun ini dikenali sebagai milikmu.
-                </p>
+                <p className="hint">{labels.emailNotVerified}</p>
               )}
             </Row>
             {!user.emailVerified && (
-              <Row title="Verifikasi email">
-                <p className="hint">
-                  Email verifikasi dikirim saat daftar. Bila tidak
-                  sampai, kirim ulang dari sini.
-                </p>
+              <Row title={labels.verifyEmail}>
+                <p className="hint">{labels.verifyHint}</p>
                 <div className="actions-row">
                   <button
                     type="button"
@@ -568,7 +645,7 @@ export default function Pengaturan() {
                     onClick={resendVerification}
                     disabled={verifyBusy}
                   >
-                    {verifyBusy ? "Mengirim…" : "Kirim ulang email"}
+                    {verifyBusy ? labels.sending : labels.resendEmail}
                   </button>
                   <button
                     type="button"
@@ -576,7 +653,7 @@ export default function Pengaturan() {
                     onClick={recheckVerification}
                     disabled={verifyBusy}
                   >
-                    Periksa lagi
+                    {labels.checkAgain}
                   </button>
                 </div>
               </Row>
@@ -588,7 +665,7 @@ export default function Pengaturan() {
               </p>
             )}
             <Row
-              title="Tutup akun"
+              title={labels.closeAccount}
               action={
                 <a
                   className="btn ghost small"
@@ -596,66 +673,52 @@ export default function Pengaturan() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Minta di GitHub
+                  {labels.askOnGithub}
                   {/* AKSES-13: beri tahu pembaca layar bahwa tautan
                     * membuka tab baru. */}
-                  <span className="sr-only"> (membuka tab baru)</span>
+                  <span className="sr-only"> {labels.newTab}</span>
                 </a>
               }
             >
-              <p className="hint">
-                Menutup akun belum bisa dari situs. Minta lewat Issues di
-                repo GitHub, pengelola akan menghapus akun dan datanya.
-              </p>
+              <p className="hint">{labels.closeHint}</p>
             </Row>
           </>
         ) : (
-          <Row title="Akun">
-            <p className="hint">
-              Kamu belum masuk. Masuk itu pilihan, semua fitur tetap bisa
-              dipakai tanpa masuk. Buka menu untuk masuk atau daftar.
-            </p>
+          <Row title={labels.account}>
+            <p className="hint">{labels.notSignedIn}</p>
           </Row>
         )}
       </section>
 
       {/* MKT-08: kartu pasang aplikasi — hanya tampil bila browser
         * menawarkan pemasangan dan belum pernah ditutup. */}
-      <InstallPrompt />
+      <InstallPrompt labels={labels.install} />
 
-      <section className="panel" aria-label="Unduh data">
-        <p className="label">Unduh dataku</p>
-        <p className="hint">
-          Salinan datamu dalam satu berkas JSON: profil akun, tanda
-          lamaran, dan pengaturan di browser ini. Berkas dibuat di
-          perangkatmu, tidak dikirim ke mana pun.
-        </p>
+      <section className="panel" aria-label={labels.downloadData}>
+        <p className="label">{labels.downloadMine}</p>
+        <p className="hint">{labels.downloadHint}</p>
         <div className="actions-row">
           <button type="button" className="btn" onClick={exportData}>
-            Unduh data (JSON)
+            {labels.downloadJson}
           </button>
         </div>
       </section>
 
-      <section className="panel danger" aria-label="Hapus semua data">
-        <p className="label">Hapus semua data</p>
-        <p className="hint">
-          Menghapus semua data di atas dari browser ini. Bila kamu masuk,
-          tanda lamaran di akun ikut dihapus. Akunnya sendiri tetap ada.
-          Menghapus tidak bisa dibatalkan.
-        </p>
+      <section className="panel danger" aria-label={labels.wipeAll}>
+        <p className="label">{labels.wipeAll}</p>
+        <p className="hint">{labels.wipeHint}</p>
         {confirmAll ? (
           <div className="actions-row">
             <button type="button" className="btn warn-btn" onClick={wipeAll}>
-              Ya, hapus semuanya
+              {labels.confirmWipeAll}
             </button>
             <button type="button" className="btn ghost" onClick={() => setConfirmAll(false)}>
-              Batal
+              {labels.cancel}
             </button>
           </div>
         ) : (
           <button type="button" className="btn" onClick={() => setConfirmAll(true)}>
-            Hapus semua dataku
+            {labels.wipeAllBtn}
           </button>
         )}
       </section>

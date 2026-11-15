@@ -21,19 +21,19 @@ const COPY = {
     id: "Cara melaporkan masalah, mengoreksi data, dan bertanya.",
     en: "How to report a problem, correct data, and ask a question.",
   },
-  deadLabel: { id: "Tautan mati", en: "Dead link" },
-  deadTitle: { id: "Laporkan tautan mati", en: "Report a dead link" },
+  deadLabel: { id: "Laporan masalah", en: "Problem reports" },
+  deadTitle: { id: "Laporkan masalah", en: "Report a problem" },
   dead1: {
-    id: "Buka halaman perusahaannya, lalu buka bagian Ada yang salah? Laporkan tautan mati. Tulis alasan singkat, misalnya halaman tidak bisa dibuka, lalu kirim.",
-    en: "Open the company page, then open the section Something wrong? Report a dead link. Write a short reason, for example that the page cannot be opened, then send it.",
+    id: "Buka halaman perusahaannya, lalu buka bagian Ada yang salah? Laporkan masalah. Pilih jenis masalahnya — tautan mati, data salah, atau lainnya — lalu tulis penjelasan singkat, misalnya halaman tidak bisa dibuka, lalu kirim. Untuk koreksi lengkap dengan bukti, pakai bagian Koreksi data yang salah di bawah.",
+    en: "Open the company page, then open the section Something wrong? Report a problem. Choose the type of problem — dead link, wrong data, or other — then write a short explanation, for example that the page cannot be opened, then send it. For a full correction with proof, use the Correct wrong data section below.",
   },
   dead2: {
-    id: "Tidak perlu masuk akun dan tidak perlu menulis nama. Yang terkirim hanya nomor dan nama perusahaan, alasan yang kamu tulis, dan waktu laporan.",
-    en: "No account and no name needed. Only the company number and name, the reason you wrote, and the time of the report are sent.",
+    id: "Tidak perlu masuk akun dan tidak perlu menulis nama. Yang terkirim hanya nomor dan nama perusahaan, jenis masalah, alasan yang kamu tulis, dan waktu laporan.",
+    en: "No account and no name needed. Only the company number and name, the type of problem, the reason you wrote, and the time of the report are sent.",
   },
   dead3: {
-    id: "Pengelola membaca laporan yang masuk. Tidak ada balasan perorangan, karena laporan tidak meminta kontak. Bila tautan diperbaiki dan status perusahaan berubah, perubahannya tercatat di bagian Yang berubah di Beranda.",
-    en: "The maintainer reads incoming reports. There is no personal reply, because reports do not ask for contact details. If the link is fixed and the company status changes, the change is listed under What changed on the homepage.",
+    id: "Pengelola membaca laporan yang masuk. Tidak ada balasan perorangan, karena laporan tidak meminta kontak. Bila masalahnya diperbaiki dan status perusahaan berubah, perubahannya tercatat di bagian Yang berubah di Beranda.",
+    en: "The maintainer reads incoming reports. There is no personal reply, because reports do not ask for contact details. If the problem is fixed and the company status changes, the change is listed under What changed on the homepage.",
   },
   fixLabel: { id: "Data salah", en: "Wrong data" },
   fixTitle: { id: "Koreksi data yang salah", en: "Correct wrong data" },
@@ -114,7 +114,7 @@ export default async function Dukungan() {
         <p className="lede">{COPY.lede[locale]}</p>
       </div>
 
-      <section className="dash-section" aria-label="Tautan mati">
+      <section className="dash-section" aria-label="Laporkan masalah">
         <p className="section-label">{COPY.deadLabel[locale]}</p>
         <h2>{COPY.deadTitle[locale]}</h2>
         <p>{COPY.dead1[locale]}</p>

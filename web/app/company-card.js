@@ -22,6 +22,9 @@ export function CompanyCard({
   labels = {},
 }) {
   const hasPortal = safeLink(c.link_karir) && c.status !== "Portal tidak bisa dibuka";
+  /* KONTEN-04: alasan kecocokan dari lib/search.js adalah kosakata
+   * Indonesia yang juga dipakai kontrak API /api/companies, jadi
+   * tidak diubah di sumbernya — diterjemahkan di sini saat tampil. */
   const matchChips = reasons.filter(
     (r) => r === "Posisi cocok" || r === "Lokasi cocok",
   );
@@ -54,10 +57,12 @@ export function CompanyCard({
         )}
         {(matchChips.length > 0 || isNew) && (
           <p className="co-chips">
-            {isNew && <span className="chip match">Baru</span>}
+            {isNew && <span className="chip match">{labels.new || "Baru"}</span>}
             {matchChips.map((r) => (
               <span key={r} className="chip match">
-                {r}
+                {r === "Posisi cocok"
+                  ? labels.matchPosition || r
+                  : labels.matchLocation || r}
               </span>
             ))}
           </p>

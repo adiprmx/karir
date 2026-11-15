@@ -42,7 +42,18 @@ export function InstallPromptListener() {
   return null;
 }
 
-export default function InstallPrompt() {
+/* W2a (UX-08): label diteruskan halaman Pengaturan lewat props;
+ * tanpa props, teks Indonesia di bawah dipakai sebagai cadangan. */
+const INSTALL_DEFAULTS = {
+  title: "Pasang aplikasi",
+  hint: "Buka Karir langsung dari layar utama, tanpa membuka browser dulu. Ukurannya kecil dan tidak mengubah apa pun di data yang tersimpan.",
+  installing: "Memasang…",
+  install: "Pasang aplikasi",
+  later: "Nanti saja",
+};
+
+export default function InstallPrompt({ labels: labelsProp }) {
+  const labels = { ...INSTALL_DEFAULTS, ...(labelsProp || {}) };
   const [ready, setReady] = useState(false);
   const [hidden, setHidden] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -111,12 +122,9 @@ export default function InstallPrompt() {
   if (hidden || !ready) return null;
 
   return (
-    <section className="panel" aria-label="Pasang aplikasi">
-      <p className="label">Pasang aplikasi</p>
-      <p className="hint">
-        Buka Karir langsung dari layar utama, tanpa membuka browser dulu.
-        Ukurannya kecil dan tidak mengubah apa pun di data yang tersimpan.
-      </p>
+    <section className="panel" aria-label={labels.title}>
+      <p className="label">{labels.title}</p>
+      <p className="hint">{labels.hint}</p>
       <div className="actions-row">
         <button
           type="button"
@@ -124,10 +132,10 @@ export default function InstallPrompt() {
           onClick={install}
           disabled={busy}
         >
-          {busy ? "Memasang…" : "Pasang aplikasi"}
+          {busy ? labels.installing : labels.install}
         </button>
         <button type="button" className="btn ghost" onClick={dismiss}>
-          Nanti saja
+          {labels.later}
         </button>
       </div>
     </section>

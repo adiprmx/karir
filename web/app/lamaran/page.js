@@ -20,35 +20,102 @@ import { useCompanyIndex } from "@/app/company-index";
 import { ConfirmDialog, Icon, Reveal, showToast } from "@/app/visual";
 import { CompanyLogo } from "@/lib/logos";
 import { safeLink } from "@/app/components";
+import { useLabels, useLocale } from "@/app/labels-provider";
+
+/* Label halaman (W2a, UX-08): diteruskan layout rute lewat konteks;
+ * nilai di bawah adalah cadangan Bahasa Indonesia bila halaman
+ * dipakai di luar provider. */
+const DEFAULT_LABELS = {
+  title: "Lamaran Saya",
+  lede: "Perusahaan yang kamu tandai dan lamar.",
+  ledeAccount: "Tersimpan di perangkat ini dan di akun kamu.",
+  ledeGuest:
+    "Tersimpan di perangkat ini saja. Masuk dari menu untuk menyimpan ke akun juga.",
+  loading: "Memuat lamaran…",
+  retrySync: "Sinkronkan lagi",
+  lastSynced: "Terakhir disinkronkan {time}.",
+  guestBanner: "Perangkat ini punya {n} lamaran yang belum masuk akun.",
+  mergeGuest: "Gabungkan ke akun",
+  or: "atau",
+  leaveAlone: "biarkan saja",
+  filterLabel: "Saring lamaran",
+  emptyTitle: "Belum ada lamaran yang dilacak.",
+  emptyHint:
+    "Ketuk ikon tanda di kartu perusahaan, atau cari dulu perusahaan yang mau dilamar.",
+  searchCompanies: "Cari perusahaan",
+  noStatus: "Tidak ada lamaran berstatus “{status}”.",
+  viewAll: "Lihat semua",
+  companyNo: "Perusahaan No. {n}",
+  openPortal: "Buka portal karir {name} (membuka tab baru)",
+  notInData: "Perusahaan ini tidak lagi ada di data.",
+  statusLabel: "Status",
+  namesFailed: "Nama perusahaan belum bisa dimuat.",
+  retry: "Coba lagi",
+  statusChanged: "Status {name} diubah menjadi {status}.",
+  statusChangedUnknown: "Status lamaran diubah menjadi {status}.",
+  syncOk: "Lamaran sudah sinkron dengan akun.",
+  syncFail: "Belum bisa sinkron. Coba lagi nanti.",
+  mergeOk: "Lamaran digabungkan ke akun.",
+  mergeFail: "Gabungkan gagal. Coba lagi nanti.",
+  deleted: "Dihapus dari lamaran.",
+  deleteTitle: "Hapus lamaran ini?",
+  deleteMessage: "Lamaran ke {name} akan dihapus dari daftar.",
+  deleteConfirm: "Ya, hapus",
+  cancel: "Batal",
+  close: "Tutup",
+  delete: "Hapus",
+  all: "Semua",
+  sync: {
+    saved: "Tersimpan di browser ini dan di akun.",
+    sending: "Mengirim ke akun...",
+    pending: "Ada perubahan yang belum terkirim ke akun.",
+    offline:
+      "Tidak ada internet. Perubahan tersimpan di perangkat ini dan akan dikirim saat tersambung lagi.",
+    busy: "Server sedang sibuk. Perubahan tersimpan di perangkat ini dan akan dikirim nanti.",
+    session:
+      "Sesi akun berakhir. Masuk lagi supaya lamaran tersimpan ke akun.",
+    denied:
+      "Akun tidak diizinkan menyimpan. Perubahan tersimpan di perangkat ini.",
+    failed: "Sinkron ke akun gagal. Perubahan tersimpan di perangkat ini.",
+    guest:
+      "Tersimpan di browser ini saja. Masuk dari menu untuk menyimpan ke akun juga.",
+  },
+};
 
 /* Format waktu sinkron terakhir untuk label jujur (AKUN-02),
  * mis. "15 Nov, 00.26". Gagal format: kembalikan string kosong
  * (label tidak ditampilkan). */
-function formatSyncTime(iso) {
+function formatSyncTime(iso, locale) {
   try {
-    return new Date(iso).toLocaleString("id-ID", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return new Date(iso).toLocaleString(
+      locale === "en" ? "en-GB" : "id-ID",
+      {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
   } catch {
     return "";
   }
 }
 
 export default function Lamaran() {
+  const labels = useLabels(DEFAULT_LABELS);
   /* DASH-05: useSearchParams wajib di dalam Suspense supaya
    * prerender tidak gagal (Next). Fallback-nya kerangka halaman
    * yang sama seperti saat lamaran dimuat. */
   return (
     <Suspense
       fallback={
-        <div className="wrap" lang="id">
+        <div className="wrap">
           <div className="page-head">
-            <h1>Lamaran Saya</h1>
+            <h1>{labels.title}</h1>
           </div>
-          <p className="sr-only" role="status">Memuat lamaran…</p>
+          <p className="sr-only" role="status">
+            {labels.loading}
+          </p>
           <div className="co-list" aria-hidden="true">
             <div className="skeleton" style={{ height: 112 }} />
             <div className="skeleton" style={{ height: 112 }} />
@@ -62,6 +129,8 @@ export default function Lamaran() {
 }
 
 function LamaranContent() {
+  const labels = useLabels(DEFAULT_LABELS);
+  const locale = useLocale();
   const searchParams = useSearchParams();
   const {
     entries,
@@ -122,8 +191,10 @@ function LamaranContent() {
     const c = byNo.get(Number(e.no));
     showToast(
       c
-        ? `Status ${c.perusahaan} diubah menjadi ${status}.`
-        : `Status lamaran diubah menjadi ${status}.`,
+        ? labels.statusChanged
+            .replace("{name}", c.perusahaan)
+            .replace("{status}", status)
+        : labels.statusChangedUnknown.replace("{status}", status),
     );
   }
 
@@ -134,46 +205,39 @@ function LamaranContent() {
   function handleDelete(no) {
     setPendingDelete(null);
     remove(no);
-    showToast("Dihapus dari lamaran.");
+    showToast(labels.deleted);
   }
 
   /* Sinkron manual (LAM-04): tombol di spanduk status. */
   async function handleRetry() {
     const res = await retrySync();
-    showToast(
-      res && res.ok
-        ? "Lamaran sudah sinkron dengan akun."
-        : "Belum bisa sinkron. Coba lagi nanti.",
-    );
+    showToast(res && res.ok ? labels.syncOk : labels.syncFail);
   }
 
   /* Gabungkan lamaran tamu ke akun (AKUN-06), atas pilihan
    * pengguna. Bila gagal, data tamu tetap utuh. */
   async function handleMergeGuest() {
     const res = await mergeGuest();
-    showToast(
-      res && res.ok
-        ? "Lamaran digabungkan ke akun."
-        : "Gabungkan gagal. Coba lagi nanti.",
-    );
+    showToast(res && res.ok ? labels.mergeOk : labels.mergeFail);
   }
 
-  const lastSynced = lastSyncedAt ? formatSyncTime(lastSyncedAt) : "";
+  const lastSynced = lastSyncedAt
+    ? formatSyncTime(lastSyncedAt, locale)
+    : "";
 
   return (
-    /* AKSES-12: seluruh halaman ini teks Indonesia kode-keras. */
-    <div className="wrap" lang="id">
+    <div className="wrap">
       <div className="page-head">
-        <h1>Lamaran Saya</h1>
+        <h1>{labels.title}</h1>
         <p className="lede">
-          Perusahaan yang kamu tandai dan lamar.{" "}
-          {syncState !== "tamu"
-            ? "Tersimpan di perangkat ini dan di akun kamu."
-            : "Tersimpan di perangkat ini saja. Masuk dari menu untuk menyimpan ke akun juga."}
+          {labels.lede}{" "}
+          {syncState !== "tamu" ? labels.ledeAccount : labels.ledeGuest}
         </p>
       </div>
       {/* AKSES-02: pesan jujur tanpa JavaScript — halaman ini membaca
-        * data dari browser, jadi tidak bisa di-render server. */}
+        * data dari browser, jadi tidak bisa di-render server. Teks di
+        * dalam noscript sengaja tetap Indonesia: tanpa JavaScript
+        * konteks bahasa tidak bisa dibaca (W2a). */}
       <noscript>
         <p className="note-line">
           <Icon name="info" size={16} />
@@ -185,38 +249,38 @@ function LamaranContent() {
       {syncState === "tertunda" && (
         <p className="note-line">
           <Icon name="info" size={16} />
-          {syncStatusMessage(syncState, syncError)}{" "}
+          {syncStatusMessage(syncState, syncError, labels.sync)}{" "}
           <button type="button" className="linkish" onClick={handleRetry}>
-            Sinkronkan lagi
+            {labels.retrySync}
           </button>
         </p>
       )}
       {syncState === "mengirim" && (
         <p className="note-line">
           <Icon name="info" size={16} />
-          {syncStatusMessage(syncState, syncError)}
+          {syncStatusMessage(syncState, syncError, labels.sync)}
         </p>
       )}
       {syncState === "sinkron" && lastSynced && (
         <p className="note-line">
           <Icon name="info" size={16} />
-          Terakhir disinkronkan {lastSynced}.
+          {labels.lastSynced.replace("{time}", lastSynced)}
         </p>
       )}
       {syncState !== "tamu" && guestCount > 0 && !guestDismissed && (
         <p className="note-line">
           <Icon name="info" size={16} />
-          Perangkat ini punya {guestCount} lamaran yang belum masuk akun.{" "}
+          {labels.guestBanner.replace("{n}", String(guestCount))}{" "}
           <button type="button" className="linkish" onClick={handleMergeGuest}>
-            Gabungkan ke akun
+            {labels.mergeGuest}
           </button>{" "}
-          atau{" "}
+          {labels.or}{" "}
           <button
             type="button"
             className="linkish"
             onClick={() => setGuestDismissed(true)}
           >
-            biarkan saja
+            {labels.leaveAlone}
           </button>
         </p>
       )}
@@ -225,7 +289,7 @@ function LamaranContent() {
         <div
           className="tabs-scroll"
           role="tablist"
-          aria-label="Saring lamaran"
+          aria-label={labels.filterLabel}
           ref={tablistRef}
           onKeyDown={onTabKeyDown}
         >
@@ -243,7 +307,7 @@ function LamaranContent() {
               className="tab-pill"
               onClick={() => setTab(s)}
             >
-              {s}
+              {s === "Semua" ? labels.all : s}
               <span className="chip-count num">
                 {loaded ? (s === "Semua" ? tracked.length : count(s)) : 0}
               </span>
@@ -262,7 +326,7 @@ function LamaranContent() {
           <>
             {/* AKSES-16: status muat diumumkan; skeleton-nya sendiri
               * tetap aria-hidden karena hanya hiasan. */}
-            <p className="sr-only" role="status">Memuat lamaran…</p>
+            <p className="sr-only" role="status">{labels.loading}</p>
             <div className="co-list" aria-hidden="true">
               <div className="skeleton" style={{ height: 112 }} />
               <div className="skeleton" style={{ height: 112 }} />
@@ -270,21 +334,18 @@ function LamaranContent() {
           </>
         ) : tracked.length === 0 ? (
           <div className="state">
-            <strong>Belum ada lamaran yang dilacak.</strong>
-            <p>
-              Ketuk ikon tanda di kartu perusahaan, atau cari dulu perusahaan
-              yang mau dilamar.
-            </p>
+            <strong>{labels.emptyTitle}</strong>
+            <p>{labels.emptyHint}</p>
             <Link className="btn" href="/cari">
-              Cari perusahaan
+              {labels.searchCompanies}
               <Icon name="arrow" size={18} />
             </Link>
           </div>
         ) : shown.length === 0 ? (
           <div className="state">
-            <strong>Tidak ada lamaran berstatus “{tab}”.</strong>
+            <strong>{labels.noStatus.replace("{status}", tab)}</strong>
             <button type="button" className="btn ghost" onClick={() => setTab("Semua")}>
-              Lihat semua
+              {labels.viewAll}
             </button>
           </div>
         ) : (
@@ -301,7 +362,9 @@ function LamaranContent() {
                     )}
                     <div className="app-title">
                       <Link href={`/perusahaan/${e.no}`}>
-                        {c ? c.perusahaan : `Perusahaan No. ${e.no}`}
+                        {c
+                          ? c.perusahaan
+                          : labels.companyNo.replace("{n}", String(e.no))}
                       </Link>
                       <span className="co-cat">
                         {[c && c.kategori, e.tanggal].filter(Boolean).join(" · ")}
@@ -313,7 +376,10 @@ function LamaranContent() {
                         href={c.link_karir}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label={`Buka portal karir ${c.perusahaan} (membuka tab baru)`}
+                        aria-label={labels.openPortal.replace(
+                          "{name}",
+                          c.perusahaan,
+                        )}
                       >
                         <Icon name="ext" size={18} />
                       </a>
@@ -321,11 +387,11 @@ function LamaranContent() {
                   </div>
                   {e.catatan && <p className="app-note">{e.catatan}</p>}
                   {!c && state === "ok" && (
-                    <p className="app-note">Perusahaan ini tidak lagi ada di data.</p>
+                    <p className="app-note">{labels.notInData}</p>
                   )}
                   <div className="app-bottom">
                     <div className="field slim">
-                      <label htmlFor={`st-${e.no}`}>Status</label>
+                      <label htmlFor={`st-${e.no}`}>{labels.statusLabel}</label>
                       <select
                         id={`st-${e.no}`}
                         value={e.status}
@@ -344,7 +410,7 @@ function LamaranContent() {
                       onClick={() => setPendingDelete(e)}
                     >
                       <Icon name="trash" size={16} />
-                      Hapus
+                      {labels.delete}
                     </button>
                   </div>
                 </li>
@@ -355,21 +421,27 @@ function LamaranContent() {
         {state === "error" && tracked.length > 0 && (
           <p className="note-line">
             <Icon name="info" size={16} />
-            Nama perusahaan belum bisa dimuat.{" "}
+            {labels.namesFailed}{" "}
             <button type="button" className="linkish" onClick={start}>
-              Coba lagi
+              {labels.retry}
             </button>
           </p>
         )}
         <ConfirmDialog
           open={pendingDelete !== null}
-          title="Hapus lamaran ini?"
+          title={labels.deleteTitle}
           message={
             pendingDelete
-              ? `Lamaran ke ${byNo.get(Number(pendingDelete.no))?.perusahaan || `Perusahaan No. ${pendingDelete.no}`} akan dihapus dari daftar.`
+              ? labels.deleteMessage.replace(
+                  "{name}",
+                  byNo.get(Number(pendingDelete.no))?.perusahaan ||
+                    labels.companyNo.replace("{n}", String(pendingDelete.no)),
+                )
               : ""
           }
-          confirmLabel="Ya, hapus"
+          confirmLabel={labels.deleteConfirm}
+          cancelLabel={labels.cancel}
+          closeLabel={labels.close}
           onConfirm={() => pendingDelete && handleDelete(pendingDelete.no)}
           onCancel={() => setPendingDelete(null)}
         />

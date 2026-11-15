@@ -54,11 +54,15 @@ function MiniRow({ c }) {
   );
 }
 
-function RecheckList({ title, status, list, locale }) {
+/* DASH-03: judul lipatan diturunkan dari statusnya — judul dan status
+ * adalah nilai yang sama (nama status adalah kosakata data, sengaja
+ * tetap Bahasa Indonesia di semua bahasa), jadi tidak ada prop judul
+ * terpisah yang bisa berbeda. */
+function RecheckList({ status, list, locale }) {
   return (
     <details className="fold">
       <summary>
-        <span>{title}</span>
+        <span>{status}</span>
         <span className="num fold-n">{list.length}</span>
         <Icon name="chevron" size={18} className="fold-ic" />
       </summary>
@@ -135,7 +139,31 @@ export default async function Dasbor() {
         </p>
       )}
 
-      <DashboardPersonal />
+      {/* W2a (DASH-03): label Dasbor saya diteruskan lewat props. */}
+      <DashboardPersonal
+        labels={{
+          title: t(locale, "dashMine.title"),
+          choiceBoth: t(locale, "dashMine.choiceBoth"),
+          choiceDomisili: t(locale, "dashMine.choiceDomisili"),
+          choicePosisi: t(locale, "dashMine.choicePosisi"),
+          noChoice: t(locale, "dashMine.noChoice"),
+          viewMatches: t(locale, "dashMine.viewMatches"),
+          editChoices: t(locale, "mulai.editChoices"),
+          start: t(locale, "nav.mulai"),
+          lastSearch: t(locale, "dashMine.lastSearch"),
+          nextSteps: t(locale, "dashMine.nextSteps"),
+          stepChoice: t(locale, "dashMine.stepChoice"),
+          stepFirstMark: t(locale, "dashMine.stepFirstMark"),
+          stepReadMethod: t(locale, "dashMine.stepReadMethod"),
+          done: t(locale, "dashMine.done"),
+          trackerTitle: t(locale, "tracker.title"),
+          emptyTitle: t(locale, "lamaran.emptyTitle"),
+          sync: {
+            saved: t(locale, "sync.saved"),
+            guest: t(locale, "sync.guest"),
+          },
+        }}
+      />
 
       <div className="dash-grid">
         <Reveal className="panel">
@@ -223,13 +251,11 @@ export default async function Dasbor() {
       <section className="sec" aria-label={t(locale, "dash.recheck")}>
         <Reveal>
           <RecheckList
-            title="Portal tidak bisa dibuka"
             status="Portal tidak bisa dibuka"
             list={portalDead}
             locale={locale}
           />
           <RecheckList
-            title="Tidak dapat diverifikasi"
             status="Tidak dapat diverifikasi"
             list={unverified}
             locale={locale}

@@ -392,11 +392,11 @@ describe("kata terverifikasi menaut ke definisi (TS-04)", () => {
   it("beranda, hero, dan /mulai menautkan kata itu ke /metode", () => {
     assert.ok(baca("app/page.js").includes('<Link href="/metode">'));
     assert.ok(baca("app/hero-search.js").includes('<Link href="/metode">'));
-    assert.ok(
-      baca("app/mulai/page.js").includes(
-        '<Link href="/metode">terverifikasi</Link>',
-      ),
-    );
+    /* /mulai: kalimatnya lokal (W2a) — kata dicari di kalimatnya
+     * sendiri lalu dibungkus tautan yang sama (merge W2a+W2b). */
+    const mulai = baca("app/mulai/page.js");
+    assert.ok(mulai.includes('<Link href="/metode">{kata}</Link>'));
+    assert.ok(mulai.includes('kalimat.includes("terverifikasi")'));
   });
 });
 

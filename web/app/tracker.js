@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog, Icon, showToast } from "@/app/visual";
 import { trackEvent } from "@/app/analytics-track";
+import { useLabels } from "@/app/labels-provider";
 import {
   TOMBSTONE_KEY,
   TRACKER_STATUSES,
@@ -297,28 +298,61 @@ function markGuest() {
 
 /* Kalimat status sinkron untuk antarmuka (tanpa istilah teknis;
  * yang ditekankan: data lokal tidak pernah hilang bila sinkron
- * gagal). Dipakai petunjuk TrackerControl dan spanduk /lamaran. */
-export function syncStatusMessage(state, error) {
-  if (state === "sinkron") return "Tersimpan di browser ini dan di akun.";
-  if (state === "mengirim") return "Mengirim ke akun...";
+ * gagal). Dipakai petunjuk TrackerControl dan spanduk /lamaran.
+ * W2a (UX-08): argumen ketiga opsional berisi terjemahan (kunci
+ * sync.* dari i18n); tanpa itu kalimat Indonesia di bawah dipakai. */
+const SYNC_MESSAGES_ID = {
+  saved: "Tersimpan di browser ini dan di akun.",
+  sending: "Mengirim ke akun...",
+  pending: "Ada perubahan yang belum terkirim ke akun.",
+  offline:
+    "Tidak ada internet. Perubahan tersimpan di perangkat ini dan akan dikirim saat tersambung lagi.",
+  busy: "Server sedang sibuk. Perubahan tersimpan di perangkat ini dan akan dikirim nanti.",
+  session:
+    "Sesi akun berakhir. Masuk lagi supaya lamaran tersimpan ke akun.",
+  denied:
+    "Akun tidak diizinkan menyimpan. Perubahan tersimpan di perangkat ini.",
+  failed: "Sinkron ke akun gagal. Perubahan tersimpan di perangkat ini.",
+  guest:
+    "Tersimpan di browser ini saja. Masuk dari menu untuk menyimpan ke akun juga.",
+};
+
+export function syncStatusMessage(state, error, messages) {
+  const m = { ...SYNC_MESSAGES_ID, ...(messages || {}) };
+  if (state === "sinkron") return m.saved;
+  if (state === "mengirim") return m.sending;
   if (state === "tertunda") {
-    if (!error) return "Ada perubahan yang belum terkirim ke akun.";
+    if (!error) return m.pending;
     if (error.code === "offline") {
-      return "Tidak ada internet. Perubahan tersimpan di perangkat ini dan akan dikirim saat tersambung lagi.";
+      return m.offline;
     }
     if (error.code === "sibuk") {
-      return "Server sedang sibuk. Perubahan tersimpan di perangkat ini dan akan dikirim nanti.";
+      return m.busy;
     }
     if (error.code === "sesi") {
-      return "Sesi akun berakhir. Masuk lagi supaya lamaran tersimpan ke akun.";
+      return m.session;
     }
     if (error.code === "ditolak") {
-      return "Akun tidak diizinkan menyimpan. Perubahan tersimpan di perangkat ini.";
+      return m.denied;
     }
-    return "Sinkron ke akun gagal. Perubahan tersimpan di perangkat ini.";
+    return m.failed;
   }
-  return "Tersimpan di browser ini saja. Masuk dari menu untuk menyimpan ke akun juga.";
+  return m.guest;
 }
+
+/* Toast dari toggle() (W2a, KONTEN-04/UX-08): dibaca dari konteks
+ * label layout akar supaya ikut bahasa aktif di Beranda, /cari, dan
+ * halaman detail. Di luar provider (mis. navigasi) teks Indonesia
+ * di bawah yang dipakai. */
+const TRACKER_TOAST_DEFAULTS = {
+  trackerMarked: "{name} ditandai.",
+  trackerView: "Lihat",
+  trackerSaveRefused:
+    "Browser menolak menyimpan. Coba keluar dari mode privat.",
+  trackerUnmarked: "Tanda dilepas.",
+  trackerInProgress:
+    "Lamaran ini sudah berprogres. Ubah dari halaman Lamaran.",
+};
 
 /* Baca/tulis memakai kunci yang sedang aktif (akun yang masuk,
  * atau kunci tamu bila belum masuk). */
@@ -462,6 +496,7 @@ export function useTracker() {
     lastSyncedAt,
   }));
   const [guestCount, setGuestCount] = useState(0);
+  const toastLabels = useLabels(TRACKER_TOAST_DEFAULTS);
 
   useEffect(() => {
     /* Baca awal dijadwalkan sebagai microtask: setState di dalam
@@ -652,25 +687,29 @@ export function useTracker() {
           });
         }
         if (ok) {
-          showToast(`${company.perusahaan} ditandai.`, "/lamaran", "Lihat");
+          showToast(
+            toastLabels.trackerMarked.replace("{name}", company.perusahaan),
+            "/lamaran",
+            toastLabels.trackerView,
+          );
         } else {
-          showToast("Browser menolak menyimpan. Coba keluar dari mode privat.");
+          showToast(toastLabels.trackerSaveRefused);
         }
       } else if (cur.status === "Ditandai" && !cur.catatan) {
         remove(company.no);
-        showToast("Tanda dilepas.");
+        showToast(toastLabels.trackerUnmarked);
       } else {
         /* LAM-11: lamaran yang sudah berprogres tidak bisa dilepas
          * dari tanda — ketukan tetap memberi respons: petunjuk ke
          * halaman Lamaran, tempat statusnya bisa diubah/dihapus. */
         showToast(
-          "Lamaran ini sudah berprogres. Ubah dari halaman Lamaran.",
+          toastLabels.trackerInProgress,
           "/lamaran",
-          "Lihat",
+          toastLabels.trackerView,
         );
       }
     },
-    [save, remove],
+    [save, remove, toastLabels],
   );
 
   /* Sinkron manual (tombol "Sinkronkan lagi"): selalu mencoba,
@@ -747,8 +786,35 @@ export function useTracker() {
 
 /* Kontrol pelacak di halaman detail: pilih status satu ketukan (langsung
  * tersimpan), lalu tanggal dan catatan muncul. Menyentuh status adalah
- * niat melacak; hanya melihat halaman tidak menyimpan apa pun. */
-export function TrackerControl({ company }) {
+ * niat melacak; hanya melihat halaman tidak menyimpan apa pun.
+ *
+ * W2a (UX-08): label diteruskan halaman detail (server) lewat props;
+ * tanpa props, teks Indonesia di bawah dipakai sebagai cadangan. Nama
+ * status (Ditandai, Sudah dilamar, ...) adalah kosakata data dan
+ * sengaja tetap Bahasa Indonesia, sama seperti nama status perusahaan
+ * di seluruh situs. */
+const TRACKER_CONTROL_DEFAULTS = {
+  title: "Lamaran saya",
+  loading: "Memuat pelacak lamaran",
+  statusLabel: "Status lamaran",
+  dateLabel: "Tanggal",
+  noteLabel: "Catatan",
+  notePlaceholder: "Catatan untuk dirimu sendiri",
+  remove: "Hapus dari lamaran",
+  deleteTitle: "Hapus lamaran ini?",
+  deleteMessage: "Lamaran ke {name} akan dihapus dari daftar.",
+  deleteConfirm: "Ya, hapus",
+  cancel: "Batal",
+  close: "Tutup",
+  saved: "Tersimpan di browser ini.",
+  saveFailed: "Browser menolak menyimpan.",
+  deleted: "Dihapus dari lamaran.",
+  hint: "Ketuk satu status untuk mulai melacak perusahaan ini.",
+  sync: SYNC_MESSAGES_ID,
+};
+
+export function TrackerControl({ company, labels: labelsProp }) {
+  const labels = { ...TRACKER_CONTROL_DEFAULTS, ...(labelsProp || {}) };
   const { entries, loaded, syncState, syncError, save, remove } = useTracker();
   const entry = entries[String(company.no)];
   const [tanggal, setTanggal] = useState(todayLocal());
@@ -796,7 +862,7 @@ export function TrackerControl({ company }) {
         action: patch.status,
       });
     }
-    showToast(ok ? "Tersimpan di browser ini." : "Browser menolak menyimpan.");
+    showToast(ok ? labels.saved : labels.saveFailed);
   }
 
   const idx = entry ? TRACKER_STATUSES.indexOf(entry.status) : -1;
@@ -819,10 +885,9 @@ export function TrackerControl({ company }) {
   }
 
   return (
-    /* AKSES-12: seluruh seksi ini teks Indonesia kode-keras. */
-    <section className="panel" aria-labelledby="lamaran-h" id="lamaran" lang="id">
+    <section className="panel" aria-labelledby="lamaran-h" id="lamaran">
       <h2 id="lamaran-h" className="panel-title">
-        Lamaran saya
+        {labels.title}
       </h2>
       {!loaded ? (
         /* AKSES-16: status muat diumumkan ke pembaca layar. */
@@ -830,14 +895,14 @@ export function TrackerControl({ company }) {
           className="skeleton"
           style={{ height: 52 }}
           role="status"
-          aria-label="Memuat pelacak lamaran"
+          aria-label={labels.loading}
         />
       ) : (
         <>
           <div
             className={`seg${idx < 0 ? " seg-none" : ""}`}
             role="radiogroup"
-            aria-label="Status lamaran"
+            aria-label={labels.statusLabel}
             ref={radioGroupRef}
             onKeyDown={onRadioKeyDown}
             style={{ "--n": TRACKER_STATUSES.length, "--k": Math.max(0, idx) }}
@@ -860,7 +925,7 @@ export function TrackerControl({ company }) {
           {entry ? (
             <div className="track-fields">
               <div className="field">
-                <label htmlFor="tracker-tanggal">Tanggal</label>
+                <label htmlFor="tracker-tanggal">{labels.dateLabel}</label>
                 <input
                   id="tracker-tanggal"
                   type="date"
@@ -872,13 +937,13 @@ export function TrackerControl({ company }) {
                 />
               </div>
               <div className="field">
-                <label htmlFor="tracker-catatan">Catatan</label>
+                <label htmlFor="tracker-catatan">{labels.noteLabel}</label>
                 <input
                   id="tracker-catatan"
                   type="text"
                   value={catatan}
                   maxLength={200}
-                  placeholder="Catatan untuk dirimu sendiri"
+                  placeholder={labels.notePlaceholder}
                   autoComplete="off"
                   onChange={(e) => setCatatan(e.target.value)}
                   onBlur={() => {
@@ -894,27 +959,32 @@ export function TrackerControl({ company }) {
                 onClick={() => setConfirmDelete(true)}
               >
                 <Icon name="trash" size={16} />
-                Hapus dari lamaran
+                {labels.remove}
               </button>
               <ConfirmDialog
                 open={confirmDelete}
-                title="Hapus lamaran ini?"
-                message={`Lamaran ke ${company.perusahaan} akan dihapus dari daftar.`}
-                confirmLabel="Ya, hapus"
+                title={labels.deleteTitle}
+                message={labels.deleteMessage.replace(
+                  "{name}",
+                  company.perusahaan,
+                )}
+                confirmLabel={labels.deleteConfirm}
+                cancelLabel={labels.cancel}
+                closeLabel={labels.close}
                 onConfirm={() => {
                   setConfirmDelete(false);
                   remove(company.no);
-                  showToast("Dihapus dari lamaran.");
+                  showToast(labels.deleted);
                 }}
                 onCancel={() => setConfirmDelete(false)}
               />
             </div>
           ) : (
-            <p className="hint">
-              Ketuk satu status untuk mulai melacak perusahaan ini.
-            </p>
+            <p className="hint">{labels.hint}</p>
           )}
-          <p className="hint">{syncStatusMessage(syncState, syncError)}</p>
+          <p className="hint">
+            {syncStatusMessage(syncState, syncError, labels.sync)}
+          </p>
         </>
       )}
     </section>

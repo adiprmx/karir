@@ -75,12 +75,14 @@ const NOT_DONE = [
   "Tidak ada data pribadi yang dimasukkan ke formulir perusahaan.",
 ];
 
+/* UX-10: faktor urutan hasil, dari yang paling berpengaruh, tanpa
+ * angka skor internal yang tidak membantu pembaca. */
 const SCORE_RULES = [
-  "Posisi cocok dengan data: +50",
-  "Domisili cocok dengan data: +30",
-  "Lowongan terverifikasi: +20",
-  "Portal tidak bisa dibuka: -20",
-  "Tidak dapat diverifikasi: -10",
+  "Posisi cocok dengan data — yang paling menentukan.",
+  "Domisili cocok dengan data.",
+  "Lowongan terverifikasi.",
+  "Portal tidak bisa dibuka — menurunkan urutan.",
+  "Tidak dapat diverifikasi — menurunkan urutan.",
 ];
 
 function numClass(status) {
@@ -102,6 +104,11 @@ export default async function Metode() {
       <div className="page-head anim-fade-up">
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
+        {/* INFO-11: isi halaman ini hanya Bahasa Indonesia; beri tahu
+          * pengunjung mode Inggris, bukan pura-pura diterjemahkan. */}
+        {locale === "en" && (
+          <p className="note-line">{t(locale, "info.idOnly")}</p>
+        )}
       </div>
 
       {source === "seed" && (
@@ -126,6 +133,29 @@ export default async function Metode() {
             <li key={r}>{r}</li>
           ))}
         </ul>
+        {/* INFO-09: sebagian perusahaan mencantumkan email atau
+          * WhatsApp HR sebagai kanal melamar; kanal itu tampil di
+          * halaman perusahaan sebagai Cara lain melamar. */}
+        <p>
+          Sebagian perusahaan juga mencantumkan email atau WhatsApp HR
+          sebagai kanal melamar. Kanal itu tampil di halaman perusahaan
+          sebagai Cara lain melamar.
+        </p>
+      </section>
+
+      {/* INFO-08: pengecekan ulang harian — kapan jalan, ke mana
+        * perubahannya dicatat, dan apa yang diperbarui. */}
+      <section
+        className="dash-section anim-fade-up"
+        aria-label="Pengecekan ulang"
+      >
+        <p className="section-label">Pengecekan ulang</p>
+        <h2>Data dicek ulang setiap hari</h2>
+        <p>
+          Kanal target dicek ulang setiap hari pukul 01.00 WIB. Bila
+          statusnya berubah, perubahan itu dicatat di bagian Yang berubah
+          di Beranda, dan tanggal cek perusahaan itu diperbarui.
+        </p>
       </section>
 
       <section
@@ -140,10 +170,7 @@ export default async function Metode() {
               <span className={numClass(s.status)}>
                 <CountUp value={stats.byStatus[s.status] || 0} />
               </span>
-              <span
-                className="stat-label"
-                style={{ textAlign: "left", flex: 1 }}
-              >
+              <span className="stat-label">
                 <StatusDot status={s.status} /> {s.status}. {s.text}
               </span>
             </li>
@@ -188,8 +215,10 @@ export default async function Metode() {
         <p className="section-label">Skor di halaman Cari</p>
         <h2>Cara hasil diurutkan</h2>
         <p>
-          Hasil diurutkan berdasarkan skor. Kalimat penyangkalan di data tidak
-          dihitung sebagai kecocokan.
+          Hasil diurutkan dari yang paling cocok. Urutannya ditentukan
+          hal-hal berikut, dari yang paling berpengaruh. Kalimat yang
+          bilang tidak ada lowongan tidak dihitung sebagai kecocokan,
+          walaupun menyebut nama posisinya.
         </p>
         <ul className="recheck-list">
           {SCORE_RULES.map((r) => (

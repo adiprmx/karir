@@ -12,6 +12,48 @@ import { hasOnboardingChoice, useOnboarding } from "@/app/onboarding";
 import { useCompanyIndex, rank } from "@/app/company-index";
 import { trackEvent } from "@/app/analytics-track";
 import { ConfirmDialog, Icon, showToast } from "@/app/visual";
+import { useLabels } from "@/app/labels-provider";
+
+/* Label halaman (W2a, ONB-07): diteruskan layout rute lewat konteks;
+ * nilai di bawah adalah cadangan Bahasa Indonesia bila halaman
+ * dipakai di luar provider. */
+const DEFAULT_LABELS = {
+  title: "Mulai",
+  lede: "Karir mengumpulkan kanal lowongan resmi perusahaan. Jawab dua hal di bawah ini, lalu lihat kanal yang paling cocok denganmu.",
+  loadingChoices: "Memuat pilihan",
+  currentChoices: "Pilihanmu saat ini",
+  domisili: "Domisili",
+  posisi: "Posisi",
+  notFilled: "Belum diisi",
+  viewMatches: "Lihat lowongan yang cocok",
+  editChoices: "Ubah pilihan",
+  clearChoices: "Hapus pilihanku",
+  savedLocal:
+    "Pilihanmu tersimpan di browser ini saja, tidak dikirim ke mana pun.",
+  clearTitle: "Hapus pilihanmu?",
+  clearMessage:
+    "Domisili dan posisi yang tersimpan akan dihapus dari browser ini.",
+  wizardLabel: "Tiga langkah singkat",
+  stepOf: "Langkah {n} dari 3",
+  whereLive: "Di mana kamu tinggal?",
+  domisiliPh: "mis. Bogor, Depok, Cibinong",
+  whatRole: "Posisi apa yang kamu cari?",
+  posisiPh: "mis. Helper Gudang, Cleaning Service",
+  matchedChannels: "kanal cocok",
+  verifiedAmong: "{n} di antaranya lowongan terverifikasi.",
+  topThree: "Tiga yang paling cocok",
+  countError:
+    "Jumlah kanal belum bisa dihitung, tetapi tombol di bawah tetap berfungsi.",
+  fillOne: "Isi salah satu untuk melihat jumlah kanal yang cocok.",
+  back: "Kembali",
+  skip: "Lewati",
+  next: "Lanjut",
+  saveFailed: "Pilihan tidak bisa disimpan di browser ini.",
+  clearFailed: "Pilihan tidak bisa dihapus. Coba lagi.",
+  deleteConfirm: "Ya, hapus",
+  cancel: "Batal",
+  close: "Tutup",
+};
 
 const CITY_CHIPS = [
   "Depok",
@@ -37,6 +79,7 @@ const ROLE_CHIPS = [
 ];
 
 export default function Mulai() {
+  const labels = useLabels(DEFAULT_LABELS);
   const router = useRouter();
   const { data, loaded, save, clear } = useOnboarding();
   const { index, state } = useCompanyIndex({ eager: true });
@@ -120,7 +163,7 @@ export default function Mulai() {
      * di layout, jadi toast bertahan melewati navigasi); hasil
      * pencarian tetap dibuka karena filternya ada di URL. */
     if ((d || p) && !save({ domisili: d, posisi: p })) {
-      showToast("Pilihan tidak bisa disimpan di browser ini.");
+      showToast(labels.saveFailed);
     }
     const query = params.toString();
     router.push(query ? `/cari?${query}` : "/cari");
@@ -157,7 +200,7 @@ export default function Mulai() {
   function onClear() {
     setConfirmClear(false);
     if (!clear()) {
-      showToast("Pilihan tidak bisa dihapus. Coba lagi.");
+      showToast(labels.clearFailed);
       return;
     }
     setDomisili("");
@@ -172,17 +215,15 @@ export default function Mulai() {
   const showSummary = loaded && hasOnboardingChoice(data) && !editing;
 
   return (
-    /* AKSES-12: seluruh halaman ini teks Indonesia kode-keras. */
-    <div className="wrap narrow" lang="id">
+    <div className="wrap narrow">
       <div className="page-head">
-        <h1>Mulai</h1>
-        <p className="lede">
-          Karir mengumpulkan kanal lowongan resmi perusahaan. Jawab dua hal
-          di bawah ini, lalu lihat kanal yang paling cocok denganmu.
-        </p>
+        <h1>{labels.title}</h1>
+        <p className="lede">{labels.lede}</p>
       </div>
       {/* AKSES-02: pesan jujur tanpa JavaScript — wizard ini membaca
-        * data dari browser dan tidak bisa di-render server. */}
+        * data dari browser dan tidak bisa di-render server. Teks di
+        * dalam noscript sengaja tetap Indonesia: tanpa JavaScript
+        * konteks bahasa tidak bisa dibaca (W2a). */}
       <noscript>
         <p className="note-line">
           <Icon name="info" size={16} />
@@ -195,60 +236,60 @@ export default function Mulai() {
         * pengguna lama tidak lagi sempat melihat wizard kosong
         * sebelum ringkasannya muncul. */}
       {!loaded ? (
-        <section className="panel" aria-label="Memuat pilihan" aria-busy="true">
+        <section className="panel" aria-label={labels.loadingChoices} aria-busy="true">
           <div className="skeleton" style={{ height: 28, width: "60%" }} />
           <div className="skeleton" style={{ height: 80, marginTop: 16 }} />
         </section>
       ) : showSummary ? (
-        <section className="panel" aria-label="Pilihanmu saat ini">
-          <p className="label">Pilihanmu saat ini</p>
+        <section className="panel" aria-label={labels.currentChoices}>
+          <p className="label">{labels.currentChoices}</p>
           <dl className="facts">
             <div>
-              <dt>Domisili</dt>
-              <dd>{data.domisili || "Belum diisi"}</dd>
+              <dt>{labels.domisili}</dt>
+              <dd>{data.domisili || labels.notFilled}</dd>
             </div>
             <div>
-              <dt>Posisi</dt>
-              <dd>{data.posisi || "Belum diisi"}</dd>
+              <dt>{labels.posisi}</dt>
+              <dd>{data.posisi || labels.notFilled}</dd>
             </div>
           </dl>
           <div className="actions-row">
             <button type="button" className="btn" onClick={goToResults}>
-              Lihat lowongan yang cocok
+              {labels.viewMatches}
               <Icon name="arrow" size={18} />
             </button>
             <button type="button" className="btn ghost" onClick={onEdit}>
-              Ubah pilihan
+              {labels.editChoices}
             </button>
             <button
               type="button"
               className="btn ghost"
               onClick={() => setConfirmClear(true)}
             >
-              Hapus pilihanku
+              {labels.clearChoices}
             </button>
           </div>
-          <p className="hint">
-            Pilihanmu tersimpan di browser ini saja, tidak dikirim ke mana pun.
-          </p>
+          <p className="hint">{labels.savedLocal}</p>
           <ConfirmDialog
             open={confirmClear}
-            title="Hapus pilihanmu?"
-            message="Domisili dan posisi yang tersimpan akan dihapus dari browser ini."
-            confirmLabel="Ya, hapus"
+            title={labels.clearTitle}
+            message={labels.clearMessage}
+            confirmLabel={labels.deleteConfirm}
+            cancelLabel={labels.cancel}
+            closeLabel={labels.close}
             onConfirm={onClear}
             onCancel={() => setConfirmClear(false)}
           />
         </section>
       ) : (
-        <section className="panel wizard" aria-label="Tiga langkah singkat">
+        <section className="panel wizard" aria-label={labels.wizardLabel}>
           <div className="wiz-steps" aria-hidden="true">
             {[1, 2, 3].map((n) => (
               <span key={n} className={n <= step ? "on" : ""} />
             ))}
           </div>
           <p className="label" aria-live="polite">
-            Langkah {step} dari 3
+            {labels.stepOf.replace("{n}", String(step))}
           </p>
 
           {/* AKSES-10: langkah wizard di dalam <form> supaya Enter di
@@ -258,14 +299,14 @@ export default function Mulai() {
             {step === 1 && (
               <>
                 <div className="field">
-                  <label htmlFor="mulai-domisili">Di mana kamu tinggal?</label>
+                  <label htmlFor="mulai-domisili">{labels.whereLive}</label>
                   <div className="input-wrap">
                     <Icon name="pin" size={18} />
                     <input
                       id="mulai-domisili"
                       type="text"
                       value={domisili}
-                      placeholder="mis. Bogor, Depok, Cibinong"
+                      placeholder={labels.domisiliPh}
                       autoComplete="off"
                       enterKeyHint="next"
                       onChange={(e) => setDomisili(e.target.value)}
@@ -296,14 +337,14 @@ export default function Mulai() {
             {step === 2 && (
               <>
                 <div className="field">
-                  <label htmlFor="mulai-posisi">Posisi apa yang kamu cari?</label>
+                  <label htmlFor="mulai-posisi">{labels.whatRole}</label>
                   <div className="input-wrap">
                     <Icon name="search" size={18} />
                     <input
                       id="mulai-posisi"
                       type="text"
                       value={posisi}
-                      placeholder="mis. Helper Gudang, Cleaning Service"
+                      placeholder={labels.posisiPh}
                       autoComplete="off"
                       enterKeyHint="next"
                       onChange={(e) => setPosisi(e.target.value)}
@@ -329,25 +370,45 @@ export default function Mulai() {
               <>
                 <dl className="facts">
                   <div>
-                    <dt>Domisili</dt>
-                    <dd>{domisili.trim() || "Belum diisi"}</dd>
+                    <dt>{labels.domisili}</dt>
+                    <dd>{domisili.trim() || labels.notFilled}</dd>
                   </div>
                   <div>
-                    <dt>Posisi</dt>
-                    <dd>{posisi.trim() || "Belum diisi"}</dd>
+                    <dt>{labels.posisi}</dt>
+                    <dd>{posisi.trim() || labels.notFilled}</dd>
                   </div>
                 </dl>
                 <div className="wiz-result" aria-live="polite">
                   {preview ? (
                     <>
                       <p className="wiz-big">
-                        <span className="num">{preview.matched}</span> kanal cocok
+                        <span className="num">{preview.matched}</span>{" "}
+                        {labels.matchedChannels}
                       </p>
                       <p className="hint">
-                        {preview.verified} di antaranya lowongan{" "}
-                        {/* TS-04: kata "terverifikasi" menaut ke
-                          * definisinya di halaman Metode. */}
-                        <Link href="/metode">terverifikasi</Link>.
+                        {(() => {
+                          const kalimat = labels.verifiedAmong.replace(
+                            "{n}",
+                            String(preview.verified),
+                          );
+                          /* TS-04: kata "terverifikasi" menaut ke
+                           * definisinya di halaman Metode — dipertahankan
+                           * dari W2b dalam kalimat lokal W2a. Kata dicari
+                           * di kalimatnya sendiri supaya berlaku di kedua
+                           * bahasa; bila tidak ketemu, kalimat tampil polos. */
+                          const kata = kalimat.includes("terverifikasi")
+                            ? "terverifikasi"
+                            : "verified";
+                          const i = kalimat.indexOf(kata);
+                          if (i < 0) return kalimat;
+                          return (
+                            <>
+                              {kalimat.slice(0, i)}
+                              <Link href="/metode">{kata}</Link>
+                              {kalimat.slice(i + kata.length)}
+                            </>
+                          );
+                        })()}
                       </p>
                       {/* ONB-10: tiga teratas akhirnya ditampilkan —
                         * sebelumnya dihitung tetapi tidak pernah
@@ -355,7 +416,7 @@ export default function Mulai() {
                       {preview.top.length > 0 && (
                         <>
                           <p className="label" style={{ marginTop: 16 }}>
-                            Tiga yang paling cocok
+                            {labels.topThree}
                           </p>
                           <ul className="mini-list">
                             {preview.top.map((e) => (
@@ -378,14 +439,11 @@ export default function Mulai() {
                       )}
                     </>
                   ) : state === "error" ? (
-                    <p className="hint">
-                      Jumlah kanal belum bisa dihitung, tetapi tombol di bawah
-                      tetap berfungsi.
-                    </p>
+                    <p className="hint">{labels.countError}</p>
                   ) : domisili.trim() || posisi.trim() ? (
                     <div className="skeleton" style={{ height: 44, width: 200 }} />
                   ) : (
-                    <p className="hint">Isi salah satu untuk melihat jumlah kanal yang cocok.</p>
+                    <p className="hint">{labels.fillOne}</p>
                   )}
                 </div>
               </>
@@ -396,11 +454,11 @@ export default function Mulai() {
             {step > 1 ? (
               <button type="button" className="btn ghost" onClick={() => goToStep(step - 1)}>
                 <Icon name="back" size={18} />
-                Kembali
+                {labels.back}
               </button>
             ) : (
               <Link className="btn ghost" href="/cari" onClick={skipOnboarding}>
-                Lewati
+                {labels.skip}
               </Link>
             )}
             {/* ONB-08: "Lewati" tersedia di semua langkah, bukan
@@ -413,25 +471,23 @@ export default function Mulai() {
                 onClick={skipOnboarding}
                 style={{ alignSelf: "center" }}
               >
-                Lewati
+                {labels.skip}
               </Link>
             )}
             {step < 3 ? (
               <button type="submit" className="btn">
-                Lanjut
+                {labels.next}
                 <Icon name="arrow" size={18} />
               </button>
             ) : (
               <button type="submit" className="btn">
-                Lihat lowongan yang cocok
+                {labels.viewMatches}
                 <Icon name="arrow" size={18} />
               </button>
             )}
           </div>
           </form>
-          <p className="hint">
-            Pilihanmu tersimpan di browser ini saja, tidak dikirim ke mana pun.
-          </p>
+          <p className="hint">{labels.savedLocal}</p>
         </section>
       )}
     </div>

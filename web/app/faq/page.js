@@ -1,4 +1,4 @@
-import { getLocale } from "@/lib/i18n";
+import { getLocale, t } from "@/lib/i18n";
 import FaqSearch from "@/app/faq/faq-search";
 import { FraudWarning } from "@/app/fraud-warning";
 
@@ -30,6 +30,10 @@ const QA = [
     a: "Ketik domisili dan posisi di Beranda, lalu lihat kanal yang paling cocok. Buka portal resminya dari hasil, baca syarat lengkapnya, dan lamar lewat kanal resmi.",
   },
   {
+    q: "Apakah bisa melamar lewat email atau WhatsApp?",
+    a: "Sebagian perusahaan mencantumkan email atau WhatsApp HR. Bila ada, kanal itu tampil di halaman perusahaan sebagai Cara lain melamar. Lamar hanya lewat kanal resmi yang tercantum di sana.",
+  },
+  {
     q: "Apakah Karir gratis?",
     a: "Ya, gratis. Tidak ada biaya. Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai.",
   },
@@ -39,7 +43,7 @@ const QA = [
   },
   {
     q: "Bagaimana data dicek?",
-    a: "Tiap perusahaan dibuka kanal karir resminya langsung di browser. Tanggal cek dicatat di tiap baris data.",
+    a: "Tiap perusahaan dibuka kanal karir resminya langsung di browser. Tiap perusahaan dicatat tanggal cek terakhirnya, supaya kamu tahu seberapa baru datanya.",
   },
   {
     q: "Kenapa ada lowongan yang tidak terverifikasi?",
@@ -50,8 +54,8 @@ const QA = [
     a: "Rekrutmen resmi tidak pernah meminta bayaran. Jangan pernah membayar untuk melamar, termasuk uang pendaftaran, seragam, atau pelatihan. Hati-hati juga bila diminta foto KTP atau rekening di awal, dijanjikan gaji jauh di atas wajar, atau dihubungi dari nomor pribadi, bukan kanal resmi perusahaan. Kalau menemukan yang mencurigakan di daftar ini, beri tahu kami lewat halaman Dukungan.",
   },
   {
-    q: "Bagaimana melaporkan tautan mati?",
-    a: "Buka halaman perusahaannya, lalu buka bagian Ada yang salah? Laporkan tautan mati. Cara lain melapor dan yang terjadi setelah melapor ada di halaman Dukungan.",
+    q: "Bagaimana melaporkan masalah?",
+    a: "Buka halaman perusahaannya, lalu buka bagian Ada yang salah? Laporkan masalah. Pilih jenis masalahnya — tautan mati, data salah, atau lainnya — lalu jelaskan masalahnya. Cara lain melapor dan yang terjadi setelah melapor ada di halaman Dukungan.",
   },
   {
     q: "Apakah laporan saya dibalas?",
@@ -59,7 +63,11 @@ const QA = [
   },
   {
     q: "Bagaimana berkontribusi?",
-    a: "Usulkan perusahaan baru atau koreksi lewat issue dan pull request di repo GitHub. Sertakan tautan halaman resmi yang kamu buka langsung sebagai bukti. Cara lengkapnya ada di halaman Dukungan.",
+    a: "Usulkan perusahaan baru atau koreksi lewat formulir Koreksi data. Sertakan tautan halaman resmi yang kamu buka langsung sebagai bukti. Cara lengkapnya ada di halaman Dukungan.",
+    link: {
+      href: "https://github.com/adiprmx/karir/issues/new?template=koreksi.md",
+      text: "Buka formulir Koreksi data",
+    },
   },
   {
     q: "Ke mana bertanya bila jawaban tidak ada di sini?",
@@ -92,6 +100,11 @@ export default async function Faq() {
       <div className="page-head anim-fade-up">
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
+        {/* INFO-11: isi halaman ini hanya Bahasa Indonesia; beri tahu
+          * pengunjung mode Inggris, bukan pura-pura diterjemahkan. */}
+        {locale === "en" && (
+          <p className="note-line">{t(locale, "info.idOnly")}</p>
+        )}
       </div>
 
       <section className="dash-section anim-fade-up" aria-label="Tanya jawab">

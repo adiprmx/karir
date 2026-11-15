@@ -137,6 +137,11 @@ export default async function Beranda() {
     unmark: t(locale, "search.unmark"),
     open: t(locale, "search.open"),
     newTab: t(locale, "common.newTab"),
+    /* W2a (KONTEN-04): chip "Baru" dan chip alasan kecocokan di kartu
+     * perusahaan hasil pencarian hero. */
+    new: t(locale, "common.new"),
+    matchPosition: t(locale, "search.matchPosition"),
+    matchLocation: t(locale, "search.matchLocation"),
   };
 
   return (
@@ -233,6 +238,12 @@ export default async function Beranda() {
             open: t(locale, "search.open"),
             newTab: t(locale, "common.newTab"),
             shown: t(locale, "home.targetsShown"),
+            /* W2a (KONTEN-04/UX-08): chip kelompok "Semua", chip
+             * "Baru", dan chip alasan kecocokan di kartu. */
+            all: t(locale, "common.all"),
+            new: t(locale, "common.new"),
+            matchPosition: t(locale, "search.matchPosition"),
+            matchLocation: t(locale, "search.matchLocation"),
           }}
         />
         <div className="actions-row no-print">
@@ -291,6 +302,8 @@ export default async function Beranda() {
               error: t(locale, "home.changesError"),
               degraded: t(locale, "home.changesDegraded"),
               loading: t(locale, "home.changesLoading"),
+              /* W2a (KONTEN-04): chip "Baru" pada perubahan terbaru. */
+              new: t(locale, "common.new"),
             }}
           />
         </Reveal>

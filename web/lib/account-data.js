@@ -15,15 +15,44 @@
  * mengaktifkan provider Google di Firebase Console. */
 import { TRACKER_STATUSES } from "./tracker-sync.js";
 
+/* Pesan bawaan (Bahasa Indonesia) untuk error dan hasil aksi akun.
+ * W2a (UX-08): fungsi di bawah menerima objek pesan opsional sebagai
+ * argumen terakhir — panel akun dan pengaturan meneruskan label
+ * terjemahan dari layout; tanpa argumen itu pesan Indonesia di sini
+ * yang dipakai, jadi pemanggil lama dan tes lama tidak berubah. */
+const DEFAULT_AUTH_MESSAGES = {
+  invalidEmail: "Alamat email tidak dikenal. Periksa lagi tulisannya.",
+  wrongCredentials: "Email atau kata sandi salah.",
+  cannotRegister: "Tidak bisa mendaftar sekarang. Coba lagi sebentar lagi.",
+  weakPassword: "Kata sandi terlalu pendek, minimal 6 huruf.",
+  tooManyRequests: "Terlalu sering mencoba. Tunggu sebentar lalu coba lagi.",
+  noConnection: "Tidak ada koneksi. Periksa internet lalu coba lagi.",
+  cannotSignIn: "Tidak bisa masuk sekarang. Coba lagi sebentar lagi.",
+  resetSent:
+    "Tautan untuk membuat kata sandi baru sudah dikirim ke email itu. " +
+    "Periksa kotak masuk, lalu ikuti tautannya.",
+  cannotSendReset:
+    "Tidak bisa mengirim tautan sekarang. Coba lagi sebentar lagi.",
+  noAccount: "Tidak ada akun yang masuk.",
+  verifySent:
+    "Email verifikasi sudah dikirim. Buka email itu, ketuk tautannya, " +
+    "lalu tekan Periksa lagi.",
+};
+
+function withAuthMessages(messages) {
+  return { ...DEFAULT_AUTH_MESSAGES, ...(messages || {}) };
+}
+
 /* Terjemahan kode error Firebase Auth ke bahasa sehari-hari. */
-export function authErrorMessage(code) {
+export function authErrorMessage(code, messages) {
+  const m = withAuthMessages(messages);
   switch (code) {
     case "auth/invalid-email":
-      return "Alamat email tidak dikenal. Periksa lagi tulisannya.";
+      return m.invalidEmail;
     case "auth/user-not-found":
     case "auth/wrong-password":
     case "auth/invalid-credential":
-      return "Email atau kata sandi salah.";
+      return m.wrongCredentials;
     case "auth/email-already-in-use":
       /* SEC-17: pesan sengaja NETRAL — sama nadanya dengan kegagalan
        * pendaftaran umum, tanpa menyebut email sudah dipakai.
@@ -32,15 +61,15 @@ export function authErrorMessage(code) {
        * pun yang mencoba mendaftar dengan email orang lain. Kode
        * ini hanya muncul saat pendaftaran (createUser), jadi pesan
        * ini tidak pernah tampil di alur masuk. */
-      return "Tidak bisa mendaftar sekarang. Coba lagi sebentar lagi.";
+      return m.cannotRegister;
     case "auth/weak-password":
-      return "Kata sandi terlalu pendek, minimal 6 huruf.";
+      return m.weakPassword;
     case "auth/too-many-requests":
-      return "Terlalu sering mencoba. Tunggu sebentar lalu coba lagi.";
+      return m.tooManyRequests;
     case "auth/network-request-failed":
-      return "Tidak ada koneksi. Periksa internet lalu coba lagi.";
+      return m.noConnection;
     default:
-      return "Tidak bisa masuk sekarang. Coba lagi sebentar lagi.";
+      return m.cannotSignIn;
   }
 }
 
@@ -48,62 +77,60 @@ export function authErrorMessage(code) {
  * (null bila berhasil). Sengaja tidak membedakan email terdaftar
  * dan tidak: keduanya mendapat pesan yang sama, supaya keberadaan
  * email tidak bocor. Kembalikan { sent, message }. */
-export function passwordResetOutcome(code) {
+export function passwordResetOutcome(code, messages) {
+  const m = withAuthMessages(messages);
   if (!code || code === "auth/user-not-found") {
     return {
       sent: true,
-      message:
-        "Tautan untuk membuat kata sandi baru sudah dikirim ke email itu. " +
-        "Periksa kotak masuk, lalu ikuti tautannya.",
+      message: m.resetSent,
     };
   }
   if (code === "auth/invalid-email") {
-    return { sent: false, message: authErrorMessage(code) };
+    return { sent: false, message: authErrorMessage(code, messages) };
   }
   if (
     code === "auth/too-many-requests" ||
     code === "auth/network-request-failed"
   ) {
-    return { sent: false, message: authErrorMessage(code) };
+    return { sent: false, message: authErrorMessage(code, messages) };
   }
   return {
     sent: false,
-    message: "Tidak bisa mengirim tautan sekarang. Coba lagi sebentar lagi.",
+    message: m.cannotSendReset,
   };
 }
 
 /* Kirim email reset kata sandi. Kembalikan hasil passwordResetOutcome;
  * tidak pernah melempar. */
-export async function sendPasswordReset(email) {
+export async function sendPasswordReset(email, messages) {
   try {
     const [{ sendPasswordResetEmail }, { auth }] = await Promise.all([
       import("firebase/auth"),
       import("./firebase.js"),
     ]);
     await sendPasswordResetEmail(auth, email);
-    return passwordResetOutcome(null);
+    return passwordResetOutcome(null, messages);
   } catch (err) {
-    return passwordResetOutcome(err && err.code);
+    return passwordResetOutcome(err && err.code, messages);
   }
 }
 
 /* Kirim ulang email verifikasi ke pengguna yang masuk. Kembalikan
  * { ok, message }; tidak pernah melempar. */
-export async function sendVerificationEmail(user) {
+export async function sendVerificationEmail(user, messages) {
+  const m = withAuthMessages(messages);
   if (!user || typeof user.email !== "string" || !user.email) {
-    return { ok: false, message: "Tidak ada akun yang masuk." };
+    return { ok: false, message: m.noAccount };
   }
   try {
     const { sendEmailVerification } = await import("firebase/auth");
     await sendEmailVerification(user);
     return {
       ok: true,
-      message:
-        "Email verifikasi sudah dikirim. Buka email itu, ketuk tautannya, " +
-        "lalu tekan Periksa lagi.",
+      message: m.verifySent,
     };
   } catch (err) {
-    return { ok: false, message: authErrorMessage(err && err.code) };
+    return { ok: false, message: authErrorMessage(err && err.code, messages) };
   }
 }
 

@@ -99,6 +99,61 @@ export function isRegistrationTooFast(shownAtMs, nowMs) {
 /* __PURE_END__ */
 /* ============ AKHIR BLOK LOGIKA MURNI ============ */
 
+/* Label panel (W2a, UX-08/UX-13): diteruskan navigasi lewat props
+ * (objek auth dari layout akar); tanpa props, teks Indonesia di
+ * bawah dipakai sebagai cadangan. Kunci invalidEmail..verifySent
+ * adalah pesan lib/account-data.js. */
+const AUTH_DEFAULTS = {
+  account: "Akun",
+  loadingStatus: "Memuat status akun…",
+  signedInAs: "Masuk sebagai",
+  syncNote:
+    "Lamaran di perangkat ini ikut tersimpan ke akun. Semua fitur tetap bisa dipakai tanpa masuk.",
+  notVerifiedNote:
+    "Email ini belum terverifikasi. Ketuk tautan di email verifikasi supaya akun ini dikenali sebagai milikmu.",
+  resendVerify: "Kirim ulang email verifikasi",
+  checkAgain: "Periksa lagi",
+  verified: "Email sudah terverifikasi.",
+  signingOut: "Keluar…",
+  signOut: "Keluar",
+  signInChoice:
+    "Masuk itu pilihan. Tanpa masuk pun semua fitur tetap bisa dipakai, hanya lamaran yang tidak tersimpan ke akun.",
+  modeLabel: "Pilih masuk atau daftar",
+  signIn: "Masuk",
+  signUp: "Daftar",
+  displayName: "Nama tampilan (boleh kosong)",
+  displayNameLabel: "Nama tampilan",
+  displayNamePh: "Nama yang tampil di akun",
+  email: "Email",
+  password: "Kata sandi",
+  passwordPh: "Minimal 6 huruf",
+  passwordPhSignUp: "Minimal 8 huruf",
+  wait: "Tunggu…",
+  createAccount: "Buat akun",
+  sending: "Mengirim…",
+  forgotPassword: "Lupa kata sandi?",
+  writeEmailFirst: "Tulis email dulu di kolom di atas, baru minta tautan.",
+  verifyStillNot:
+    "Email masih belum terverifikasi. Ketuk tautan di email yang dikirim, lalu periksa lagi.",
+  verifyCheckFailed:
+    "Status verifikasi belum bisa diperiksa. Coba lagi sebentar lagi.",
+  close: "Tutup",
+  invalidEmail: "Alamat email tidak dikenal. Periksa lagi tulisannya.",
+  wrongCredentials: "Email atau kata sandi salah.",
+  cannotRegister: "Tidak bisa mendaftar sekarang. Coba lagi sebentar lagi.",
+  weakPassword: "Kata sandi terlalu pendek, minimal 6 huruf.",
+  tooManyRequests: "Terlalu sering mencoba. Tunggu sebentar lalu coba lagi.",
+  noConnection: "Tidak ada koneksi. Periksa internet lalu coba lagi.",
+  cannotSignIn: "Tidak bisa masuk sekarang. Coba lagi sebentar lagi.",
+  resetSent:
+    "Tautan untuk membuat kata sandi baru sudah dikirim ke email itu. Periksa kotak masuk, lalu ikuti tautannya.",
+  cannotSendReset:
+    "Tidak bisa mengirim tautan sekarang. Coba lagi sebentar lagi.",
+  noAccount: "Tidak ada akun yang masuk.",
+  verifySent:
+    "Email verifikasi sudah dikirim. Buka email itu, ketuk tautannya, lalu tekan Periksa lagi.",
+};
+
 /* Mengikuti status masuk pengguna beserta status muatnya (AKUN-13):
  * `loading` true sampai onAuthStateChanged pertama menjawab, supaya
  * pemanggil bisa membedakan "belum diketahui" dari "belum masuk".
@@ -160,7 +215,8 @@ export function AuthWatcher() {
   return null;
 }
 
-export default function AuthPanel() {
+export default function AuthPanel({ labels: labelsProp }) {
+  const labels = { ...AUTH_DEFAULTS, ...(labelsProp || {}) };
   const { user, loading } = useAuthStatus();
   const [mode, setMode] = useState("masuk");
   const [name, setName] = useState("");
@@ -267,7 +323,7 @@ export default function AuthPanel() {
       }
       setPassword("");
     } catch (err) {
-      setError(authErrorMessage(err && err.code));
+      setError(authErrorMessage(err && err.code, labels));
     }
     setBusy(false);
   }
@@ -278,14 +334,14 @@ export default function AuthPanel() {
   async function forgotPassword() {
     const address = email.trim();
     if (!address) {
-      setError("Tulis email dulu di kolom di atas, baru minta tautan.");
+      setError(labels.writeEmailFirst);
       setInfo("");
       return;
     }
     setError("");
     setInfo("");
     setResetBusy(true);
-    const result = await sendPasswordReset(address);
+    const result = await sendPasswordReset(address, labels);
     if (result.sent) {
       setInfo(result.message);
     } else {
@@ -299,7 +355,7 @@ export default function AuthPanel() {
     setError("");
     setInfo("");
     setVerifyBusy(true);
-    const result = await sendVerificationEmail(user);
+    const result = await sendVerificationEmail(user, labels);
     if (result.ok) {
       setInfo(result.message);
     } else {
@@ -319,15 +375,12 @@ export default function AuthPanel() {
       await user.reload();
       setVerifyChecked((n) => n + 1);
       if (user.emailVerified) {
-        setInfo("Email sudah terverifikasi.");
+        setInfo(labels.verified);
       } else {
-        setInfo(
-          "Email masih belum terverifikasi. Ketuk tautan di email yang " +
-            "dikirim, lalu periksa lagi.",
-        );
+        setInfo(labels.verifyStillNot);
       }
     } catch {
-      setError("Status verifikasi belum bisa diperiksa. Coba lagi sebentar lagi.");
+      setError(labels.verifyCheckFailed);
     }
     setVerifyBusy(false);
   }
@@ -350,10 +403,10 @@ export default function AuthPanel() {
    * bukan form masuk yang berkedip. */
   if (loading) {
     return (
-      <div className="filters" style={{ marginTop: 16 }} lang="id">
-        <p className="section-label">Akun</p>
+      <div className="filters" style={{ marginTop: 16 }}>
+        <p className="section-label">{labels.account}</p>
         <p className="section-note" role="status">
-          Memuat status akun…
+          {labels.loadingStatus}
         </p>
       </div>
     );
@@ -361,23 +414,16 @@ export default function AuthPanel() {
 
   if (user) {
     return (
-      /* AKSES-12: seluruh panel ini teks Indonesia kode-keras. */
-      <div className="filters" style={{ marginTop: 16 }} lang="id">
-        <p className="section-label">Akun</p>
+      <div className="filters" style={{ marginTop: 16 }}>
+        <p className="section-label">{labels.account}</p>
         <p>
-          Masuk sebagai <strong>{user.email}</strong>
+          {labels.signedInAs} <strong>{user.email}</strong>
           {user.displayName ? ` (${user.displayName})` : ""}
         </p>
-        <p className="section-note">
-          Lamaran di perangkat ini ikut tersimpan ke akun. Semua fitur
-          tetap bisa dipakai tanpa masuk.
-        </p>
+        <p className="section-note">{labels.syncNote}</p>
         {!user.emailVerified && (
           <>
-            <p className="notice">
-              Email ini belum terverifikasi. Ketuk tautan di email
-              verifikasi supaya akun ini dikenali sebagai milikmu.
-            </p>
+            <p className="notice">{labels.notVerifiedNote}</p>
             <div className="filter-actions">
               <button
                 className="btn ghost small"
@@ -385,7 +431,7 @@ export default function AuthPanel() {
                 onClick={resendVerification}
                 disabled={verifyBusy}
               >
-                {verifyBusy ? "Mengirim…" : "Kirim ulang email verifikasi"}
+                {verifyBusy ? labels.sending : labels.resendVerify}
               </button>
               <button
                 className="btn ghost small"
@@ -393,13 +439,13 @@ export default function AuthPanel() {
                 onClick={recheckVerification}
                 disabled={verifyBusy}
               >
-                Periksa lagi
+                {labels.checkAgain}
               </button>
             </div>
           </>
         )}
         {user.emailVerified && (
-          <p className="section-note">Email sudah terverifikasi.</p>
+          <p className="section-note">{labels.verified}</p>
         )}
         {/* AKSES-05: hasil aksi akun diumumkan — info sebagai status,
           * error sebagai alert. */}
@@ -420,7 +466,7 @@ export default function AuthPanel() {
             onClick={signOutUser}
             disabled={signingOut}
           >
-            {signingOut ? "Keluar…" : "Keluar"}
+            {signingOut ? labels.signingOut : labels.signOut}
           </button>
         </div>
       </div>
@@ -428,58 +474,48 @@ export default function AuthPanel() {
   }
 
   return (
-    <div className="filters" style={{ marginTop: 16 }} lang="id">
-      <p className="section-label">Akun</p>
-      <p className="section-note">
-        Masuk itu pilihan. Tanpa masuk pun semua fitur tetap bisa dipakai,
-        hanya lamaran yang tidak tersimpan ke akun.
-      </p>
-      <div className="chip-row" role="group" aria-label="Pilih masuk atau daftar">
+    <div className="filters" style={{ marginTop: 16 }}>
+      <p className="section-label">{labels.account}</p>
+      <p className="section-note">{labels.signInChoice}</p>
+      <div className="chip-row" role="group" aria-label={labels.modeLabel}>
+        {/* UX-13: tombol mode aktif memakai kelas .btn (latar gelap
+          * dari variabel tema), bukan gaya sebaris warna gelap/putih
+          * yang tidak mengikuti tema gelap. */}
         <button
           type="button"
-          className="btn ghost small"
+          className={mode === "masuk" ? "btn small" : "btn ghost small"}
           aria-pressed={mode === "masuk"}
           onClick={() => {
             setMode("masuk");
             setError("");
             setInfo("");
           }}
-          style={
-            mode === "masuk"
-              ? { background: "#0a0a0a", color: "#fff" }
-              : undefined
-          }
         >
-          Masuk
+          {labels.signIn}
         </button>
         <button
           type="button"
-          className="btn ghost small"
+          className={mode === "daftar" ? "btn small" : "btn ghost small"}
           aria-pressed={mode === "daftar"}
           onClick={() => {
             setMode("daftar");
             setError("");
             setInfo("");
           }}
-          style={
-            mode === "daftar"
-              ? { background: "#0a0a0a", color: "#fff" }
-              : undefined
-          }
         >
-          Daftar
+          {labels.signUp}
         </button>
       </div>
       <form onSubmit={submit}>
         {mode === "daftar" && (
           <fieldset>
-            <legend>Nama tampilan (boleh kosong)</legend>
+            <legend>{labels.displayName}</legend>
             {/* AKSES-06: legend memberi konteks, tetapi label eksplisit
               * memberi nama aksesibel yang pasti pada tiap isian.
               * Label disembunyikan visual (sr-only) karena legend
               * sudah tampil di layar. */}
             <label className="sr-only" htmlFor="akun-nama">
-              Nama tampilan
+              {labels.displayNameLabel}
             </label>
             <input
               id="akun-nama"
@@ -488,15 +524,15 @@ export default function AuthPanel() {
               onChange={(e) => setName(e.target.value)}
               autoComplete="nickname"
               maxLength={100}
-              placeholder="Nama yang tampil di akun"
+              placeholder={labels.displayNamePh}
               aria-describedby={error ? "akun-error" : undefined}
             />
           </fieldset>
         )}
         <fieldset>
-          <legend>Email</legend>
+          <legend>{labels.email}</legend>
           <label className="sr-only" htmlFor="akun-email">
-            Email
+            {labels.email}
           </label>
           <input
             id="akun-email"
@@ -510,9 +546,9 @@ export default function AuthPanel() {
           />
         </fieldset>
         <fieldset>
-          <legend>Kata sandi</legend>
+          <legend>{labels.password}</legend>
           <label className="sr-only" htmlFor="akun-password">
-            Kata sandi
+            {labels.password}
           </label>
           <input
             id="akun-password"
@@ -523,7 +559,7 @@ export default function AuthPanel() {
             autoComplete={mode === "daftar" ? "new-password" : "current-password"}
             minLength={mode === "daftar" ? MIN_PASSWORD_LENGTH_DAFTAR : 6}
             placeholder={
-              mode === "daftar" ? "Minimal 8 huruf" : "Kata sandi akun"
+              mode === "daftar" ? labels.passwordPhSignUp : labels.passwordPh
             }
             aria-describedby={error ? "akun-error" : undefined}
           />
@@ -591,7 +627,11 @@ export default function AuthPanel() {
         )}
         <div className="filter-actions">
           <button className="btn" type="submit" disabled={busy}>
-            {busy ? "Tunggu…" : mode === "daftar" ? "Buat akun" : "Masuk"}
+            {busy
+              ? labels.wait
+              : mode === "daftar"
+                ? labels.createAccount
+                : labels.signIn}
           </button>
           {mode === "masuk" && (
             <button
@@ -600,7 +640,7 @@ export default function AuthPanel() {
               onClick={forgotPassword}
               disabled={busy || resetBusy}
             >
-              {resetBusy ? "Mengirim…" : "Lupa kata sandi?"}
+              {resetBusy ? labels.sending : labels.forgotPassword}
             </button>
           )}
         </div>

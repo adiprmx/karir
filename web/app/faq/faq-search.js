@@ -21,15 +21,19 @@ export default function FaqSearch({ items }) {
     /* AKSES-12: seluruh blok ini teks Indonesia kode-keras. */
     <div lang="id">
       <Reveal>
-        <label htmlFor="faq-search">Cari pertanyaan</label>
-        <input
-          id="faq-search"
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari pertanyaan..."
-          autoComplete="off"
-        />
+        {/* UX-17: label dan isian dibungkus .field supaya jaraknya
+          * konsisten dengan isian lain di situs. */}
+        <div className="field">
+          <label htmlFor="faq-search">Cari pertanyaan</label>
+          <input
+            id="faq-search"
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Cari pertanyaan..."
+            autoComplete="off"
+          />
+        </div>
       </Reveal>
       {/* AKSES-11: hitungan hasil diumumkan saat mengetik (pola yang
         * sama dengan hitungan /cari); hanya tampil saat menyaring. */}
@@ -57,6 +61,23 @@ export default function FaqSearch({ items }) {
                     {" "}
                     Cara lengkapnya ada di halaman{" "}
                     <Link href="/metode">Metode</Link>.
+                  </>
+                )}
+                {/* DUKUNG-05: tautan opsional dari item (mis. formulir
+                  * Koreksi data) dirender sebagai tombol di bawah
+                  * jawaban. */}
+                {item.link && (
+                  <>
+                    <br />
+                    <a
+                      className="btn ghost small"
+                      href={item.link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ marginTop: 12 }}
+                    >
+                      {item.link.text}
+                    </a>
                   </>
                 )}
               </p>

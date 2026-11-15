@@ -30,7 +30,37 @@ function readVisitedMetode() {
   }
 }
 
-export default function DashboardPersonal() {
+/* W2a (DASH-03): label diteruskan halaman Dasbor (server) lewat
+ * props; tanpa props, teks Indonesia di bawah dipakai sebagai
+ * cadangan. Nama status pelacak (Ditandai, Sudah dilamar, ...) dan
+ * nama status perusahaan adalah kosakata data dan sengaja tetap
+ * Bahasa Indonesia di semua bahasa. */
+const DASH_DEFAULTS = {
+  title: "Dasbor saya",
+  choiceBoth: "Lowongan {posisi} di {domisili}",
+  choiceDomisili: "Lowongan di {domisili}",
+  choicePosisi: "Lowongan {posisi}",
+  noChoice: "Belum ada pilihan tersimpan.",
+  viewMatches: "Lihat yang cocok",
+  editChoices: "Ubah pilihan",
+  start: "Mulai",
+  lastSearch: "Terakhir kamu cari:",
+  nextSteps: "Langkah berikutnya",
+  stepChoice: "Tentukan domisili dan posisi",
+  stepFirstMark: "Tandai lamaran pertama",
+  stepReadMethod: "Baca cara data dicek sebelum melamar",
+  done: "Selesai: ",
+  trackerTitle: "Lamaran saya",
+  emptyTitle: "Belum ada lamaran yang dilacak.",
+  sync: {
+    saved: "Tersimpan di browser ini dan di akun.",
+    guest:
+      "Tersimpan di browser ini saja. Masuk dari menu untuk menyimpan ke akun juga.",
+  },
+};
+
+export default function DashboardPersonal({ labels: labelsProp }) {
+  const labels = { ...DASH_DEFAULTS, ...(labelsProp || {}) };
   const { entries, loaded, synced } = useTracker();
   const [onboarding, setOnboarding] = useState(null);
   const [recent, setRecent] = useState(null);
@@ -64,7 +94,7 @@ export default function DashboardPersonal() {
     return (
       /* AKSES-16: aria-busy memberi tahu pembaca layar bahwa seksi
        * ini sedang dimuat (pola yang sama dengan loading.js). */
-      <section className="panel" aria-label="Dasbor saya" aria-busy="true" lang="id">
+      <section className="panel" aria-label={labels.title} aria-busy="true">
         <div className="skeleton" style={{ height: 28, width: "60%" }} />
         <div className="skeleton" style={{ height: 80, marginTop: 16 }} />
       </section>
@@ -88,12 +118,12 @@ export default function DashboardPersonal() {
 
   const steps = [
     {
-      text: "Tentukan domisili dan posisi",
+      text: labels.stepChoice,
       done: isOnboardingComplete(onboarding),
       href: "/mulai",
     },
-    { text: "Tandai lamaran pertama", done: total > 0, href: "/cari" },
-    { text: "Baca cara data dicek sebelum melamar", done: visitedMetode, href: "/metode" },
+    { text: labels.stepFirstMark, done: total > 0, href: "/cari" },
+    { text: labels.stepReadMethod, done: visitedMetode, href: "/metode" },
   ];
   const doneN = steps.filter((s) => s.done).length;
   const searchHref = onboarding
@@ -111,10 +141,12 @@ export default function DashboardPersonal() {
    * "Lowongan Helper Gudang di" atau "Lowongan di". */
   const choiceHeading = onboarding
     ? onboarding.domisili && onboarding.posisi
-      ? `Lowongan ${onboarding.posisi} di ${onboarding.domisili}`
+      ? labels.choiceBoth
+          .replace("{posisi}", onboarding.posisi)
+          .replace("{domisili}", onboarding.domisili)
       : onboarding.domisili
-        ? `Lowongan di ${onboarding.domisili}`
-        : `Lowongan ${onboarding.posisi}`
+        ? labels.choiceDomisili.replace("{domisili}", onboarding.domisili)
+        : labels.choicePosisi.replace("{posisi}", onboarding.posisi)
     : null;
   const recentParts = recent
     ? [recent.domisili, recent.posisi].filter(Boolean)
@@ -130,31 +162,30 @@ export default function DashboardPersonal() {
     : "/cari";
 
   return (
-    /* AKSES-12: seluruh seksi ini teks Indonesia kode-keras. */
-    <Reveal className="panel mine" as="section" lang="id">
+    <Reveal className="panel mine" as="section">
       <div className="mine-top">
         <div>
-          <p className="kicker">Dasbor saya</p>
+          <p className="kicker">{labels.title}</p>
           {onboarding ? (
             <h2>{choiceHeading}</h2>
           ) : (
-            <h2>Belum ada pilihan tersimpan.</h2>
+            <h2>{labels.noChoice}</h2>
           )}
         </div>
         <div className="actions-row">
           {onboarding ? (
             <>
               <Link href={searchHref} className="btn small">
-                Lihat yang cocok
+                {labels.viewMatches}
                 <Icon name="arrow" size={16} />
               </Link>
               <Link href="/mulai" className="btn ghost small">
-                Ubah pilihan
+                {labels.editChoices}
               </Link>
             </>
           ) : (
             <Link href="/mulai" className="btn small">
-              Mulai
+              {labels.start}
               <Icon name="arrow" size={16} />
             </Link>
           )}
@@ -163,14 +194,15 @@ export default function DashboardPersonal() {
 
       {recentParts.length > 0 && (
         <p className="hint">
-          Terakhir kamu cari: <Link href={recentHref}>{recentParts.join(" + ")}</Link>
+          {labels.lastSearch}{" "}
+          <Link href={recentHref}>{recentParts.join(" + ")}</Link>
         </p>
       )}
 
       <div className="mine-cols">
         <div>
           <p className="label">
-            Langkah berikutnya <span className="num">{doneN}/3</span>
+            {labels.nextSteps} <span className="num">{doneN}/3</span>
           </p>
           <div className="progress" aria-hidden="true">
             <span style={{ width: `${(doneN / 3) * 100}%` }} />
@@ -183,7 +215,7 @@ export default function DashboardPersonal() {
                 </span>
                 {s.done ? (
                   <span>
-                    <span className="sr-only">Selesai: </span>
+                    <span className="sr-only">{labels.done}</span>
                     {s.text}
                   </span>
                 ) : (
@@ -194,14 +226,12 @@ export default function DashboardPersonal() {
           </ol>
         </div>
         <div>
-          <p className="label">Lamaran saya</p>
+          <p className="label">{labels.trackerTitle}</p>
           <p className="hint">
-            {synced
-              ? "Tersimpan di browser ini dan di akun."
-              : "Tersimpan di browser ini saja. Masuk dari menu untuk menyimpan ke akun juga."}
+            {synced ? labels.sync.saved : labels.sync.guest}
           </p>
           {total === 0 ? (
-            <p className="hint">Belum ada lamaran yang dilacak.</p>
+            <p className="hint">{labels.emptyTitle}</p>
           ) : (
             <div className="counts">
               {TRACKER_STATUSES.map((s) => (
