@@ -490,6 +490,8 @@ const DICT = {
     "map.marker": "{city}, {n} perusahaan ada lowongan",
     "map.failed":
       "Peta tidak bisa dimuat. Pilih kota di atas untuk melihat daftarnya.",
+    "map.loading": "Memuat peta…",
+    "map.empty": "Belum ada lowongan target di peta.",
     "map.otherLocations": "Lokasi lain (tidak cocok dengan kota di peta)",
     "install.title": "Pasang aplikasi",
     "install.hint":
@@ -983,6 +985,8 @@ const DICT = {
     "map.marker": "{city}, {n} companies with openings",
     "map.failed":
       "The map could not be loaded. Choose a city above to see its list.",
+    "map.loading": "Loading the map…",
+    "map.empty": "No target openings on the map yet.",
     "map.otherLocations": "Other locations (not matching a city on the map)",
     "install.title": "Install the app",
     "install.hint":

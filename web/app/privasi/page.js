@@ -5,6 +5,8 @@ export const metadata = {
   title: "Kebijakan Privasi",
   description:
     "Data apa yang Karir simpan, di mana data itu berada, dan cara menghapusnya.",
+  /* SEO-04: kanonis /privasi (W3). */
+  alternates: { canonical: "/privasi" },
 };
 
 const COPY = {

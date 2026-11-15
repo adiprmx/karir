@@ -79,6 +79,8 @@ export default async function Peta() {
           label: t(locale, "map.label"),
           marker: t(locale, "map.marker"),
           failed: t(locale, "map.failed"),
+          loading: t(locale, "map.loading"),
+          empty: t(locale, "map.empty"),
           otherLocations: t(locale, "map.otherLocations"),
         }}
       />

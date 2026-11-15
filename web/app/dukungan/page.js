@@ -5,6 +5,8 @@ export const metadata = {
   title: "Dukungan",
   description:
     "Cara melaporkan masalah, mengoreksi data, dan bertanya soal Karir.",
+  /* SEO-04: kanonis /dukungan (W3). */
+  alternates: { canonical: "/dukungan" },
 };
 
 /* Tautan issue memakai template Koreksi data yang sudah ada di repo

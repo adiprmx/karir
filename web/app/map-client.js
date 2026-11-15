@@ -20,6 +20,8 @@ const MAP_DEFAULTS = {
   marker: "{city}, {n} perusahaan ada lowongan",
   failed:
     "Peta tidak bisa dimuat. Pilih kota di atas untuk melihat daftarnya.",
+  loading: "Memuat peta…",
+  empty: "Belum ada lowongan target di peta.",
   otherLocations: "Lokasi lain (tidak cocok dengan kota di peta)",
 };
 
@@ -34,6 +36,7 @@ export default function MapClient({ groups, other, labels: labelsProp }) {
   const mapRef = useRef(null);
   const markers = useRef(new Map());
   const [failed, setFailed] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const [selected, setSelected] = useState(groups[0] ? groups[0].city.name : null);
 
   useEffect(() => {
@@ -89,6 +92,8 @@ export default function MapClient({ groups, other, labels: labelsProp }) {
             { padding: [40, 40], maxZoom: 10 },
           );
         }
+        /* PETA-05: peta selesai dibuat — teks "Memuat peta…" hilang. */
+        if (!cancelled) setMapReady(true);
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -100,6 +105,9 @@ export default function MapClient({ groups, other, labels: labelsProp }) {
         mapRef.current.remove();
         mapRef.current = null;
       }
+      /* PETA-05: bila effect jalan lagi (grup/label berubah), teks
+       * loading tampil lagi sampai peta baru selesai dibuat. */
+      setMapReady(false);
     };
   }, [groups, labels]);
 
@@ -154,10 +162,25 @@ export default function MapClient({ groups, other, labels: labelsProp }) {
         role="region"
         aria-label={labels.label}
       />
+      {/* PETA-05: teks loading selama Leaflet dimuat (wadah peta
+        * kosong sebelum itu); tidak tampil bila tidak ada grup —
+        * pesan kosong di bawah yang berlaku. */}
+      {!mapReady && !failed && groups.length > 0 && (
+        <p className="note-line" role="status">
+          {labels.loading}
+        </p>
+      )}
       {failed && (
         <p className="note-line">
           <Icon name="info" size={16} />
           {labels.failed}
+        </p>
+      )}
+      {/* PETA-05: tidak ada grup berarti tidak ada panel kota —
+        * beri tahu pengguna, jangan biarkan halaman kosong diam. */}
+      {groups.length === 0 && (
+        <p className="note-line" role="status">
+          {labels.empty}
         </p>
       )}
 

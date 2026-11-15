@@ -5,6 +5,8 @@ export const metadata = {
   title: "Syarat Penggunaan",
   description:
     "Aturan pakai Karir: gratis, info lowongan bisa berubah, dan cara melaporkan tautan mati.",
+  /* SEO-04: kanonis /syarat (W3). */
+  alternates: { canonical: "/syarat" },
 };
 
 const COPY = {

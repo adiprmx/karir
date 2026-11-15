@@ -288,6 +288,9 @@ describe("pass metadata kanonis (SEO-04 / MKT-03 / DET-09)", () => {
       ["app/faq/page.js", 'alternates: { canonical: "/faq" }'],
       ["app/changelog/page.js", 'alternates: { canonical: "/changelog" }'],
       ["app/mulai/layout.js", 'alternates: { canonical: "/mulai" }'],
+      ["app/dukungan/page.js", 'alternates: { canonical: "/dukungan" }'],
+      ["app/privasi/page.js", 'alternates: { canonical: "/privasi" }'],
+      ["app/syarat/page.js", 'alternates: { canonical: "/syarat" }'],
       [
         "app/perusahaan/[no]/page.js",
         "alternates: { canonical: `/perusahaan/${company.no}` }",
