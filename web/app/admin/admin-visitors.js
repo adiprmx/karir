@@ -321,6 +321,17 @@ export default function VisitorsSection({
               </tbody>
             </table>
 
+            {/* ANALITIK-12: panduan awal di /mulai — berapa kali
+              * dituntaskan dan berapa kali dilewati, dari catatan
+              * yang dimuat (bukan jumlah orang yang berbeda). */}
+            <p>
+              <strong>Panduan awal</strong>
+            </p>
+            <p className="section-note">
+              Diselesaikan {visitorSummary.onboarding.selesai} kali,
+              dilewati {visitorSummary.onboarding.dilewati} kali.
+            </p>
+
             <p>
               <strong>Akun paling aktif</strong>
             </p>

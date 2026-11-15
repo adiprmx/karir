@@ -2194,8 +2194,13 @@ select:focus {
 .wiz-nav .btn:last-child {
   flex: 1;
 }
+/* AKUN-15: baris pengaturan bisa membungkus di layar sempit —
+ * kolom teks boleh menyusut (min-width: 0) dan memecah kata
+ * panjang, supaya teks "domisili · posisi" yang panjang tidak
+ * mendesak tombol atau meluap di layar 360px. */
 .set-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
@@ -2205,6 +2210,10 @@ select:focus {
 .set-row:first-child {
   border-top: 0;
   padding-top: 0;
+}
+.set-row > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .set-row .label {
   margin-bottom: 2px;

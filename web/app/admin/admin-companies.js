@@ -16,6 +16,7 @@ export default function CompaniesPanel({
   onAddNew,
   loadError,
   loadingCompanies,
+  loadedCount,
   pageRows,
   selected,
   onPick,
@@ -25,6 +26,18 @@ export default function CompaniesPanel({
   onPrevPage,
   onNextPage,
 }) {
+  /* ADM-13: baris tabel bisa dipilih dari keyboard — Enter atau
+   * Spasi memilih perusahaan yang sedang fokus, sama seperti klik.
+   * Spasi ditahan default-nya supaya halaman tidak ikut bergeser.
+   * Baris sengaja tetap <tr> (tanpa role="button") supaya semantik
+   * tabelnya utuh bagi pembaca layar; cincin fokus datang dari
+   * :focus-visible global di globals.css. */
+  function onRowKeyDown(e, c) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onPick(c);
+    }
+  }
   return (
     <div>
       <div className="filters" style={{ position: "static" }}>
@@ -86,7 +99,10 @@ export default function CompaniesPanel({
       )}
       {loadingCompanies && (
         <div className="state" role="status">
-          <strong>Memuat data perusahaan…</strong>
+          <strong>
+            Memuat data perusahaan…
+            {loadedCount > 0 ? ` ${loadedCount} dimuat.` : ""}
+          </strong>
         </div>
       )}
 
@@ -104,11 +120,16 @@ export default function CompaniesPanel({
             <tr
               key={c.no}
               onClick={() => onPick(c)}
+              onKeyDown={(e) => onRowKeyDown(e, c)}
+              tabIndex={0}
+              aria-label={`Pilih ${c.perusahaan} untuk diubah`}
               style={{
                 cursor: "pointer",
+                /* UX-13: latar baris terpilih memakai token --sunken
+                 * (sama dengan latar hover baris), bukan hex mentah. */
                 background:
                   selected && Number(selected.no) === Number(c.no)
-                    ? "#f4f4f5"
+                    ? "var(--sunken)"
                     : undefined,
               }}
             >

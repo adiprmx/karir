@@ -8,7 +8,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Icon, Sheet } from "./visual";
 import { useTracker } from "./tracker";
-import AuthPanel, { AuthWatcher, useAuthUser } from "./auth-panel";
+import AuthPanel, { AuthWatcher, useAuthStatus } from "./auth-panel";
 
 function isActive(pathname, href) {
   if (href === "/") return pathname === "/";
@@ -77,12 +77,17 @@ export default function SiteNav({ labels, locale }) {
   const [menu, setMenu] = useState(false);
   const { entries } = useTracker();
   const tracked = Object.keys(entries || {}).length;
-  const authUser = useAuthUser();
-  const authLabel = authUser
-    ? (authUser.displayName || authUser.email || "Akun")
-        .split("@")[0]
-        .slice(0, 12) || "Akun"
-    : "Masuk";
+  /* AKUN-13: selama status masuk belum diketahui, tampilkan
+   * placeholder netral "Akun" — bukan "Masuk" yang berkedip untuk
+   * pengguna yang sebenarnya sudah masuk. */
+  const { user: authUser, loading: authLoading } = useAuthStatus();
+  const authLabel = authLoading
+    ? "Akun"
+    : authUser
+      ? (authUser.displayName || authUser.email || "Akun")
+          .split("@")[0]
+          .slice(0, 12) || "Akun"
+      : "Masuk";
   const close = useCallback(() => setMenu(false), []);
 
   /* Tutup menu begitu halaman berpindah. Penyesuaian state saat render
@@ -143,7 +148,11 @@ export default function SiteNav({ labels, locale }) {
               aria-haspopup="dialog"
               aria-expanded={menu}
               aria-label={
-                authUser ? `Akun ${authUser.email}` : "Masuk atau daftar"
+                authLoading
+                  ? "Akun"
+                  : authUser
+                    ? `Akun ${authUser.email}`
+                    : "Masuk atau daftar"
               }
             >
               <Icon name="user" size={16} />

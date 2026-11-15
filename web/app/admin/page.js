@@ -26,7 +26,7 @@
  * admin-helpers.js untuk fungsi murni dan konstanta. Semua state,
  * efek, dan handler tetap di sini supaya perilaku tidak berubah;
  * komponen seksi hanya menerima props dan menampilkan. */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getIdTokenResult,
   onAuthStateChanged,
@@ -45,13 +45,18 @@ import {
   orderBy,
   query,
   setDoc,
+  startAfter,
   updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { STATUS_ORDER } from "@/lib/companies";
+import { sendPasswordReset } from "@/lib/account-data";
+import { markSignOutIntended } from "@/app/tracker";
 import {
   AUDIT_LIMIT,
   BULK_CHECK_DELAY_MS,
+  CHECK_LINK_TIMEOUT_MS,
+  COMPANIES_PAGE_SIZE,
   EMPTY,
   MAX_IMPORT,
   PAGE_SIZE,
@@ -61,14 +66,19 @@ import {
   aggregateBotSignals,
   aggregateVisitors,
   buildCompanyData,
+  cancellableDelay,
+  clearBulkSummary,
   exportCompaniesCsv,
   exportCompaniesJson,
+  fetchWithTimeout,
   filterAndSortCompanies,
   hasNoLink,
   hasNoLokasi,
   isStale,
   isValidDateString,
+  loadBulkSummary,
   parseCsv,
+  saveBulkSummary,
   todayStr,
   validateCsvRows,
 } from "./admin-helpers";
@@ -97,6 +107,10 @@ export default function Admin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  /* ADM-10: lupa kata sandi admin — pesan netral (sama untuk email
+   * terdaftar maupun tidak) dan status kirim tautan reset. */
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetInfo, setResetInfo] = useState("");
   const [companies, setCompanies] = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -115,6 +129,17 @@ export default function Admin() {
   const [bulkDone, setBulkDone] = useState(0);
   const [bulkResults, setBulkResults] = useState([]);
   const [bulkChanges, setBulkChanges] = useState(0);
+  /* ADM-11: bulkCancelled = pemeriksaan terakhir dihentikan admin
+   * sebelum selesai; bulkRestoredAt = waktu selesai ringkasan yang
+   * dipulihkan dari perangkat (null bila hasil dari jalan saat ini).
+   * Ketiga ref mengendalikan pembatalan: flag dibaca loop tiap
+   * putaran, kontroler membatalkan permintaan yang sedang berjalan,
+   * dan wake membangunkan jeda antar pemeriksaan lebih awal. */
+  const [bulkCancelled, setBulkCancelled] = useState(false);
+  const [bulkRestoredAt, setBulkRestoredAt] = useState(null);
+  const bulkCancelRef = useRef(false);
+  const bulkAbortRef = useRef(null);
+  const bulkWakeRef = useRef(null);
   const [csvFileName, setCsvFileName] = useState("");
   const [csvValid, setCsvValid] = useState([]);
   const [csvRejected, setCsvRejected] = useState([]);
@@ -172,16 +197,44 @@ export default function Admin() {
     };
   }, []);
 
+  /* ADM-12: perusahaan dimuat bertahap per 200 dokumen (kursor
+   * startAfter), bukan sekaligus — tabel bisa dipakai begitu
+   * halaman pertama tiba. Penggabungan memakai state lama sebagai
+   * dasar: simpan/hapus yang terjadi selama muat berjalan tidak
+   * tertimpa oleh halaman berikutnya. Gagal di tengah jalan
+   * menyisakan halaman yang sudah dimuat, dengan pesan yang jelas. */
   async function loadCompanies() {
     setLoadingCompanies(true);
     setLoadError("");
+    const all = [];
+    let lastDoc = null;
     try {
-      const snap = await getDocs(
-        query(collection(db, "companies"), orderBy("no", "asc")),
-      );
-      setCompanies(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      for (;;) {
+        const constraints = [
+          orderBy("no", "asc"),
+          limit(COMPANIES_PAGE_SIZE),
+        ];
+        if (lastDoc) constraints.push(startAfter(lastDoc));
+        const snap = await getDocs(
+          query(collection(db, "companies"), ...constraints),
+        );
+        snap.docs.forEach((d) => all.push({ id: d.id, ...d.data() }));
+        setCompanies((prev) => {
+          const byId = new Map(prev.map((c) => [c.id, c]));
+          all.forEach((c) => {
+            if (!byId.has(c.id)) byId.set(c.id, c);
+          });
+          return [...byId.values()].sort((a, b) => a.no - b.no);
+        });
+        if (snap.size < COMPANIES_PAGE_SIZE) break;
+        lastDoc = snap.docs[snap.docs.length - 1];
+      }
     } catch {
-      setLoadError("Gagal memuat data perusahaan. Periksa koneksi lalu muat ulang halaman.");
+      setLoadError(
+        all.length === 0
+          ? "Gagal memuat data perusahaan. Periksa koneksi lalu muat ulang halaman."
+          : "Sebagian data perusahaan gagal dimuat. Muat ulang halaman untuk mencoba lagi.",
+      );
     }
     setLoadingCompanies(false);
   }
@@ -270,11 +323,18 @@ export default function Admin() {
     setLoadingVisitors(false);
   }
 
+  /* ADM-12: profil diurutkan dari yang terakhir diperbarui, supaya
+   * bila akun melebihi batas, yang diambil adalah 100 akun terbaru
+   * — bukan 100 akun sembarang tanpa urutan. */
   async function loadProfiles() {
     setProfilesError("");
     try {
       const snap = await getDocs(
-        query(collection(db, "user_profiles"), limit(PROFILES_LIMIT)),
+        query(
+          collection(db, "user_profiles"),
+          orderBy("updatedAt", "desc"),
+          limit(PROFILES_LIMIT),
+        ),
       );
       setUserProfiles(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch {
@@ -293,6 +353,15 @@ export default function Admin() {
     queueMicrotask(() => {
       loadCompanies();
       loadQuota();
+      /* ADM-11: pulihkan ringkasan cek massal terakhir dari perangkat
+       * ini, supaya hasil tidak hilang saat halaman dimuat ulang. */
+      const saved = loadBulkSummary(window.localStorage);
+      if (saved) {
+        setBulkResults(saved.results);
+        setBulkDone(saved.results.length);
+        setBulkChanges(saved.changes);
+        setBulkRestoredAt(saved.finishedAt);
+      }
     });
   }, [user, isAdmin]);
 
@@ -323,6 +392,36 @@ export default function Admin() {
     } catch {
       setLoginError("Email atau kata sandi salah.");
     }
+  }
+
+  /* ADM-10: lupa kata sandi admin — kirim tautan reset ke email
+   * yang tertulis, memakai pengirim yang sama dengan panel akun.
+   * Pesannya netral (sama untuk email terdaftar maupun tidak)
+   * supaya keberadaan email tidak bocor. */
+  async function handleForgotPassword() {
+    const address = email.trim();
+    if (!address) {
+      setLoginError("Tulis email dulu di kolom di atas, baru minta tautan.");
+      setResetInfo("");
+      return;
+    }
+    setLoginError("");
+    setResetInfo("");
+    setResetBusy(true);
+    const result = await sendPasswordReset(address);
+    if (result.sent) {
+      setResetInfo(result.message);
+    } else {
+      setLoginError(result.message);
+    }
+    setResetBusy(false);
+  }
+
+  /* Keluar yang disengaja (AKUN-10): tandai dulu supaya pelacak
+   * tidak salah menafsirkan keluar ini sebagai sesi yang berakhir. */
+  function handleSignOut() {
+    markSignOutIntended();
+    signOut(auth);
   }
 
   async function writeAudit(action, no, perusahaan) {
@@ -490,11 +589,18 @@ export default function Admin() {
     setCheckingLink(true);
     setLinkCheck(null);
     try {
-      const res = await fetch("/api/admin/check-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ no }),
-      });
+      /* ADM-09: batas waktu 20 detik — stall jaringan tidak lagi
+       * mengunci tombol "Memeriksa…" tanpa batas. */
+      const res = await fetchWithTimeout(
+        fetch,
+        "/api/admin/check-link",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ no }),
+        },
+        CHECK_LINK_TIMEOUT_MS,
+      );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setLinkCheck({
@@ -504,10 +610,38 @@ export default function Admin() {
       } else {
         setLinkCheck(body);
       }
-    } catch {
-      setLinkCheck({ ok: false, error: "Tidak bisa menghubungi server." });
+    } catch (err) {
+      setLinkCheck({
+        ok: false,
+        error:
+          err && err.name === "AbortError"
+            ? "Pemeriksaan melewati batas waktu. Coba lagi."
+            : "Tidak bisa menghubungi server.",
+      });
     }
     setCheckingLink(false);
+  }
+
+  /* ADM-11: hentikan cek massal yang sedang berjalan. Flag dibaca
+   * loop tiap putaran; permintaan yang sedang berjalan dibatalkan
+   * dan jeda antar pemeriksaan dibangunkan lebih awal, supaya
+   * berhenti seketika — hasil yang sudah didapat tetap disimpan. */
+  function cancelBulkCheck() {
+    if (!bulkRunning) return;
+    bulkCancelRef.current = true;
+    if (bulkAbortRef.current) bulkAbortRef.current.abort();
+    if (bulkWakeRef.current) bulkWakeRef.current();
+  }
+
+  /* ADM-11: hapus ringkasan cek massal terakhir dari perangkat ini
+   * beserta tampilannya. */
+  function clearLastBulk() {
+    clearBulkSummary(window.localStorage);
+    setBulkResults([]);
+    setBulkDone(0);
+    setBulkChanges(0);
+    setBulkCancelled(false);
+    setBulkRestoredAt(null);
   }
 
   async function checkBulkTargets() {
@@ -519,20 +653,34 @@ export default function Admin() {
     setBulkResults([]);
     setBulkChanges(0);
     setBulkDone(0);
+    setBulkCancelled(false);
+    setBulkRestoredAt(null);
+    bulkCancelRef.current = false;
     const done = [];
     let recorded = 0;
     for (let i = 0; i < targets.length; i++) {
+      if (bulkCancelRef.current) break;
       if (i > 0) {
-        await new Promise((r) => setTimeout(r, BULK_CHECK_DELAY_MS));
+        await cancellableDelay(BULK_CHECK_DELAY_MS, bulkWakeRef);
+        if (bulkCancelRef.current) break;
       }
       const c = targets[i];
       let entry;
       try {
-        const res = await fetch("/api/admin/check-link", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ no: Number(c.no) }),
-        });
+        /* ADM-09: tiap pemeriksaan dibatasi 20 detik; ADM-11:
+         * kontrolernya diserahkan supaya tombol Batal bisa
+         * membatalkan permintaan yang sedang berjalan. */
+        const res = await fetchWithTimeout(
+          fetch,
+          "/api/admin/check-link",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ no: Number(c.no) }),
+          },
+          CHECK_LINK_TIMEOUT_MS,
+          bulkAbortRef,
+        );
         const body = await res.json().catch(() => ({}));
         /* API mengembalikan 200 walau portalnya sendiri gagal dibuka,
          * jadi `ok` di sini wajib mengikuti hasil ceknya (body.ok),
@@ -558,13 +706,19 @@ export default function Admin() {
               error: body.error || "Pemeriksaan gagal.",
               checkedAt: new Date().toISOString(),
             };
-      } catch {
+      } catch (err) {
+        /* ADM-11: dibatalkan admin di tengah pemeriksaan — bukan
+         * hasil pemeriksaan, jangan dicatat sebagai gagal. */
+        if (bulkCancelRef.current) break;
         entry = {
           no: c.no,
           perusahaan: c.perusahaan,
           ok: false,
           status: null,
-          error: "Tidak bisa menghubungi server.",
+          error:
+            err && err.name === "AbortError"
+              ? "Pemeriksaan melewati batas waktu."
+              : "Tidak bisa menghubungi server.",
           checkedAt: new Date().toISOString(),
         };
       }
@@ -584,8 +738,20 @@ export default function Admin() {
         if (recordedOk) recorded++;
       }
     }
+    const cancelled = bulkCancelRef.current;
+    setBulkCancelled(cancelled);
     setBulkChanges(recorded);
     setBulkRunning(false);
+    /* ADM-11: simpan ringkasan hasil ke perangkat ini — termasuk
+     * bila dibatalkan di tengah jalan — supaya bisa dilihat lagi
+     * setelah halaman dimuat ulang. */
+    if (done.length > 0) {
+      saveBulkSummary(window.localStorage, {
+        finishedAt: new Date().toISOString(),
+        changes: recorded,
+        results: done,
+      });
+    }
   }
 
   function handleCsvFile(file) {
@@ -706,6 +872,9 @@ export default function Admin() {
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
         onSubmit={handleLogin}
+        onForgotPassword={handleForgotPassword}
+        resetBusy={resetBusy}
+        resetInfo={resetInfo}
       />
     );
   }
@@ -717,7 +886,7 @@ export default function Admin() {
     return (
       <NotAdmin
         adminCheckError={adminCheckError}
-        onSignOut={() => signOut(auth)}
+        onSignOut={handleSignOut}
       />
     );
   }
@@ -767,7 +936,7 @@ export default function Admin() {
           Masuk sebagai {user.email} · {companies.length} perusahaan ·{" "}
           <button
             type="button"
-            onClick={() => signOut(auth)}
+            onClick={handleSignOut}
             style={{
               background: "none",
               border: 0,
@@ -803,6 +972,7 @@ export default function Admin() {
           onAddNew={addNew}
           loadError={loadError}
           loadingCompanies={loadingCompanies}
+          loadedCount={companies.length}
           pageRows={pageRows}
           selected={selected}
           onPick={pick}
@@ -835,7 +1005,11 @@ export default function Admin() {
         bulkDone={bulkDone}
         bulkResults={bulkResults}
         bulkChanges={bulkChanges}
+        bulkCancelled={bulkCancelled}
+        bulkRestoredAt={bulkRestoredAt}
         onCheck={checkBulkTargets}
+        onCancel={cancelBulkCheck}
+        onClearLast={clearLastBulk}
       />
       <CsvSection
         csvFileName={csvFileName}

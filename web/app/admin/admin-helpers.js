@@ -64,12 +64,137 @@ export const AUDIT_LIMIT = 10;
 export const VISITOR_DAYS = 30;
 /* Kuota baca harian Firestore paket Spark. */
 export const QUOTA_DAILY_LIMIT = 50000;
-export const TRACKER_ACTIONS = ["Ditandai", "Sudah dilamar", "Dipanggil", "Ditolak"];
+/* KONTEN-07 (bagian admin): selaras dengan TRACKER_STATUSES di
+ * lib/tracker-sync.js — lima status, "Diterima" sesudah "Dipanggil"
+ * dan sebelum "Ditolak". Urutan ini juga urutan baris tabel
+ * "Penanda lamaran" di seksi Pengunjung. */
+export const TRACKER_ACTIONS = ["Ditandai", "Sudah dilamar", "Dipanggil", "Diterima", "Ditolak"];
+
+/* Ukuran halaman muat perusahaan (ADM-12): daftar ditarik per 200
+ * dokumen dengan kursor, supaya tabel bisa dipakai sebelum seluruh
+ * 610 dokumen selesai dimuat. */
+export const COMPANIES_PAGE_SIZE = 200;
+
+/* Batas waktu cek tautan di klien (ADM-09, 20 detik — dua kali
+ * batas 10 detik di server, memberi ruang untuk latensi jaringan).
+ * Melewati batas ini, permintaan dibatalkan dan admin mendapat
+ * pesan "waktu habis", bukan tombol yang menggantung selamanya. */
+export const CHECK_LINK_TIMEOUT_MS = 20000;
 
 /* Jeda antar pemeriksaan massal. Batas di server: 10 permintaan per
  * 60 detik per alamat IP. Jeda 6,5 detik menjaga laju di bawah
  * batas itu, berapa pun jumlah perusahaan yang diperiksa. */
 export const BULK_CHECK_DELAY_MS = 6500;
+
+/* Fetch dengan batas waktu (ADM-09): permintaan dibatalkan lewat
+ * AbortController bila melewati timeoutMs, dan pemanggil mendapat
+ * AbortError. `fetchImpl` disuntik supaya bisa dites tanpa
+ * jaringan. `controllerRef` opsional: bila diisi, kontroler yang
+ * dipakai disimpan di `.current` selama permintaan berjalan (dan
+ * dibersihkan sesudahnya), supaya pemanggil bisa membatalkannya
+ * dari luar — dipakai tombol Batal cek massal (ADM-11). */
+export async function fetchWithTimeout(
+  fetchImpl,
+  url,
+  options,
+  timeoutMs,
+  controllerRef,
+) {
+  const controller = new AbortController();
+  if (controllerRef) controllerRef.current = controller;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchImpl(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+    if (controllerRef) controllerRef.current = null;
+  }
+}
+
+/* Jeda yang bisa dibangunkan lebih awal (ADM-11): dipakai jeda
+ * antar pemeriksaan massal. `wakeRef.current()` (bila diisi)
+ * mengakhiri jeda seketika tanpa menunggu — dipakai tombol Batal
+ * supaya tidak perlu menunggu sisa jeda 6,5 detik. */
+export function cancellableDelay(ms, wakeRef) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (wakeRef) wakeRef.current = null;
+      resolve();
+    }, ms);
+    if (wakeRef) {
+      wakeRef.current = () => {
+        clearTimeout(timer);
+        wakeRef.current = null;
+        resolve();
+      };
+    }
+  });
+}
+
+/* Ringkasan hasil cek massal di localStorage (ADM-11): hasil tidak
+ * lagi hilang saat halaman dimuat ulang. Disimpan di perangkat
+ * admin saja, bukan Firestore — ringkasan baru akan butuh koleksi
+ * dan aturan Firestore baru, sementara datanya hanya dibaca admin
+ * yang sama di perangkat yang sama. Bentuk tersimpan:
+ * { finishedAt (ISO), changes (jumlah), results: [{ no,
+ * perusahaan, ok, status, error, checkedAt }] }. */
+export const BULK_SUMMARY_KEY = "karir-admin-bulk-check";
+
+/* Ringkasan hitung dari daftar hasil: total, bisa dibuka, gagal.
+ * Entri yang bukan objek atau tanpa `ok` dihitung gagal. */
+export function summarizeBulkResults(results) {
+  const list = Array.isArray(results) ? results : [];
+  const ok = list.filter((r) => r && r.ok === true).length;
+  return { total: list.length, ok, failed: list.length - ok };
+}
+
+/* Simpan ringkasan; kembalikan false bila browser menolak. */
+export function saveBulkSummary(storage, summary) {
+  try {
+    if (!storage) return false;
+    storage.setItem(BULK_SUMMARY_KEY, JSON.stringify(summary));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* Baca ringkasan tersimpan; kembalikan null bila tidak ada, rusak,
+ * atau bentuknya tidak sesuai (tidak pernah melempar). */
+export function loadBulkSummary(storage) {
+  try {
+    if (!storage) return null;
+    const raw = storage.getItem(BULK_SUMMARY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof parsed.finishedAt !== "string" ||
+      !Array.isArray(parsed.results)
+    ) {
+      return null;
+    }
+    return {
+      finishedAt: parsed.finishedAt,
+      changes: typeof parsed.changes === "number" ? parsed.changes : 0,
+      results: parsed.results,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/* Hapus ringkasan tersimpan; kembalikan false bila browser menolak. */
+export function clearBulkSummary(storage) {
+  try {
+    if (!storage) return false;
+    storage.removeItem(BULK_SUMMARY_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /* Hari (YYYY-MM-DD) dari satu catatan pengunjung: pakai kolom `day`
  * bila ada, kalau tidak dari `ts`. `ts` bisa berupa Timestamp
@@ -157,6 +282,10 @@ export function aggregateVisitors(events, companies, today = new Date()) {
   const filters = new Map();
   const noResult = new Map();
   const tracker = new Map(TRACKER_ACTIONS.map((a) => [a, 0]));
+  /* ANALITIK-12: panduan awal di /mulai mengirim event onboarding
+   * dengan action "selesai" (wizard dituntaskan) atau "dilewati"
+   * (pengunjung memilih lewati) — hitung keduanya terpisah. */
+  const onboarding = { selesai: 0, dilewati: 0 };
   const kindsByVisitor = new Map();
 
   list.forEach((e) => {
@@ -209,6 +338,12 @@ export function aggregateVisitors(events, companies, today = new Date()) {
     }
     if (e.type === "tracker_mark" && TRACKER_ACTIONS.includes(e.action)) {
       tracker.set(e.action, tracker.get(e.action) + 1);
+    }
+    if (
+      e.type === "onboarding" &&
+      (e.action === "selesai" || e.action === "dilewati")
+    ) {
+      onboarding[e.action]++;
     }
     /* ANALITIK-06: kunci yang sama dengan hitungan harian (perDay)
      * — visitorHash diutamakan, visitor sebagai cadangan — supaya
@@ -272,6 +407,7 @@ export function aggregateVisitors(events, companies, today = new Date()) {
       action,
       count: tracker.get(action),
     })),
+    onboarding,
     serious: {
       count: serious,
       total: totalVisitors,

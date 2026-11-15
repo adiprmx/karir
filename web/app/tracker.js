@@ -140,6 +140,109 @@ function applyLocalDelta(merged, before, after) {
   return out;
 }
 
+/* ============ BLOK LOGIKA MURNI (AKUN-10) ============
+ * Fungsi-fungsi di antara penanda __PURE_START__ dan __PURE_END__
+ * diuji unit lewat ekstraksi sumber di app/w2c-admin.test.js:
+ * berkas ini tidak bisa diimpor langsung oleh node:test karena
+ * JSX dan impor Next. Blok ini WAJIB mandiri: hanya memakai
+ * global standar (Date) dan penyimpanan yang disuntik, tanpa
+ * impor atau state lain. Jangan menambah ketergantungan di dalam
+ * blok ini.
+/* __PURE_START__ */
+
+/* Kunci localStorage untuk membedakan "keluar sengaja" dari "sesi
+ * berakhir" (AKUN-10). Keluar yang disengaja menandai
+ * SIGNOUT_INTENDED_KEY sebelum memanggil signOut; sesi yang mati
+ * sendiri (token refresh gagal — akun dinonaktifkan atau dihapus)
+ * tidak meninggalkan tanda itu. Penanda sesi berakhir dibaca
+ * panel akun sekali, lalu dihapus. */
+export const SIGNOUT_INTENDED_KEY = "karir-keluar-sengaja";
+export const SESSION_ENDED_KEY = "karir-sesi-berakhir";
+/* Tanda keluar hanya berlaku 60 detik: signOut Firebase menyebar
+ * ke semua tab dalam hitungan detik, jadi tanda yang lebih tua
+ * dari ini adalah sisa yang tidak terpakai. */
+export const SIGNOUT_INTENDED_MAX_AGE_MS = 60 * 1000;
+/* Pemberitahuan sesi berakhir hanya relevan satu jam sesudahnya;
+ * sesudah itu, panel masuk biasa sudah cukup menjelaskan. */
+export const SESSION_ENDED_MAX_AGE_MS = 60 * 60 * 1000;
+
+function storageOf(storage) {
+  if (storage) return storage;
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return window.localStorage;
+    }
+  } catch {
+    /* Tanpa penyimpanan, tidak ada tanda yang dibaca. */
+  }
+  return null;
+}
+
+function readFreshTimestamp(storage, key, maxAgeMs, now) {
+  const store = storageOf(storage);
+  if (!store) return false;
+  let raw = null;
+  try {
+    raw = store.getItem(key);
+    store.removeItem(key);
+  } catch {
+    return false;
+  }
+  if (!raw) return false;
+  const at = Number(raw);
+  if (!Number.isFinite(at)) return false;
+  const age = now - at;
+  return age >= 0 && age <= maxAgeMs;
+}
+
+function writeTimestamp(storage, key, now) {
+  const store = storageOf(storage);
+  if (!store) return false;
+  try {
+    store.setItem(key, String(now));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* Tandai bahwa keluar berikutnya disengaja (dipanggil sebelum
+ * signOut). Argumen `storage` dan `now` hanya untuk tes. */
+export function markSignOutIntended(storage, now = Date.now()) {
+  return writeTimestamp(storage, SIGNOUT_INTENDED_KEY, now);
+}
+
+/* Baca sekaligus hapus tanda keluar sengaja: true bila ada tanda
+ * yang masih segar. Dipanggil saat status masuk menjadi null. */
+export function consumeSignOutIntended(storage, now = Date.now()) {
+  return readFreshTimestamp(
+    storage,
+    SIGNOUT_INTENDED_KEY,
+    SIGNOUT_INTENDED_MAX_AGE_MS,
+    now,
+  );
+}
+
+/* Tandai bahwa sesi berakhir sendiri (dipanggil saat status masuk
+ * menjadi null tanpa tanda keluar sengaja). */
+export function markSessionEnded(storage, now = Date.now()) {
+  return writeTimestamp(storage, SESSION_ENDED_KEY, now);
+}
+
+/* Baca sekaligus hapus penanda sesi berakhir: true bila ada
+ * penanda yang masih segar. Dipanggil panel akun saat tampil. */
+export function consumeSessionEnded(storage, now = Date.now()) {
+  return readFreshTimestamp(
+    storage,
+    SESSION_ENDED_KEY,
+    SESSION_ENDED_MAX_AGE_MS,
+    now,
+  );
+}
+
+/* __PURE_END__ */
+/* ============ AKHIR BLOK LOGIKA MURNI ============ */
+
 /* Status sinkron (modul, dibagikan semua pemakai useTracker):
  * "tamu" (belum masuk), "sinkron" (terakhir berhasil),
  * "mengirim" (sinkron/kirim sedang jalan), "tertunda" (ada
@@ -423,6 +526,13 @@ export function useTracker() {
         document.addEventListener("visibilitychange", onVisible);
         const authUnsub = onAuthStateChanged(auth, (u) => {
           if (!u) {
+            /* AKUN-10: sesi yang mati sendiri (pernah masuk, lalu
+             * null tanpa keluar sengaja) diberitahukan lewat toast
+             * dan penanda untuk panel akun — bukan diam-diam
+             * menjadi tamu. Keluar dari tombol Keluar menandai
+             * dulu, jadi tidak memicu pemberitahuan ini. */
+            const wasSignedIn = Boolean(activeUid);
+            const intended = consumeSignOutIntended();
             activeUid = null;
             syncedUid = null;
             pendingPush.clear();
@@ -433,6 +543,12 @@ export function useTracker() {
             markGuest();
             setEntries(readEntries());
             setGuestCount(0);
+            if (wasSignedIn && !intended) {
+              markSessionEnded();
+              showToast(
+                "Sesi akun berakhir. Masuk lagi supaya lamaran tersimpan ke akun.",
+              );
+            }
             return;
           }
           const switched = activeUid !== u.uid;

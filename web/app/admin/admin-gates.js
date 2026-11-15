@@ -6,6 +6,8 @@
  * bukan admin. Semua keputusan (siapa yang melihat apa) tetap di
  * page.js; komponen di sini hanya menampilkan. */
 
+import { useState } from "react";
+
 export function LoadingGate() {
   return (
     <div className="wrap">
@@ -23,7 +25,13 @@ export function LoginForm({
   onEmailChange,
   onPasswordChange,
   onSubmit,
+  onForgotPassword,
+  resetBusy,
+  resetInfo,
 }) {
+  /* ADM-10: opsi tampilkan kata sandi, supaya salah ketik bisa
+   * dilihat sebelum masuk. State lokal form ini saja. */
+  const [showPassword, setShowPassword] = useState(false);
   return (
     <div className="wrap">
       <div className="page-head">
@@ -62,22 +70,55 @@ export function LoginForm({
           </label>
           <input
             id="admin-login-password"
-            type="password"
+            type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => onPasswordChange(e.target.value)}
             required
             autoComplete="current-password"
           />
         </fieldset>
+        <label
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showPassword}
+            onChange={(e) => setShowPassword(e.target.checked)}
+          />
+          Tampilkan kata sandi
+        </label>
         {/* AKSES-05: error masuk diumumkan sebagai alert. */}
         {loginError && (
           <p className="notice" role="alert">
             {loginError}
           </p>
         )}
-        <button className="btn" type="submit">
-          Masuk
-        </button>
+        {/* ADM-10: hasil kirim tautan reset diumumkan sebagai status. */}
+        {resetInfo && (
+          <p className="notice" role="status">
+            {resetInfo}
+          </p>
+        )}
+        <div className="filter-actions">
+          <button className="btn" type="submit">
+            Masuk
+          </button>
+          {/* ADM-10: lupa kata sandi — kirim tautan reset ke email
+            * yang tertulis, tanpa perlu keluar ke Firebase Console. */}
+          <button
+            className="btn ghost small"
+            type="button"
+            onClick={onForgotPassword}
+            disabled={resetBusy}
+          >
+            {resetBusy ? "Mengirim…" : "Lupa kata sandi?"}
+          </button>
+        </div>
       </form>
     </div>
   );

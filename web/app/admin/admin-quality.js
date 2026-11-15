@@ -21,9 +21,12 @@ export default function QualitySection({ qualityButtons, qualityFilter, onToggle
             className="btn ghost"
             aria-pressed={qualityFilter === b.key}
             onClick={() => onToggle(b.key)}
+            /* UX-13: tombol aktif memakai token --ink/--paper (tinta
+             * di atas kertas, terbalik dari normal), bukan hex
+             * mentah — ikut tema terang/gelap. */
             style={
               qualityFilter === b.key
-                ? { background: "#0a0a0a", color: "#fff" }
+                ? { background: "var(--ink)", color: "var(--paper)" }
                 : undefined
             }
           >
