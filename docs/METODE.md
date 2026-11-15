@@ -124,6 +124,24 @@ investigasinya.
 | `kontak_lain` | Kontak melamar lain dari sumber resmi (misalnya formulir pendaftaran atau akun resmi perusahaan). Tautan pemendek boleh dicantumkan di sini bila memenuhi aturan di seksi "Tautan pemendek sebagai kanal melamar" di atas. Kosong bila tidak ada. |
 | `batas_lamar` | Batas akhir melamar yang tercatat, format `YYYY-MM-DD`; kosong bila tidak ada batas yang tercatat. Batas ini diambil dari tanggal yang tertulis di kanal resmi perusahaan, bukan dari perkiraan. |
 
+## Cara menulis catatan
+
+Kolom `catatan` tampil langsung ke pembaca, jadi isinya ditulis dengan
+bahasa pembaca, bukan bahasa proses pengecekan. Aturannya:
+
+- Tulis apa yang terlihat saat dicek: judul lowongan, syarat, batas
+  lamar, dan tanggal-tanggal yang relevan. Tanggal dan bukti tetap
+  dicatat — itu informasi pembaca, bukan catatan internal.
+- Jangan tulis rujukan proses internal: kode galat (misalnya HTTP 404
+  atau 503), istilah alat (curl, crawl, egress, fetch), singkatan
+  proses (taksonomi, rekonsiliasi), atau pesan untuk pengecek lain.
+- Bila situs tidak bisa dibuka, tulis dalam bahasa biasa — misalnya
+  "situs tidak bisa dibuka" atau "alamat tidak ditemukan" — bukan
+  kode galatnya.
+- Jangan pakai huruf kapital berlebih untuk penekanan.
+- Kutipan dari portal (pesan situs, nama tombol, nama program) boleh
+  dipertahankan apa adanya bila itu yang tertulis di portal.
+
 ## Aplikasi web
 
 Aplikasi web yang live adalah aplikasi Next.js di folder `web/` (https://karir-adiprmx.vercel.app/). Aplikasi itu membaca data yang sama dan memberi rekomendasi berdasarkan domisili dan posisi yang dicari. Versi statis lama di folder `docs/` (`docs/index.html`, GitHub Pages) sudah tidak live dan hanya disimpan sebagai versi sebelumnya. Aturan kejujurannya:

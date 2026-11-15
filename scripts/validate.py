@@ -34,6 +34,20 @@ Kualitas data (T8, 15 Nov 2026 — DATA-04/05/06 + penjaga DET-03):
   "/"); tiap nomor dinormalisasi terpisah (awalan 0 atau 8 menjadi
   62) dan wajib 10-15 digit setelah normalisasi, supaya tidak ada
   lagi tautan wa.me ke nomor gabungan yang tidak ada.
+- DATA-11 (15 Nov 2026 — W1-C): celah validator yang ditutup:
+  (b) nilai status dan placeholder "tidak dirinci" di kolom posisi
+  adalah kesalahan keras (penanda jujurnya: "Tidak ada posisi
+  terlihat" / "Tidak bisa dicek"); (c) token email dan URL di
+  kontak_lain dicek formatnya (gagang media sosial dikecualikan,
+  domain tanpa skema tidak dicek — kontak_lain juga berisi alamat
+  jalan dan nama domain yang bukan tautan); (d) duplikat link_karir
+  dihitung dan dijaga (ratchet: baseline 3 — tiga portal grup yang
+  dipakai bersama perusahaan segrup, bukan kesalahan data);
+  (e) tanggal_cek di masa depan (WIB) adalah kesalahan keras;
+  (f) format link_karir yang cacat adalah kesalahan keras, tautan
+  http:// dihitung dan dijaga (ratchet: baseline 5) — validator
+  jalan offline dan tidak menebak https (menaikkan ke https tanpa
+  verifikasi live bisa mematahkan tautan).
 
 Baseline ratchet diukur dari data 15 Nov 2026 (610 baris). Angka ini
 hanya boleh TURUN (data membaik) — menaikkan baseline untuk
@@ -46,7 +60,7 @@ import csv
 import re
 import sys
 from collections import Counter
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -190,6 +204,35 @@ MAX_KATEGORI_NONKANONIK = 129
 # tidak ditemukan).
 MAX_TANPA_KANAL = 4
 
+# --- DATA-11: posisi, kontak_lain, duplikat tautan, tanggal, skema -------
+# (b) Nilai status dan placeholder "tidak dirinci" di kolom posisi
+# adalah kesalahan keras (0 baris sejak perbaikan DATA-12, 15 Nov
+# 2026). Penanda jujur yang diizinkan: "Tidak ada posisi terlihat",
+# "Tidak bisa dicek", "Tidak dapat ditentukan".
+# (c) Format kontak_lain: token yang mengandung "@" (bukan awalan —
+# gagang media sosial seperti "@pp_presisi" dikecualikan) wajib
+# berupa alamat email yang valid; token tautan http(s) wajib berupa
+# URL yang valid. Domain tanpa skema (mis. "bit.ly/abc") sengaja
+# tidak dicek — kontak_lain juga berisi alamat jalan dan nama domain
+# yang bukan tautan, sehingga mewajibkan skema menghasilkan banyak
+# positif palsu.
+URL_RE = re.compile(r"^https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:\d+)?(/\S*)?$")
+# (d) Duplikat link_karir (dihitung + ratchet). Baseline 15 Nov 2026:
+# 3 baris ekstra — tiga portal grup yang dipakai bersama perusahaan
+# segrup, BUKAN kesalahan data: recruitment.pertamina.com (no 83,
+# 406), career.astra.co.id/lowongan (no 88, 370),
+# karir.kawanlamagroup.com (no 237, 238). Duplikat baru di luar tiga
+# portal ini wajib ditinjau (kemungkinan perusahaan ganda).
+MAX_LINK_KARIR_DUPLIKAT = 3
+# (e) tanggal_cek masa depan (dibandingkan dengan tanggal hari ini
+# WIB): kesalahan keras.
+# (f) link_karir http:// (bukan https) dihitung + ratchet. Baseline
+# 15 Nov 2026: 5 tautan (no 203, 231, 318, 593, 608). Bukan kesalahan
+# keras: menaikkan ke https tanpa verifikasi live bisa mematahkan
+# tautan, dan validator ini jalan offline (egress tidak bisa
+# diandalkan). Format URL yang cacat tetap kesalahan keras.
+MAX_LINK_HTTP = 5
+
 
 def load_city_keys():
     """Baca kunci kota dari web/lib/cities.js (satu sumber kebenaran
@@ -290,6 +333,11 @@ def main() -> int:
     kanal_email = kanal_wa = kanal_lain = 0
     punya_kanal = 0
     tanpa_kanal = 0
+    link_http = 0
+    # Tanggal hari ini dalam WIB (jam VM adalah UTC — date.today()
+    # saja salah hingga 7 jam; pola yang sama dipakai
+    # import_canonical.py).
+    today_wib = (datetime.now(timezone.utc) + timedelta(hours=7)).date()
 
     for i, row in enumerate(rows, start=2):
         if row["status"] not in VALID_STATUSES:
@@ -299,9 +347,15 @@ def main() -> int:
         else:
             y, m, d = map(int, row["tanggal_cek"].split("-"))
             try:
-                date(y, m, d)
+                parsed = date(y, m, d)
             except ValueError:
                 errors.append(f"baris {i}: tanggal tidak valid: {row['tanggal_cek']!r}")
+            else:
+                # DATA-11 (e): tanggal_cek di masa depan (WIB).
+                if parsed > today_wib:
+                    errors.append(
+                        f"baris {i}: tanggal_cek di masa depan: {row['tanggal_cek']!r}"
+                    )
         batas = (row["batas_lamar"] or "").strip()
         if batas:
             if not DATE_RE.match(batas):
@@ -313,8 +367,13 @@ def main() -> int:
                 except ValueError:
                     errors.append(f"baris {i}: batas_lamar bukan tanggal kalender yang valid: {batas!r}")
         link = (row["link_karir"] or "").strip()
-        if link and not link.startswith(("http://", "https://")):
-            errors.append(f"baris {i}: link_karir bukan URL http(s): {link!r}")
+        # DATA-11 (f): format URL yang cacat adalah kesalahan keras
+        # (menggantikan cek awalan http(s) saja); tautan http://
+        # dihitung untuk ratchet di bawah.
+        if link and not URL_RE.match(link):
+            errors.append(f"baris {i}: link_karir bukan URL yang valid: {link!r}")
+        if link.startswith("http://"):
+            link_http += 1
         note = (row["catatan"] or "").lower()
         has_channel = any(
             (row[c] or "").strip() for c in ("email_hrd", "wa_hrd", "kontak_lain")
@@ -333,6 +392,25 @@ def main() -> int:
                 normalize_wa(p) is None for p in parts
             ):
                 errors.append(f"baris {i}: wa_hrd bukan nomor telepon yang valid: {wa!r}")
+        # --- DATA-11 (c): format token email dan URL di kontak_lain ---
+        kontak = (row["kontak_lain"] or "").strip()
+        if kontak:
+            for token in re.split(r"[\s;|,]+", kontak):
+                token = token.strip("()\"'").rstrip(".,;")
+                if not token:
+                    continue
+                if token.startswith(("http://", "https://")):
+                    if not URL_RE.match(token):
+                        errors.append(
+                            f"baris {i}: kontak_lain berisi URL yang "
+                            f"tidak valid: {token!r}"
+                        )
+                elif "@" in token and not token.startswith("@"):
+                    if not EMAIL_RE.match(token):
+                        errors.append(
+                            f"baris {i}: kontak_lain berisi alamat email "
+                            f"yang tidak valid: {token!r}"
+                        )
         for col in ("perusahaan", "kategori", "status", "lokasi", "posisi"):
             if not (row[col] or "").strip():
                 errors.append(f"baris {i}: kolom {col} kosong")
@@ -348,6 +426,24 @@ def main() -> int:
                 errors.append(
                     f"baris {i}: nilai status {status!r} bocor ke kolom lokasi"
                 )
+
+        # --- DATA-11 (b): nilai status / placeholder di kolom posisi ---
+        # Kesalahan keras (0 baris sejak perbaikan DATA-12, 15 Nov
+        # 2026). Penanda jujur yang diizinkan: "Tidak ada posisi
+        # terlihat", "Tidak bisa dicek", "Tidak dapat ditentukan".
+        posisi = (row["posisi"] or "").strip()
+        for status in VALID_STATUSES:
+            if status in posisi:
+                errors.append(
+                    f"baris {i}: nilai status {status!r} bocor ke kolom posisi"
+                )
+        if "tidak dirinci" in posisi.lower():
+            errors.append(
+                f"baris {i}: kolom posisi mengandung placeholder "
+                f"'tidak dirinci' — isi judul posisi sebenarnya atau "
+                f"penanda jujur ('Tidak ada posisi terlihat' / "
+                f"'Tidak bisa dicek')"
+            )
         # Pemisah multi-kota: koma tanpa titik koma (dihitung + ratchet).
         # Catatan: cek ini tidak sadar negasi ("tidak ada di Depok"
         # tetap terhitung sebagai penyebutan kota) — ia menjaga
@@ -388,7 +484,29 @@ def main() -> int:
                     f"melamar apa pun (tautan + kanal kosong)"
                 )
 
+    # --- DATA-11 (d): duplikat link_karir (dihitung + ratchet) ---
+    link_counts = Counter(
+        (r["link_karir"] or "").strip().lower()
+        for r in rows
+        if (r["link_karir"] or "").strip()
+    )
+    duplikat_link = sum(v - 1 for v in link_counts.values() if v > 1)
+    duplikat_groups = [
+        (link, v) for link, v in link_counts.most_common() if v > 1
+    ]
+
     # --- Ratchet kualitas: jumlah hanya boleh turun, tidak naik. ---
+    if duplikat_link > MAX_LINK_KARIR_DUPLIKAT:
+        errors.append(
+            f"duplikat link_karir bertambah: {duplikat_link} baris ekstra "
+            f"(baseline {MAX_LINK_KARIR_DUPLIKAT}) — tinjau duplikat baru "
+            f"(kemungkinan perusahaan ganda)"
+        )
+    if link_http > MAX_LINK_HTTP:
+        errors.append(
+            f"link_karir http:// bertambah: {link_http} "
+            f"(baseline {MAX_LINK_HTTP}) — tautan baru wajib https://"
+        )
     if placeholder_count > MAX_PLACEHOLDER_LOKASI:
         errors.append(
             f"lokasi placeholder bertambah: {placeholder_count} "
@@ -421,8 +539,13 @@ def main() -> int:
         f"kanal: email {kanal_email}, WA {kanal_wa}, kontak lain "
         f"{kanal_lain}, punya >=1 kanal {punya_kanal} "
         f"({punya_kanal / total * 100:.1f}%), tanpa kanal apa pun "
-        f"{tanpa_kanal}; multi-kota pemisah koma {comma_multi_count}"
+        f"{tanpa_kanal}; multi-kota pemisah koma {comma_multi_count}; "
+        f"duplikat link_karir {duplikat_link} baris ekstra; "
+        f"link_karir http:// {link_http}"
     )
+    if duplikat_groups:
+        breakdown = ", ".join(f"{link} ({v}x)" for link, v in duplikat_groups)
+        print(f"  duplikat link_karir: {breakdown}")
     if placeholder_by_value:
         breakdown = ", ".join(
             f"{k}: {v}" for k, v in placeholder_by_value.most_common()
