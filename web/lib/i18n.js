@@ -19,7 +19,7 @@ const DICT = {
     "footer.note":
       "Data dicek berkala langsung di browser; tiap perusahaan mencatat tanggal cek terbarunya. Lowongan bisa berubah setelah tanggal cek, selalu periksa portal resminya.",
     "footer.privacy":
-      "Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai. Kalau masuk, yang tersimpan di akun hanya email, kata pencarian, dan tanda lamaran, dan hanya pemilik akun dan admin yang bisa melihatnya. Tanpa masuk, tidak ada nama atau identitas yang tersimpan; kata pencarian hanya dicatat tanpa nama untuk statistik kunjungan.",
+      "Masuk akun itu pilihan, bukan kewajiban. Tanpa masuk pun semua fitur tetap bisa dipakai. Kalau masuk, yang tersimpan di akun hanya email, kata pencarian, dan tanda lamaran, dan hanya pemilik akun dan admin yang bisa melihatnya. Bila kamu mengaktifkan notifikasi, alamat push perangkatmu ikut tersimpan di akun supaya lowongan baru bisa dikabari; matikan notifikasi dari Pengaturan bila tidak mau lagi. Tanpa masuk, tidak ada nama atau identitas yang tersimpan; kata pencarian hanya dicatat tanpa nama untuk statistik kunjungan.",
     "footer.repo": "Repo GitHub",
     "footer.method": "Metode pengecekan",
     "footer.about": "Tentang Karir",
@@ -434,6 +434,28 @@ const DICT = {
     "settings.toastWiped": "Semua data di browser ini dihapus.",
     "settings.toastWipedAccount":
       "Semua data di browser ini dihapus, dan tanda lamaran di akun ikut dihapus.",
+    /* --- T10 (notifikasi web push): hanya kunci baru di blok ini,
+     * nilai kunci lama tidak diubah. --- */
+    "settings.pushTitle": "Notifikasi",
+    "settings.pushHint":
+      "Kabari saya saat ada lowongan baru, langsung di perangkat ini. Paling banyak satu pesan sehari, dan hanya saat ada yang baru.",
+    "settings.pushEnable": "Aktifkan notifikasi",
+    "settings.pushDisable": "Matikan notifikasi",
+    "settings.pushActive": "Notifikasi aktif di browser ini.",
+    "settings.pushNeedSignIn":
+      "Masuk dulu untuk mengaktifkan notifikasi.",
+    "settings.pushUnsupported":
+      "Browser ini tidak mendukung notifikasi.",
+    "settings.pushDenied":
+      "Izin notifikasi ditolak di browser ini. Aktifkan lagi dari pengaturan browser, lalu kembali ke sini.",
+    "settings.pushBusy": "Memproses…",
+    "settings.pushEnabled": "Notifikasi diaktifkan.",
+    "settings.pushDisabled": "Notifikasi dimatikan.",
+    "settings.pushFailed":
+      "Notifikasi belum bisa diaktifkan. Coba lagi sebentar lagi.",
+    "settings.pushUnsubFailed":
+      "Notifikasi belum bisa dimatikan. Coba lagi sebentar lagi.",
+    /* --- akhir T10 --- */
     "auth.syncNote":
       "Lamaran di perangkat ini ikut tersimpan ke akun. Semua fitur tetap bisa dipakai tanpa masuk.",
     "auth.notVerifiedNote":
@@ -520,7 +542,7 @@ const DICT = {
     "footer.note":
       "Data is checked regularly, directly in the browser; each company records its latest check date. Openings can change after the check date, always verify on the official portal.",
     "footer.privacy":
-      "Signing in is a choice, not a requirement. Without signing in, every feature still works. If you sign in, only your email, your searches, and your application marks are saved to your account, and only you and the admin can see them. Without signing in, no name or identity is saved; searches are only recorded anonymously for visit statistics.",
+      "Signing in is a choice, not a requirement. Without signing in, every feature still works. If you sign in, only your email, your searches, and your application marks are saved to your account, and only you and the admin can see them. If you turn on notifications, your device push address is also saved to your account so new openings can reach you; turn notifications off in Settings any time. Without signing in, no name or identity is saved; searches are only recorded anonymously for visit statistics.",
     "footer.repo": "GitHub repo",
     "footer.method": "Checking method",
     "footer.about": "About Karir",
@@ -937,6 +959,28 @@ const DICT = {
     "settings.toastWiped": "All data in this browser deleted.",
     "settings.toastWipedAccount":
       "All data in this browser deleted, and application marks in your account deleted too.",
+    /* --- T10 (web push notifications): new keys only in this
+     * block, existing key values untouched. --- */
+    "settings.pushTitle": "Notifications",
+    "settings.pushHint":
+      "Let me know when there are new openings, right on this device. At most one message a day, and only when there is something new.",
+    "settings.pushEnable": "Turn on notifications",
+    "settings.pushDisable": "Turn off notifications",
+    "settings.pushActive": "Notifications are on in this browser.",
+    "settings.pushNeedSignIn":
+      "Sign in first to turn on notifications.",
+    "settings.pushUnsupported":
+      "This browser does not support notifications.",
+    "settings.pushDenied":
+      "Notification permission was denied in this browser. Turn it back on in your browser settings, then come back here.",
+    "settings.pushBusy": "Working…",
+    "settings.pushEnabled": "Notifications turned on.",
+    "settings.pushDisabled": "Notifications turned off.",
+    "settings.pushFailed":
+      "Notifications could not be turned on. Please try again in a bit.",
+    "settings.pushUnsubFailed":
+      "Notifications could not be turned off. Please try again in a bit.",
+    /* --- end T10 --- */
     "auth.syncNote":
       "Applications on this device are also saved to your account. Every feature still works without signing in.",
     "auth.notVerifiedNote":

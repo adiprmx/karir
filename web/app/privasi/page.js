@@ -46,6 +46,14 @@ export default async function Privasi() {
           Hanya kamu yang bisa melihatnya.
         </p>
         <p>
+          Bila kamu mengaktifkan notifikasi dari halaman Pengaturan,
+          alamat push perangkatmu beserta kunci enkripsinya tersimpan
+          di akun, supaya lowongan baru bisa dikabari langsung di
+          perangkat itu. Yang tersimpan hanya alamat dan kunci itu,
+          tanpa isi pesan. Kamu bisa mematikannya kapan saja dari
+          halaman Pengaturan; alamat dan kuncinya ikut terhapus.
+        </p>
+        <p>
           Kata sandi dipegang Firebase, layanan akun dari Google. Kata
           sandi tidak disimpan di data Karir.
         </p>

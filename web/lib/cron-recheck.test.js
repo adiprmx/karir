@@ -16,6 +16,10 @@
  * 409 = sudah ada, gagal tulis dikeluarkan dari snapshot NOTIF-06),
  * loop cek portal (portal mati -> status berubah + perubahan
  * tercatat), marker kesegaran, dan heartbeat cron-runs (OPS-01).
+ * Wiring digest web push (T10, RENDAH-5) juga dites di sini:
+ * impor `web-push` di lib/push.js dipetakan ke stub test
+ * (lib/webpush-test-loader.mjs) supaya pemanggilan sendPushDigest
+ * + argumen freshAlerts-nya bisa diamati tanpa jaringan.
  * Logika murni notifikasi (collectNewTargetAlerts,
  * collectDeadlineAlerts, formatTelegramMessage, markAlertsSent)
  * SUDAH teruji di lib/notify.test.js dan tidak diulang di sini.
@@ -26,7 +30,14 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { generateKeyPairSync } from "node:crypto";
+/* Impor STATIS dari `web-push` di sini resolve ke library ASLI
+ * (loader stub baru terdaftar di bawah, sesudah impor statis
+ * di-link) — dipakai hanya untuk membuat pasangan kunci VAPID
+ * uji. Impor `web-push` di lib/push.js (yang dimuat belakangan
+ * lewat impor dinamis rute) resolve ke stub test. */
+import { generateVAPIDKeys } from "web-push";
 import { revalidateCompanies } from "./companies.js";
+import { webpushStub } from "./webpush-test-stub.mjs";
 
 /* --- Env dummy (sebelum impor rute) --- */
 process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "proyek-uji-t16b";
@@ -44,8 +55,15 @@ const SA_JSON = JSON.stringify({
   project_id: "proyek-uji-t16b",
 });
 
-/* Loader `@/` + `next/server` harus terdaftar SEBELUM rute diimpor. */
+/* Loader `@/` + `next/server` harus terdaftar SEBELUM rute diimpor.
+ * Loader stub `web-push` didaftar bersama (untuk test wiring
+ * digest push, RENDAH-5). */
 register("./route-test-loader.mjs", import.meta.url);
+register("./webpush-test-loader.mjs", import.meta.url);
+
+/* Pasangan kunci VAPID uji (dibuat di tempat, bukan kunci
+ * produksi) — dipasang ke env hanya di dalam test push. */
+const VAPID = generateVAPIDKeys();
 
 const { GET: getRecheck } = await import(
   "../app/api/cron/recheck/route.js"
@@ -136,7 +154,9 @@ function snapshotDoc(nos) {
 }
 
 /* Mode tiap sumber tiruan. `alerts` mengendalikan POST /alerts:
- * "ok" = 200 (baru dibuat), "exists" = 409, "failed" = 500. */
+ * "ok" = 200 (baru dibuat), "exists" = 409, "failed" = 500.
+ * `pushList` mengendalikan GET /push_subscriptions: "ok" =
+ * satu langganan tiruan, "failed" = 500. */
 const modes = {
   marker: "ok",
   list: "ok",
@@ -144,8 +164,30 @@ const modes = {
   snapshot: "missing",
   snapshotNos: [],
   alerts: "ok",
+  pushList: "ok",
 };
-const recorded = { patch: [], post: [], alertIds: [] };
+const recorded = { patch: [], post: [], alertIds: [], pushListCalls: [] };
+
+/* Satu dokumen langganan push tiruan (bentuk REST Firestore),
+ * dipakai test wiring digest (RENDAH-5). Kunci berbentuk benar
+ * (p256dh 65 byte diawali 0x04, auth 16 byte); endpoint tidak
+ * pernah dihubungi karena kirim memakai stub web-push. */
+function pushSubscriptionDoc() {
+  const p256dh = Buffer.alloc(65);
+  p256dh[0] = 0x04;
+  p256dh[1] = 0xab;
+  const auth = Buffer.alloc(16, 0x11);
+  return {
+    name: "projects/proyek-uji-t16b/databases/(default)/documents/push_subscriptions/doc-uji-push",
+    fields: {
+      endpoint: {
+        stringValue: "https://fcm.googleapis.com/fcm/send/langganan-uji",
+      },
+      p256dh: { stringValue: p256dh.toString("base64url") },
+      auth: { stringValue: auth.toString("base64url") },
+    },
+  };
+}
 
 function resetModes() {
   modes.marker = "ok";
@@ -154,9 +196,11 @@ function resetModes() {
   modes.snapshot = "missing";
   modes.snapshotNos = [];
   modes.alerts = "ok";
+  modes.pushList = "ok";
   recorded.patch.length = 0;
   recorded.post.length = 0;
   recorded.alertIds.length = 0;
+  recorded.pushListCalls.length = 0;
 }
 
 function mockResponse({ ok, status, body }) {
@@ -233,15 +277,34 @@ globalThis.fetch = async (url, options = {}) => {
       },
     });
   }
+  if (u.includes("/push_subscriptions")) {
+    /* Daftar langganan push — hanya sendPushDigest yang
+     * memanggil endpoint ini (test wiring RENDAH-5). */
+    recorded.pushListCalls.push(u);
+    if (modes.pushList === "failed") {
+      return mockResponse({ ok: false, status: 500 });
+    }
+    return mockResponse({
+      ok: true,
+      status: 200,
+      body: { documents: [pushSubscriptionDoc()] },
+    });
+  }
   return mockResponse({ ok: false, status: 404 });
 };
 
 beforeEach(() => {
   revalidateCompanies();
   resetModes();
+  webpushStub.reset();
   process.env.CRON_SECRET = "secret-cron-uji-bukan-asli";
   process.env.FIREBASE_SERVICE_ACCOUNT = SA_JSON;
   delete process.env.TELEGRAM_BOT_TOKEN;
+  /* Kunci VAPID hanya dipasang di dalam test push; tanpa ini,
+   * sendPushDigest menjawab skipped-no-vapid sebelum membaca
+   * daftar langganan. */
+  delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  delete process.env.VAPID_PRIVATE_KEY;
 });
 
 /* --- Gerbang keamanan (NOTIF-02, fail-closed) --- */
@@ -537,5 +600,100 @@ describe("fase alert", () => {
     const body = await res.json();
     assert.equal(body.alerts, 0);
     assert.equal(recorded.alertIds.length, 0);
+  });
+});
+
+/* --- Wiring digest web push (T10, RENDAH-5) --- */
+describe("wiring digest web push (T10, RENDAH-5)", () => {
+  function pasangVapidUji() {
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = VAPID.publicKey;
+    process.env.VAPID_PRIVATE_KEY = VAPID.privateKey;
+  }
+
+  it("alert baru: sendPushDigest dipanggil dengan freshAlerts yang sama, digest terkirim", async () => {
+    pasangVapidUji();
+    modes.snapshot = "ok";
+    modes.snapshotNos = [];
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.alerts, 1);
+    /* Daftar langganan dibaca — hanya sendPushDigest yang
+     * memanggil endpoint ini. */
+    assert.equal(recorded.pushListCalls.length, 1);
+    assert.ok(
+      recorded.pushListCalls[0].includes(
+        "/push_subscriptions?pageSize=500",
+      ),
+    );
+    /* VAPID dipasang + satu kirim ke langganan tiruan. */
+    assert.equal(webpushStub.vapidCalls.length, 1);
+    assert.equal(webpushStub.sendCalls.length, 1);
+    assert.equal(
+      webpushStub.sendCalls[0].subscription.endpoint,
+      "https://fcm.googleapis.com/fcm/send/langganan-uji",
+    );
+    /* Payload digest dibangun dari freshAlerts run ini (bukan
+     * dari data lain): perusahaan + posisi alert new-target. */
+    const payload = JSON.parse(webpushStub.sendCalls[0].payload);
+    assert.equal(payload.title, "Lowongan baru di Karir");
+    assert.equal(payload.body, "Perusahaan Uji Satu — Staff Gudang");
+    assert.equal(payload.data.tag, `karir-digest-${todayWib()}`);
+    assert.equal(payload.data.date, todayWib());
+    assert.equal(payload.data.url, "/");
+    /* Hasil kirim masuk ringkasan. */
+    assert.equal(body.push, "sent");
+    assert.equal(body.pushSent, 1);
+    assert.equal(body.pushFailed, 0);
+    assert.equal(body.pushPruned, 0);
+    assert.equal(body.pushTruncated, false);
+    /* ... dan ke heartbeat cron-runs. */
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.ok(heartbeat, "tidak ada PATCH heartbeat cron-runs");
+    assert.equal(heartbeat.body.fields.push.stringValue, "sent");
+    assert.equal(heartbeat.body.fields.pushSent.integerValue, "1");
+  });
+
+  it("tanpa alert baru: sendPushDigest tidak dipanggil", async () => {
+    pasangVapidUji();
+    modes.snapshot = "ok";
+    modes.snapshotNos = [1];
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.alerts, 0);
+    assert.equal(recorded.pushListCalls.length, 0);
+    assert.equal(webpushStub.sendCalls.length, 0);
+    assert.equal(body.push, "none");
+    assert.equal(body.pushSent, 0);
+  });
+
+  it("daftar langganan gagal: push failed, run tetap 200", async () => {
+    pasangVapidUji();
+    modes.snapshot = "ok";
+    modes.snapshotNos = [];
+    modes.pushList = "failed";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.alerts, 1);
+    assert.equal(recorded.pushListCalls.length, 1);
+    assert.equal(webpushStub.sendCalls.length, 0);
+    assert.equal(body.push, "failed");
+    assert.equal(body.pushSent, 0);
+  });
+
+  it("tanpa kunci VAPID: push dilewati, daftar tidak dibaca", async () => {
+    modes.snapshot = "ok";
+    modes.snapshotNos = [];
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.alerts, 1);
+    assert.equal(recorded.pushListCalls.length, 0);
+    assert.equal(webpushStub.sendCalls.length, 0);
+    assert.equal(body.push, "skipped-no-vapid");
   });
 });

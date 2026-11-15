@@ -198,6 +198,33 @@ hal ini ke pengguna; bila alur laporan berubah (misalnya mulai
 meminta kontak), perbarui kebijakan itu dulu sebelum mengubah
 formulir.
 
+### Permintaan tutup akun (via Issues)
+
+Tutup akun belum punya tombol di situs: pengguna meminta lewat
+Issues di repo GitHub Karir (dijelaskan di `/privasi`).
+Pengelola menangani manual, urutannya:
+
+1. Pastikan pemohon adalah pemilik akun: minta alamat email
+   akun, lalu cocokkan dengan pengguna di Firebase Auth
+   (console → Authentication → Users) dan catat UID-nya.
+2. Hapus dokumen langganan push milik UID pemohon: di koleksi
+   `push_subscriptions`, hapus semua dokumen yang field
+   `uid`-nya sama dengan UID pemohon (query `uid == <UID>`,
+   lalu hapus satu per satu). Rules menutup koleksi ini total
+   untuk klien, jadi penghapusan dilakukan lewat Firebase
+   console atau service account. Langkah ini wajib — tanpa
+   ini, perangkat pemohon tetap menerima digest harian walau
+   akunnya sudah ditutup.
+3. Hapus `user_trackers/{UID}/items` (semua dokumen) dan
+   `user_profiles/{UID}`.
+4. Hapus pengguna di Firebase Auth (console → Authentication
+   → Users → hapus akun).
+5. Balas Issue bahwa akun sudah ditutup dan datanya dihapus.
+
+Catatan kunjungan anonim (`analytics_events`) tidak terikat
+UID sehingga tidak bisa dihapus per pengguna; data itu
+terhapus sendiri setelah 90 hari.
+
 ## File terkait
 
 - `web/app/dukungan/page.js`: halaman dukungan untuk pengguna.

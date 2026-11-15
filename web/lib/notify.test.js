@@ -532,6 +532,11 @@ describe("buildCronRunRecord (OPS-01)", () => {
         alertsFailed: 0,
         telegram: "sent",
         telegramMarked: 2,
+        push: "sent",
+        pushSent: 3,
+        pushFailed: 1,
+        pushPruned: 1,
+        pushTruncated: true,
         markerBumped: true,
         queue: { urgent: 1, open: 237, dead: 55, total: 293 },
         alertPhaseTruncated: false,
@@ -551,6 +556,11 @@ describe("buildCronRunRecord (OPS-01)", () => {
     assert.equal(record.openSkipped.integerValue, "0");
     assert.equal(record.telegram.stringValue, "sent");
     assert.equal(record.telegramMarked.integerValue, "2");
+    assert.equal(record.push.stringValue, "sent");
+    assert.equal(record.pushSent.integerValue, "3");
+    assert.equal(record.pushFailed.integerValue, "1");
+    assert.equal(record.pushPruned.integerValue, "1");
+    assert.equal(record.pushTruncated.booleanValue, true);
     assert.equal(record.markerBumped.booleanValue, true);
     assert.equal(record.queueTotal.integerValue, "293");
     assert.equal(record.queueUrgent.integerValue, "1");
@@ -570,6 +580,12 @@ describe("buildCronRunRecord (OPS-01)", () => {
     assert.equal(record.checked.integerValue, "0");
     assert.equal(record.queueTotal.integerValue, "0");
     assert.equal(record.durationMs.integerValue, "1000");
+    /* Field push (T10) ikut memakai nilai bawaan bila tidak ada. */
+    assert.equal(record.push.stringValue, "none");
+    assert.equal(record.pushSent.integerValue, "0");
+    assert.equal(record.pushFailed.integerValue, "0");
+    assert.equal(record.pushPruned.integerValue, "0");
+    assert.equal(record.pushTruncated.booleanValue, false);
   });
 });
 

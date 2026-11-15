@@ -2,6 +2,18 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.17.0 — 2026-11-16
+
+Notifikasi web push (T10, S8): pelanggan yang masuk akun bisa mengaktifkan pemberitahuan lowongan baru langsung di perangkatnya.
+
+- Tombol "Aktifkan notifikasi" di /pengaturan (tanpa auto-prompt): izin hanya diminta dari ketukan pengguna. Status aktif/nonaktif tampil di halaman, dengan penjelasan bila belum masuk akun, browser tidak mendukung, atau izin ditolak di browser. Langganan terikat akun; tamu tetap memakai semua fitur yang ada.
+- Endpoint baru `POST / DELETE /api/push/subscribe`: UID hanya dari ID token Firebase terverifikasi; bentuk langganan divalidasi server-side (endpoint https, kunci p256dh 65 byte + auth 16 byte); batas laju 5/menit per IP; satu dokumen per langganan di koleksi baru `push_subscriptions` (ID dokumen = SHA-256 endpoint, subscribe idempotent). Aturan Firestore menutup koleksi ini total untuk klien dan admin — akses hanya lewat service account.
+- Digest harian: cron recheck mengirim satu notifikasi ke semua pelanggan sesudah pesan Telegram, hanya bila ada lowongan baru (paling banyak satu pesan sehari). Anggaran sendiri 10 detik, konkurensi 10, best-effort — gagal kirim tidak menggagalkan run. Langganan 410/404 dihapus otomatis; 401/403 dicatat sebagai alarm konfigurasi VAPID (langganan tidak dihapus); 429/5xx dicoba lagi besok. Ringkasan cron-runs bertambah field `push`, `pushSent`, `pushFailed`, `pushPruned`, `pushTruncated`.
+- Service worker baru `public/sw.js` (hanya handler `push` + `notificationclick`, tanpa caching) dengan header `Cache-Control: max-age=0, must-revalidate` + `Service-Worker-Allowed: /`. Kunci VAPID sudah dipasang di env Vercel Production oleh Tim B1; kunci privat hanya dibaca dari env server, tidak pernah masuk repo.
+- /privasi kini menyebut data langganan push (alamat push + kunci enkripsi perangkat, cara mematikan); 13 kunci i18n baru `settings.push*` (paritas id↔en). Helper Firestore server (`getAccessToken`, `firestoreFetch`, `firestoreGet`) diekstrak dari route recheck ke `lib/firestore-server.js` tanpa mengubah perilaku; dependensi baru `web-push` 4.0.0 (server saja).
+- Perbaikan keamanan Blue Team (B3b): service worker membaca tag/url/date dari payload bertingkat (notifikasi beda hari tidak lagi saling menimpa) dan klik notifikasi hanya membuka URL same-origin; hapus langganan kedaluwarsa kini dihitung ke anggaran 10 detik; subscribe atas langganan milik akun lain ditolak 409; langganan browser dibatalkan bila token gagal didapat.
+- Tes: 1264 total (1187 node:test + 48 pytest + 29 unittest watcher, termasuk 96 test baru T10: 48 unit lib/push.js + 28 wiring route subscribe + 12 kontrak service worker + 4 wiring recheck→push + 4 klien push). Lint 0 error, build sukses.
+
 ## 2.16.3 — 2026-11-16
 
 Ekspor data akun lengkap + heartbeat cleanup dan pemantauan mingguan (S8).

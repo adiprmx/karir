@@ -240,6 +240,22 @@ service cloud.firestore {
         && request.resource.data.catatan is string
         && request.resource.data.catatan.size() <= 200;
     }
+    // Langganan web push (T10): endpoint + kunci enkripsi per
+    // perangkat. Ditulis dan dibaca HANYA lewat server (API route
+    // subscribe dan cron recheck, keduanya memakai service account
+    // yang melewati rules). Klien tidak pernah membaca atau menulis
+    // langsung: endpoint + keys adalah kredensial kanal push
+    // perangkat itu, dan create dari klien bisa dibanjiri karena
+    // API key Firebase ada di bundle publik (alasan yang sama
+    // dengan analytics_events, SEC-06). Admin tidak diberi baca:
+    // tidak ada kebutuhan operasional membaca isi langganan
+    // (hitungannya ada di ringkasan cron-runs), dan endpoint
+    // adalah pengenal per perangkat. Hapus manual bila perlu
+    // memakai Firebase Console (melewati rules sebagai pemilik
+    // proyek).
+    match /push_subscriptions/{doc} {
+      allow read, write: if false;
+    }
     // Profil akun: tulis hanya pemiliknya; baca hanya pemiliknya
     // atau admin. Dipakai dasbor admin untuk menampilkan akun tanpa
     // menyimpan email di dalam event pengunjung.

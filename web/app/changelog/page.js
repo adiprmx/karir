@@ -24,6 +24,15 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.17.0",
+    date: "16 November 2026",
+    points: [
+      "Notifikasi lowongan baru kini bisa masuk langsung ke perangkatmu: aktifkan dari halaman Pengaturan, tanpa perlu membuka situs setiap hari.",
+      "Pemberitahuan dikirim paling banyak sekali sehari, hanya bila ada lowongan baru; kamu bisa mematikannya kapan saja dari halaman yang sama.",
+      "Izin notifikasi hanya diminta saat kamu menekan tombolnya — situs tidak pernah memintanya sendiri.",
+    ],
+  },
+  {
     version: "2.16.3",
     date: "16 November 2026",
     points: [

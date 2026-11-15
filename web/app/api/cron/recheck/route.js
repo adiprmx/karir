@@ -46,11 +46,16 @@
  *
  * Balasan: {checked, changed, updated, skipped, openSkipped,
  * truncated, alerts, alertsFailed, telegram, telegramMarked,
+ * push, pushSent, pushFailed, pushPruned, pushTruncated,
  * alertPhaseTruncated, snapshotKnown, snapshotWritten, queue,
  * markerBumped, heartbeatWritten}. alerts = alert baru yang dibuat
  * di run ini; telegram = "sent" | "failed" | "skipped-no-token" |
  * "none"; telegramMarked = alert yang berhasil ditandai terkirim
- * sesudah kirim langsung (NOTIF-01); openSkipped = perusahaan tier
+ * sesudah kirim langsung (NOTIF-01); push = "sent" | "failed" |
+ * "skipped-no-vapid" | "none" (digest web push, T10 — "none" bila
+ * tidak ada alert baru); pushSent/pushFailed/pushPruned =
+ * hasil kirim per langganan; pushTruncated = true bila kirim
+ * push kehabisan anggaran 10 detik; openSkipped = perusahaan tier
  * mendesak/terbuka yang tidak sempat dicek karena terpotong;
  * queue = {urgent, open, dead, total}; markerBumped = true bila
  * marker kesegaran dinaikkan di run ini; heartbeatWritten = true
@@ -96,12 +101,24 @@
  *   anggaran sebelum mencoba), nomor itu dikeluarkan dari snapshot
  *   meta/targets supaya run berikut mencoba lagi — bukan hilang
  *   selamanya (NOTIF-06). Kegagalan tulis snapshot dicatat di log
- *   dan ringkasan, bukan ditelan diam-diam (NOTIF-07). */
+ *   dan ringkasan, bukan ditelan diam-diam (NOTIF-07).
+ * - Digest web push (T10, lib/push.js sendPushDigest): sesudah
+ *   Telegram, bila ada alert baru, satu digest dikirim ke semua
+ *   langganan push_subscriptions. Anggaran sendiri 10 detik,
+ *   best-effort total — gagal kirim tidak menggagalkan run.
+ *   Langganan yang jawabannya 410/404 dihapus; 401/403 adalah
+ *   alarm konfigurasi VAPID (bukan salah langganan); 429/5xx
+ *   dicoba lagi besok. */
 import { NextResponse } from "next/server";
-import { createSign, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { requireEnv } from "@/lib/require-env";
-import { jsonWithTimeout } from "@/lib/companies";
 import { getCompaniesWithSource, STATUS_ORDER } from "@/lib/companies";
+import {
+  firestoreFetch,
+  firestoreGet,
+  getAccessToken,
+} from "@/lib/firestore-server";
+import { sendPushDigest } from "@/lib/push";
 import { buildCheckQueue, checkUrl } from "@/lib/check";
 import {
   OPEN_STATUS,
@@ -142,98 +159,6 @@ const UNVERIFIED_STATUS = "Tidak dapat diverifikasi";
 
 function todayWib() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
-}
-
-function base64url(input) {
-  return Buffer.from(input).toString("base64url");
-}
-
-/* Tukar service account menjadi access token Firestore. */
-async function getAccessToken(sa) {
-  const now = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64url(
-    JSON.stringify({
-      iss: sa.client_email,
-      scope: "https://www.googleapis.com/auth/datastore",
-      aud: "https://oauth2.googleapis.com/token",
-      exp: now + 3600,
-      iat: now,
-    }),
-  );
-  const signer = createSign("RSA-SHA256");
-  signer.update(`${header}.${payload}`);
-  const signature = signer.sign(sa.private_key, "base64url");
-  const jwt = `${header}.${payload}.${signature}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      signal: controller.signal,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion: jwt,
-      }).toString(),
-    });
-    if (!res.ok) {
-      throw new Error(`Token tukar gagal: HTTP ${res.status}`);
-    }
-    const body = await res.json();
-    if (!body.access_token) throw new Error("Token tidak ada di balasan.");
-    return body.access_token;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function firestoreFetch(url, token, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const res = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    if (!res.ok) {
-      throw new Error(`Firestore tulis gagal: HTTP ${res.status}`);
-    }
-    /* res.json() di sini WAJIB bertimeout (BE-09): return langsung
-     * mematikan timer AbortController di finally sebelum body
-     * dibaca, jadi tanpa jsonWithTimeout panggilan ini bisa
-     * menggantung selamanya saat body stall. */
-    return jsonWithTimeout(res, 10_000).catch(() => ({}));
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/* Baca satu dokumen Firestore. Kembalikan null bila dokumen belum ada
- * (HTTP 404); lempar untuk kegagalan lain. */
-async function firestoreGet(url, token) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) {
-      throw new Error(`Firestore baca gagal: HTTP ${res.status}`);
-    }
-    /* Lihat catatan di firestoreFetch: res.json() tanpa timeout
-     * bisa menggantung selamanya karena timer sudah dimatikan. */
-    return jsonWithTimeout(res, 10_000);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 /* Buat satu dokumen alert dengan id deterministik. Kembalikan "created"
@@ -477,6 +402,11 @@ export async function GET(request) {
     alertsFailed: 0,
     telegram: "none",
     telegramMarked: 0,
+    push: "none",
+    pushSent: 0,
+    pushFailed: 0,
+    pushPruned: 0,
+    pushTruncated: false,
     alertPhaseTruncated: false,
     snapshotKnown,
     snapshotWritten: false,
@@ -648,6 +578,21 @@ export async function GET(request) {
           }
         }
       }
+
+      /* Digest web push (T10): sesudah Telegram, dari freshAlerts
+       * yang sama. Best-effort total — sendPushDigest tidak pernah
+       * melempar, dan hasilnya hanya dicatat di ringkasan. */
+      const pushResult = await sendPushDigest({
+        fsBase,
+        token,
+        alerts: freshAlerts,
+        todayIso: today,
+      });
+      summary.push = pushResult.push;
+      summary.pushSent = pushResult.pushSent;
+      summary.pushFailed = pushResult.pushFailed;
+      summary.pushPruned = pushResult.pushPruned;
+      summary.pushTruncated = pushResult.pushTruncated;
     }
   } catch {
     /* Alert dan Telegram tidak boleh menggagalkan cron. */

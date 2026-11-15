@@ -38,6 +38,11 @@ import {
   setAnalyticsOptOut,
 } from "@/app/analytics-track";
 import {
+  getPushStatus,
+  subscribePush,
+  unsubscribePush,
+} from "@/app/push-client";
+import {
   VISITOR_KEY,
   buildAccountExport,
   clearLocalData,
@@ -155,6 +160,23 @@ const DEFAULT_LABELS = {
   toastWiped: "Semua data di browser ini dihapus.",
   toastWipedAccount:
     "Semua data di browser ini dihapus, dan tanda lamaran di akun ikut dihapus.",
+  /* T10 (notifikasi web push). */
+  pushTitle: "Notifikasi",
+  pushHint:
+    "Kabari saya saat ada lowongan baru, langsung di perangkat ini. Paling banyak satu pesan sehari, dan hanya saat ada yang baru.",
+  pushEnable: "Aktifkan notifikasi",
+  pushDisable: "Matikan notifikasi",
+  pushActive: "Notifikasi aktif di browser ini.",
+  pushNeedSignIn: "Masuk dulu untuk mengaktifkan notifikasi.",
+  pushUnsupported: "Browser ini tidak mendukung notifikasi.",
+  pushDenied:
+    "Izin notifikasi ditolak di browser ini. Aktifkan lagi dari pengaturan browser, lalu kembali ke sini.",
+  pushBusy: "Memproses…",
+  pushEnabled: "Notifikasi diaktifkan.",
+  pushDisabled: "Notifikasi dimatikan.",
+  pushFailed: "Notifikasi belum bisa diaktifkan. Coba lagi sebentar lagi.",
+  pushUnsubFailed:
+    "Notifikasi belum bisa dimatikan. Coba lagi sebentar lagi.",
   deleteConfirm: "Ya, hapus",
   cancel: "Batal",
   close: "Tutup",
@@ -207,6 +229,10 @@ export default function Pengaturan() {
   const [exportBusy, setExportBusy] = useState(false);
   const [accountMsg, setAccountMsg] = useState("");
   const [, setVerifyChecked] = useState(0);
+  /* T10 (notifikasi web push): "memuat" | "unsupported" | "denied" |
+   * "active" | "inactive" (lihat app/push-client.js getPushStatus). */
+  const [pushStatus, setPushStatus] = useState("memuat");
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     /* Baca awal dijadwalkan sebagai microtask: setState di dalam
@@ -228,6 +254,23 @@ export default function Pengaturan() {
       window.removeEventListener("storage", onChange);
     };
   }, []);
+
+  /* T10: baca status langganan push saat halaman dimuat dan saat
+   * akun berubah. Hanya membaca — tidak mendaftarkan service
+   * worker dan tidak meminta izin (itu hanya dari ketukan tombol). */
+  useEffect(() => {
+    let cancelled = false;
+    getPushStatus()
+      .then((status) => {
+        if (!cancelled) setPushStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setPushStatus("inactive");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const trackedCount = Object.keys(entries || {}).length;
   const loaded = onboardingLoaded && trackerLoaded && recentReady;
@@ -458,6 +501,41 @@ export default function Pengaturan() {
       setAccountMsg(labels.verifyCheckFailed);
     }
     setVerifyBusy(false);
+  }
+
+  /* T10: aktifkan / matikan notifikasi push. Status dibaca ulang
+   * sesudah tiap aksi supaya yang tampil selalu jujur (tidak
+   * pura-pura aktif bila subscribe gagal). Bila izin ditolak,
+   * panel sendiri yang menjelaskan (baris pushDenied) — tidak
+   * ada toast tambahan. */
+  async function enablePush() {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      const result = await subscribePush();
+      const status = await getPushStatus().catch(() => "inactive");
+      setPushStatus(status);
+      if (result.ok) {
+        showToast(labels.pushEnabled);
+      } else if (result.code !== "ditolak") {
+        showToast(labels.pushFailed);
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function disablePush() {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      const result = await unsubscribePush();
+      const status = await getPushStatus().catch(() => "inactive");
+      setPushStatus(status);
+      showToast(result.ok ? labels.pushDisabled : labels.pushUnsubFailed);
+    } finally {
+      setPushBusy(false);
+    }
   }
 
   function wipeAll() {
@@ -772,6 +850,51 @@ export default function Pengaturan() {
             <p className="hint">{labels.notSignedIn}</p>
           </Row>
         )}
+      </section>
+
+      {/* T10: notifikasi web push. Langganan terikat akun, jadi
+        * tamu hanya melihat petunjuk masuk. Izin hanya diminta
+        * dari ketukan tombol "Aktifkan notifikasi" — tidak ada
+        * auto-prompt saat halaman dibuka. */}
+      <section className="panel settings" aria-label={labels.pushTitle}>
+        <Row
+          title={labels.pushTitle}
+          action={
+            user && pushStatus === "active" ? (
+              <button
+                type="button"
+                className="btn ghost small"
+                onClick={disablePush}
+                disabled={pushBusy}
+              >
+                {pushBusy ? labels.pushBusy : labels.pushDisable}
+              </button>
+            ) : user && pushStatus === "inactive" ? (
+              <button
+                type="button"
+                className="btn small"
+                onClick={enablePush}
+                disabled={pushBusy}
+              >
+                {pushBusy ? labels.pushBusy : labels.pushEnable}
+              </button>
+            ) : null
+          }
+        >
+          {pushStatus === "memuat" ? (
+            <p className="hint">{labels.pushHint}</p>
+          ) : !user ? (
+            <p className="hint">{labels.pushNeedSignIn}</p>
+          ) : pushStatus === "unsupported" ? (
+            <p className="hint">{labels.pushUnsupported}</p>
+          ) : pushStatus === "denied" ? (
+            <p className="hint">{labels.pushDenied}</p>
+          ) : pushStatus === "active" ? (
+            <p>{labels.pushActive}</p>
+          ) : (
+            <p className="hint">{labels.pushHint}</p>
+          )}
+        </Row>
       </section>
 
       {/* MKT-08: kartu pasang aplikasi — hanya tampil bila browser

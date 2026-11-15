@@ -21,6 +21,21 @@ const nextConfig = {
    * koordinator (tidak bisa dibuktikan dari kode saja). */
   async headers() {
     return [
+      /* Service worker web push (T10): browser wajib memeriksa
+       * versi baru tiap kali, supaya perbaikan sw.js tidak
+       * tertahan cache. Service-Worker-Allowed menegaskan scope
+       * root. Aturan yang lebih spesifik didahulukan atas aturan
+       * global di bawah. */
+      {
+        source: "/sw.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, must-revalidate",
+          },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [

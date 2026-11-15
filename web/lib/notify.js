@@ -440,6 +440,13 @@ export function buildCronRunRecord(summary, { date, startedAt, finishedAt }) {
     alertsFailed: { integerValue: String(s.alertsFailed || 0) },
     telegram: { stringValue: s.telegram || "none" },
     telegramMarked: { integerValue: String(s.telegramMarked || 0) },
+    /* Digest web push (T10): "sent" | "failed" |
+     * "skipped-no-vapid" | "none" (tidak ada alert baru). */
+    push: { stringValue: s.push || "none" },
+    pushSent: { integerValue: String(s.pushSent || 0) },
+    pushFailed: { integerValue: String(s.pushFailed || 0) },
+    pushPruned: { integerValue: String(s.pushPruned || 0) },
+    pushTruncated: { booleanValue: s.pushTruncated === true },
     markerBumped: { booleanValue: s.markerBumped === true },
     queueTotal: { integerValue: String(queue.total || 0) },
     queueUrgent: { integerValue: String(queue.urgent || 0) },
