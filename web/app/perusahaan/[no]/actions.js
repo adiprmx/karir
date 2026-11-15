@@ -110,12 +110,22 @@ function saveReportTimestamps(timestamps) {
   }
 }
 
-/* Tombol salin kecil untuk satu nilai kanal (alamat email atau nomor
- * WhatsApp) di halaman detail. Gaya sama dengan tombol bagikan
- * (btn ghost small). Event channel_copy dikirim hanya bila salin
- * berhasil; impor trackEvent dari @/app/analytics-track supaya
- * opt-out analitik berlaku. */
-export function CopyChannelButton({ value, channel, companyNo, labels }) {
+/* Tombol salin kecil untuk satu nilai kanal (alamat email, nomor
+ * WhatsApp, atau tautan di kontak_lain) di halaman detail. Gaya sama
+ * dengan tombol bagikan (btn ghost small). Event channel_copy dikirim
+ * hanya bila salin berhasil; impor trackEvent dari
+ * @/app/analytics-track supaya opt-out analitik berlaku. Kanal
+ * "link" (tautan kontak_lain) memakai aria-label labels.copyLink;
+ * prop ariaLabel opsional menimpa label itu — dipakai halaman detail
+ * untuk membedakan beberapa tautan dengan domainnya, dan untuk
+ * tombol salin teks polos tanpa URL. */
+export function CopyChannelButton({
+  value,
+  channel,
+  companyNo,
+  labels,
+  ariaLabel,
+}) {
   async function copy() {
     try {
       await navigator.clipboard.writeText(value);
@@ -131,13 +141,21 @@ export function CopyChannelButton({ value, channel, companyNo, labels }) {
     }
   }
 
+  const label =
+    ariaLabel ||
+    (channel === "wa"
+      ? labels.copyWa
+      : channel === "link"
+        ? labels.copyLink
+        : labels.copyEmail);
+
   return (
     <button
       type="button"
       className="btn ghost small"
       style={{ marginLeft: 8 }}
       onClick={copy}
-      aria-label={channel === "wa" ? labels.copyWa : labels.copyEmail}
+      aria-label={label}
     >
       {labels.copy}
     </button>

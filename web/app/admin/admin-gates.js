@@ -77,12 +77,16 @@ export function LoginForm({
             autoComplete="current-password"
           />
         </fieldset>
+        {/* BUG-3: nowrap supaya "Tampilkan kata sandi" tetap satu
+          * baris; ukuran checkbox sendiri diperbaiki aturan global
+          * input[type="checkbox"] di globals.css. */}
         <label
           style={{
             display: "flex",
             gap: 8,
             alignItems: "center",
             cursor: "pointer",
+            whiteSpace: "nowrap",
           }}
         >
           <input

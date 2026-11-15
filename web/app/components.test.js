@@ -6,7 +6,14 @@
  * koordinator). Tambahkan app/components.test.js ke daftar di sana. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { linkifySegments, splitContacts, waLink } from "./components.js";
+import { readFileSync } from "node:fs";
+import {
+  contactCopyTargets,
+  linkDomain,
+  linkifySegments,
+  splitContacts,
+  waLink,
+} from "./components.js";
 
 /* Href dari potongan tautan saja, untuk membandingkan dengan ringkas. */
 function hrefs(text) {
@@ -211,5 +218,157 @@ describe("linkifySegments: domain tanpa skema", () => {
 
   it("skema javascript tidak pernah menjadi tautan", () => {
     assert.deepEqual(hrefs("javascript:alert(1)"), []);
+  });
+});
+
+/* Target tombol salin kanal kontak_lain (BUG-1): satu target per URL,
+ * atau satu target penyalin seluruh teks bila tanpa URL. */
+describe("contactCopyTargets (BUG-1)", () => {
+  it("satu URL menghasilkan satu target tautan", () => {
+    assert.deepEqual(
+      contactCopyTargets(
+        "Isi formulir https://t.ly/karir-guardianjabodetabek85",
+      ),
+      [
+        {
+          value: "https://t.ly/karir-guardianjabodetabek85",
+          isUrl: true,
+        },
+      ],
+    );
+  });
+
+  it("beberapa URL menghasilkan satu target per URL, sesuai urutan", () => {
+    assert.deepEqual(
+      contactCopyTargets(
+        "Formulir https://t.ly/aaa atau https://bit.ly/bbb",
+      ),
+      [
+        { value: "https://t.ly/aaa", isUrl: true },
+        { value: "https://bit.ly/bbb", isUrl: true },
+      ],
+    );
+  });
+
+  it("URL yang sama berulang hanya dihitung sekali", () => {
+    assert.deepEqual(
+      contactCopyTargets("https://t.ly/aaa dan lagi https://t.ly/aaa"),
+      [{ value: "https://t.ly/aaa", isUrl: true }],
+    );
+  });
+
+  it("domain tanpa skema menjadi target tautan https", () => {
+    assert.deepEqual(contactCopyTargets("Daftar di karir.contoh.id"), [
+      { value: "https://karir.contoh.id", isUrl: true },
+    ]);
+  });
+
+  it("teks polos tanpa URL menyalin seluruh teks", () => {
+    assert.deepEqual(
+      contactCopyTargets("Jl. Raya Bogor No. 12, Cibinong"),
+      [{ value: "Jl. Raya Bogor No. 12, Cibinong", isUrl: false }],
+    );
+  });
+
+  it("email saja bukan URL: seluruh teks disalin", () => {
+    assert.deepEqual(contactCopyTargets("Hubungi hrd@contoh.id"), [
+      { value: "Hubungi hrd@contoh.id", isUrl: false },
+    ]);
+  });
+
+  it("teks kosong atau null menghasilkan daftar kosong", () => {
+    assert.deepEqual(contactCopyTargets(""), []);
+    assert.deepEqual(contactCopyTargets("   "), []);
+    assert.deepEqual(contactCopyTargets(null), []);
+    assert.deepEqual(contactCopyTargets(undefined), []);
+  });
+});
+
+describe("linkDomain (BUG-1)", () => {
+  it("mengambil hostname dari href", () => {
+    assert.equal(
+      linkDomain("https://t.ly/karir-guardianjabodetabek85"),
+      "t.ly",
+    );
+    assert.equal(linkDomain("https://bit.ly/bbb"), "bit.ly");
+    assert.equal(linkDomain("https://www.contoh.id/karir/x"), "www.contoh.id");
+  });
+
+  it("href yang tidak bisa diurai menghasilkan string kosong", () => {
+    assert.equal(linkDomain("bukan-url"), "");
+    assert.equal(linkDomain(""), "");
+    assert.equal(linkDomain(null), "");
+  });
+});
+
+/* Render tombol salin kontak_lain (BUG-1) dan spasi penghitung /cari
+ * (BUG-2) tidak bisa diuji lewat impor — berkasnya mengandung JSX.
+ * Seperti pola ekstraksi sumber di lib/analytics.test.js, yang
+ * dikunci di sini adalah sumber yang dikirim: page.js merender
+ * CopyChannelButton kanal "link" dari contactCopyTargets, actions.js
+ * membedakan aria-label kanal "link", dan search-app.js memakai
+ * spasi eksplisit {" "} sebelum hitungan cocok. */
+describe("tombol salin kontak_lain di halaman detail (BUG-1, sumber)", () => {
+  const pageSrc = readFileSync(
+    new URL("./perusahaan/[no]/page.js", import.meta.url),
+    "utf8",
+  );
+  const actionsSrc = readFileSync(
+    new URL("./perusahaan/[no]/actions.js", import.meta.url),
+    "utf8",
+  );
+
+  it("page.js memakai contactCopyTargets untuk kontak_lain", () => {
+    assert.match(pageSrc, /contactCopyTargets\(company\.kontak_lain\)/);
+  });
+
+  it("page.js merender satu CopyChannelButton kanal link per target", () => {
+    assert.match(pageSrc, /otherCopyTargets\.map\(/);
+    assert.match(pageSrc, /channel="link"/);
+    assert.match(pageSrc, /value=\{target\.value\}/);
+  });
+
+  it("page.js meneruskan label copyLink dan membedakan aria-label per domain", () => {
+    assert.match(pageSrc, /copyLink: t\(locale, "detail\.copyLink"\)/);
+    assert.match(pageSrc, /linkDomain\(target\.value\)/);
+  });
+
+  it("actions.js membedakan aria-label kanal link", () => {
+    assert.match(actionsSrc, /channel === "link"/);
+    assert.match(actionsSrc, /labels\.copyLink/);
+  });
+
+  it("tombol salin kontak_lain dirender di dalam blok dd yang sama dengan teks", () => {
+    const blockStart = pageSrc.indexOf("company.kontak_lain && (");
+    const blockEnd = pageSrc.indexOf("</dd>", blockStart);
+    const block = pageSrc.slice(blockStart, blockEnd);
+    assert.match(block, /<LinkedText/);
+    assert.match(block, /<CopyChannelButton/);
+  });
+});
+
+describe("spasi penghitung /cari (BUG-2, sumber)", () => {
+  const searchSrc = readFileSync(
+    new URL("./cari/search-app.js", import.meta.url),
+    "utf8",
+  );
+
+  it("hitungan cocok dipisah spasi eksplisit dari hitungan tampil", () => {
+    /* Paragraf penghitung adalah yang ber-aria-live (paragraf
+     * result-count pertama adalah status muat). */
+    const pStart = searchSrc.indexOf('aria-live="polite"');
+    const pEnd = searchSrc.indexOf("</p>", pStart);
+    const paragraph = searchSrc.slice(pStart, pEnd);
+    assert.match(paragraph, /fill\(labels\.showing/);
+    assert.match(paragraph, /\{" "\}/);
+    assert.match(paragraph, /fill\(labels\.matchCount/);
+    assert.ok(
+      paragraph.indexOf('{" "}') < paragraph.indexOf("labels.matchCount"),
+      'spasi eksplisit harus sebelum hitungan cocok',
+    );
+  });
+
+  it("pola fragmen lama dengan spasi JSX polos sudah tidak ada", () => {
+    assert.doesNotMatch(searchSrc, /<> \{fill\(labels\.matchCount/);
   });
 });

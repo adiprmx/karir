@@ -2,6 +2,14 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.16.1 — 2026-11-15
+
+Perbaikan tombol Salin kanal lain + dua perbaikan tampilan.
+
+- Tombol "Salin" kini muncul untuk kanal "Cara lain melamar" di halaman perusahaan: satu tombol per tautan (formulir/lainnya); bila kanalnya teks tanpa tautan, tombol menyalin seluruh teks.
+- Spasi teks penghitung hasil di halaman /cari diperbaiki.
+- Tampilan label "Tampilkan kata sandi" di halaman masuk admin diperbaiki; perbaikan yang sama berlaku untuk checkbox di /pengaturan.
+
 ## 2.16.0 — 2026-11-15
 
 Poles Fase 5 (125 temuan P2) + terapan kanal baris lama (HUNT-10) + pengujian menyeluruh (T16). Satu bump konsolidasi untuk seluruh Fase 5, tanpa bump per batch.

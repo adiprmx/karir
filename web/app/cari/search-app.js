@@ -520,8 +520,15 @@ export default function SearchApp({ initial, initialResults, categories, statuse
                     a: shown.length,
                     b: total,
                   })}
+                  {/* BUG-2: spasi di antara dua penghitung WAJIB eksplisit
+                    * ({" "}) — spasi JSX polos di dalam fragmen
+                    * ("<> {…}") hilang saat transformasi, sehingga
+                    * tampil "…perusahaan1 cocok…". */}
                   {r.matched.size > 0 && (
-                    <> {fill(labels.matchCount, { m: r.matched.size })}</>
+                    <>
+                      {" "}
+                      {fill(labels.matchCount, { m: r.matched.size })}
+                    </>
                   )}
                 </p>
                 <button

@@ -24,6 +24,15 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.16.1",
+    date: "15 November 2026",
+    points: [
+      "Tombol Salin kini tersedia untuk kanal Cara lain melamar: satu tombol untuk setiap tautan formulir atau tautan lainnya; bila kanalnya berupa teks tanpa tautan, tombol menyalin seluruh teks.",
+      "Spasi teks penghitung hasil di halaman Cari diperbaiki.",
+      "Tampilan label Tampilkan kata sandi di halaman masuk admin diperbaiki; perbaikan yang sama berlaku untuk checkbox di halaman Pengaturan.",
+    ],
+  },
+  {
     version: "2.16.0",
     date: "15 November 2026",
     points: [

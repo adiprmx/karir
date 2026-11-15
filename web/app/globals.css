@@ -419,6 +419,17 @@ textarea {
   border-radius: var(--r-s);
   background: var(--surface);
 }
+/* BUG-3: aturan input di atas memaksa SEMUA input selebar 100% —
+ * checkbox di label flex (gerbang login /admin, pengaturan opt-out
+ * analitik) ikut melebar dan mendesak teks labelnya sampai
+ * membungkus ke dua baris. Checkbox/radio kembali ke ukuran
+ * aslinya; labelnya sendiri juga diberi nowrap di komponennya. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  min-height: auto;
+  padding: 0;
+}
 /* AKSES-07: placeholder memakai --muted penuh. Campuran 75% hanya
  * 3,68:1 di tema terang (gagal 4,5:1); --muted penuh 6,59:1 terang
  * dan 7,06:1 gelap. Dikunci test lib/a11y.test.js. */

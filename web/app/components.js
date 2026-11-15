@@ -191,3 +191,39 @@ export function linkifySegments(text) {
   if (cursor < input.length) segments.push({ text: input.slice(cursor) });
   return segments;
 }
+
+/* Target tombol salin untuk teks kontak_lain di halaman detail
+ * (BUG-1): satu target per URL http(s) yang ditemukan — nilainya
+ * href lengkap, disalin apa adanya. Alamat email (mailto:) BUKAN
+ * URL: teks yang hanya berisi email/alamat polos tanpa URL apa pun
+ * menghasilkan satu target yang menyalin SELURUH teks. URL yang
+ * sama berulang hanya dihitung sekali (urutan kemunculan pertama
+ * dipertahankan). Teks kosong/null menghasilkan daftar kosong.
+ * Kembalikan daftar { value, isUrl }: isUrl true berarti value
+ * adalah href tautan, false berarti teks utuh. */
+export function contactCopyTargets(text) {
+  const input = String(text || "");
+  const seen = new Set();
+  const urls = [];
+  for (const seg of linkifySegments(input)) {
+    if (!seg.href || !seg.href.startsWith("http")) continue;
+    if (seen.has(seg.href)) continue;
+    seen.add(seg.href);
+    urls.push({ value: seg.href, isUrl: true });
+  }
+  if (urls.length > 0) return urls;
+  const plain = input.trim();
+  return plain ? [{ value: plain, isUrl: false }] : [];
+}
+
+/* Domain (hostname) sebuah href, untuk membedakan aria-label tombol
+ * salin bila satu kontak punya beberapa tautan. Href yang tidak
+ * bisa diurai menghasilkan string kosong — pemanggil memakai label
+ * generik bila domainnya kosong. */
+export function linkDomain(href) {
+  try {
+    return new URL(String(href)).hostname;
+  } catch {
+    return "";
+  }
+}

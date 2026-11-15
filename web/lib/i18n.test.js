@@ -139,6 +139,7 @@ describe("t() (QA-07)", () => {
       "detail.tryPortalAnyway",
       "detail.copyChannel",
       "detail.channelCopied",
+      "detail.copyLink",
     ]) {
       assert.notEqual(t("id", key), key, `kunci id hilang: ${key}`);
       assert.notEqual(t("en", key), key, `kunci en hilang: ${key}`);

@@ -4,10 +4,12 @@ import { getCompanyByIdOrSeed, getRelatedOrSeed } from "@/lib/companies";
 import { getLocale, t } from "@/lib/i18n";
 import {
   STATUS_EXPLAIN,
+  contactCopyTargets,
   daysSince,
   daysUntil,
   formatDate,
   isShortenerUrl,
+  linkDomain,
   linkifySegments,
   safeLink,
   splitContacts,
@@ -105,6 +107,11 @@ export default async function CompanyDetail({ params }) {
         (s) => s.href && isShortenerUrl(s.href),
       ),
   );
+  /* BUG-1: target tombol salin kanal kontak_lain — satu per URL,
+   * atau satu tombol penyalin seluruh teks bila tanpa URL. */
+  const otherCopyTargets = company.kontak_lain
+    ? contactCopyTargets(company.kontak_lain)
+    : [];
   const hasChannels = Boolean(
     company.email_hrd || company.wa_hrd || company.kontak_lain,
   );
@@ -365,6 +372,41 @@ export default async function CompanyDetail({ params }) {
                     text={company.kontak_lain}
                     newTab={t(locale, "common.newTab")}
                   />
+                  {/* BUG-1: tombol Salin di bawah teks, satu baris per
+                    * target — per URL bila ada tautan, atau satu tombol
+                    * penyalin seluruh teks bila tanpa URL. Bila ada
+                    * beberapa URL, aria-label dibedakan dengan domain
+                    * tautannya; tombol teks polos memakai label Salin
+                    * generik (bukan "Salin tautan"). Tombol dirender
+                    * server seperti tombol Salin email/WA. */}
+                  {otherCopyTargets.map((target) => {
+                    const domain = target.isUrl
+                      ? linkDomain(target.value)
+                      : "";
+                    const ariaLabel = !target.isUrl
+                      ? t(locale, "detail.copyChannel")
+                      : otherCopyTargets.length > 1 && domain
+                        ? `${t(locale, "detail.copyLink")} ${domain}`
+                        : t(locale, "detail.copyLink");
+                    return (
+                      <div key={target.value}>
+                        <CopyChannelButton
+                          value={target.value}
+                          channel="link"
+                          companyNo={company.no}
+                          ariaLabel={ariaLabel}
+                          labels={{
+                            copy: t(locale, "detail.copyChannel"),
+                            copied: t(locale, "detail.channelCopied"),
+                            copyFailed: t(locale, "detail.channelCopyFailed"),
+                            copyWa: t(locale, "detail.copyWa"),
+                            copyEmail: t(locale, "detail.copyEmail"),
+                            copyLink: t(locale, "detail.copyLink"),
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </dd>
                 {channelsShortened && (
                   <p className="note-line">

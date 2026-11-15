@@ -65,6 +65,8 @@ const DICT = {
       "Tidak bisa disalin otomatis. Salin manual dari layar.",
     "detail.copyWa": "Salin nomor WhatsApp",
     "detail.copyEmail": "Salin alamat email",
+    /* BUG-1: aria-label tombol salin tautan di kanal kontak_lain. */
+    "detail.copyLink": "Salin tautan",
     /* --- akhir T1f --- */
     /* --- T13 (aksesibilitas: tautan tab baru, toast, pesan tanpa-JS,
      * hitungan hasil target): hanya kunci baru di blok ini, nilai
@@ -563,6 +565,8 @@ const DICT = {
       "Could not be copied automatically. Copy it manually from the screen.",
     "detail.copyWa": "Copy WhatsApp number",
     "detail.copyEmail": "Copy email address",
+    /* BUG-1: aria-label for the copy-link button on the other-channels row. */
+    "detail.copyLink": "Copy link",
     /* --- end T1f --- */
     /* --- T13 (accessibility: new-tab links, toast, no-JS message,
      * target result count): new keys only in this block, existing

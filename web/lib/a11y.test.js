@@ -186,3 +186,29 @@ describe("token kontras dari globals.css (UX-06, AKSES-07)", () => {
     );
   });
 });
+
+/* Ukuran checkbox (BUG-3): aturan input global memaksa width 100% +
+ * min-height 48px ke SEMUA input, termasuk checkbox di label flex
+ * gerbang login /admin — checkbox melebar dan teks labelnya
+ * membungkus ke dua baris. Aturan penimpa ini mengunci checkbox
+ * kembali ke ukuran aslinya; label admin sendiri juga nowrap. */
+describe("checkbox tidak ikut aturan input 100% (BUG-3)", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const gates = readFileSync(
+    new URL("../app/admin/admin-gates.js", import.meta.url),
+    "utf8",
+  );
+
+  it("globals.css menimpa lebar checkbox/radio menjadi auto", () => {
+    assert.match(css, /input\[type="checkbox"\]/);
+    const ruleStart = css.indexOf('input[type="checkbox"]');
+    const ruleEnd = css.indexOf("}", ruleStart);
+    const rule = css.slice(ruleStart, ruleEnd);
+    assert.match(rule, /width:\s*auto/);
+    assert.match(rule, /min-height:\s*auto/);
+  });
+
+  it("label tampilkan kata sandi di gerbang admin memakai nowrap", () => {
+    assert.match(gates, /whiteSpace:\s*"nowrap"/);
+  });
+});
