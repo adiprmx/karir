@@ -79,7 +79,7 @@ Data mentah tersedia dalam dua format: [daftar-link-karir.csv](data/daftar-link-
 | Payment gateway | Tidak dipakai | Tanpa bayar |
 | Akun pengguna | Opsional | Login Firebase (Email/Password) untuk sinkron pelacak; tamu tetap bisa pakai semua fitur |
 
-Dokumen: [PRODUCT.md](docs/PRODUCT.md), [DESIGN.md](docs/DESIGN.md), [METODE.md](docs/METODE.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), [API.md](docs/API.md), [SECURITY.md](SECURITY.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md). Usulan perusahaan baru dan koreksi tautan mengikuti aturan di CONTRIBUTING.md.
+Dokumen: [PRODUCT.md](docs/PRODUCT.md), [DESIGN.md](docs/DESIGN.md), [METODE.md](docs/METODE.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), [API.md](docs/API.md), [SECURITY.md](SECURITY.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md). Usulan perusahaan baru dan koreksi tautan mengikuti aturan di CONTRIBUTING.md. Kebijakan pengujian untuk perubahan kode ada di CONTRIBUTING.md, seksi CI dan Kebijakan pengujian.
 
 <h2 align="center">FAQ</h2>
 

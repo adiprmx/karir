@@ -1,0 +1,92 @@
+# Cadangan Firestore mingguan Karir (OPS-09).
+#
+# Mengekspor semua koleksi Firestore (companies, alerts, meta,
+# rate_limits, audit_logs, reports, changes, user_profiles,
+# analytics_events, plus subkoleksi pelacak user_trackers/{uid}/items)
+# ke berkas JSON lewat web/scripts/backup-firestore.mjs, lalu
+# mengunggahnya sebagai artifact workflow (retensi 90 hari).
+# Cadangan TIDAK di-commit ke repo: isinya mencakup data yang
+# terhubung ke pengguna (audit_logs, reports, user_profiles,
+# pelacak), dan riwayat git adalah tempat yang salah untuk itu.
+#
+# KREDENSIAL: satu-satunya workflow yang memakai secret — job ini
+# butuh FIREBASE_SERVICE_ACCOUNT (string JSON service account baca
+# Firestore) yang dipasang di Settings > Secrets and variables >
+# Actions repo ini, dengan nama persis FIREBASE_SERVICE_ACCOUNT.
+# Nilainya tidak pernah ditulis di repo atau di workflow ini.
+# Bila secret belum dipasang, run GAGAL dengan pesan yang jelas
+# (bukan diam-diam tanpa cadangan) sampai pemilik memasangnya.
+# Build, tes, dan smoke di workflow lain tetap tanpa secret.
+#
+# Jadwal: tiap Minggu 02:00 UTC (09:00 WIB), plus jalan manual lewat
+# workflow_dispatch (mis. sebelum perubahan besar di Firestore).
+# Tidak butuh `npm ci`: skrip cadangan memakai Node murni + berkas
+# lib repo, tanpa dependensi npm.
+name: Backup Firestore
+
+on:
+  schedule:
+    # 02:00 UTC = 09:00 WIB tiap Minggu.
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+
+# Satu run cadangan dalam satu waktu; run yang tumpang tindih
+# mengantre (bukan dibatalkan) supaya tidak ada minggu yang terlewat.
+concurrency:
+  group: backup-firestore
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # Node 24.x: sama dengan engines di web/package.json dan
+          # .nvmrc — konsisten dengan workflow app.yml.
+          node-version: "24.x"
+      - name: Ekspor Firestore ke JSON
+        working-directory: web
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/backup-firestore.mjs --out backups/$(date -u +%Y-%m-%d)
+      - name: Unggah cadangan sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-backup
+          path: web/backups/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Ringkasan cadangan
+        run: |
+          python3 - <<'PY'
+          """Tulis ringkasan cadangan ke GITHUB_STEP_SUMMARY."""
+          import glob
+          import json
+          import os
+
+          manifests = sorted(glob.glob("web/backups/*/manifest.json"))
+          if not manifests:
+              raise SystemExit("manifest.json tidak ditemukan")
+          with open(manifests[0], encoding="utf-8") as f:
+              manifest = json.load(f)
+          lines = [
+              "## Cadangan Firestore",
+              "",
+              f"- Proyek: `{manifest['project']}`",
+              f"- Waktu: `{manifest['createdAt']}`",
+              f"- Total dokumen: **{manifest['totalDocuments']}**",
+              "",
+              "| Koleksi | Dokumen |",
+              "| --- | --- |",
+          ]
+          for name, info in sorted(manifest["collections"].items()):
+              lines.append(f"| `{name}` | {info['documents']} |")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write("\n".join(lines) + "\n")
+          PY

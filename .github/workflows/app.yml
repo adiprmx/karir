@@ -7,13 +7,17 @@
 # hanya ada di Vercel dan di .env.local lokal, dan keduanya tidak dipakai
 # di sini. Nilai dummy ini bukan kunci asli dan tidak membuka apa pun.
 # Langkah Smoke menjalankan server production dari hasil build lalu
-# memeriksa 5 cek lewat web/scripts/smoke-check.mjs. Tiga cek data
-# (/api/stats, /api/companies, dan /api/index) dilewati bila server
-# menjawab 503, karena kunci dummy tidak bisa membaca Firestore; / dan
-# /changelog harus lolos. Karena ketiga cek data itu selalu dilewati di
-# CI, langkah ini juga memeriksa jalur data dari seed: beranda dan
-# halaman detail di-render dari seed saat Firestore mati, jadi isinya
-# dicek langsung (total perusahaan + satu perusahaan target dari seed).
+# memeriksa 5 cek lewat web/scripts/smoke-check.mjs. Kelima cek wajib
+# lolos di CI: arsitektur seed-first membuat rute data jatuh ke seed
+# dan menjawab 200 saat Firestore tak terjangkau (kunci dummy), jadi
+# ketiga cek data (/api/stats, /api/companies, dan /api/index)
+# benar-benar menguji jalur data, bukan dilewati; 503 kini berarti
+# seed ikut gagal dan membuat cek gagal. Jangkar /changelog dibaca
+# dari versi package.json, bukan dikode keras. Langkah ini juga
+# memeriksa isi halaman yang di-render dari seed (beranda memuat
+# total perusahaan + satu perusahaan target, halaman detail memuat
+# namanya) — cakupan yang tidak dimiliki smoke-check.mjs, yang hanya
+# memeriksa API dan status halaman.
 # Server dimatikan lagi di akhir langkah.
 name: App
 
@@ -82,13 +86,13 @@ jobs:
           done
           STATUS=0
           node scripts/smoke-check.mjs || STATUS=$?
-          # Cek jalur data dari seed (QA-09): tiga cek API di atas selalu
-          # dilewati di CI (503, kunci dummy), jadi tanpa cek ini CI tidak
-          # pernah memverifikasi jalur data. Beranda dan halaman detail
-          # di-render dari seed saat Firestore mati (getCompaniesOrSeed),
-          # sehingga isinya bisa dicek di sini: beranda harus memuat total
-          # perusahaan dan satu perusahaan target, dan halaman detail
-          # perusahaan itu harus memuat namanya. Total, nomor, dan nama
+          # Cek halaman dari seed: smoke-check.mjs di atas memeriksa API
+          # dan status halaman, tetapi tidak memeriksa isi halaman yang
+          # di-render. Beranda dan halaman detail di-render dari seed
+          # saat Firestore mati (getCompaniesOrSeed), sehingga isinya
+          # dicek di sini: beranda harus memuat total perusahaan dan
+          # satu perusahaan target, dan halaman detail perusahaan itu
+          # harus memuat namanya. Total, nomor, dan nama
           # dibaca dari seed, bukan dikode keras, supaya cek ikut saat
           # data berubah lewat hunting harian. Nama yang mengandung & atau
           # < dilewati karena lolos HTML akan mengubah penulisannya.

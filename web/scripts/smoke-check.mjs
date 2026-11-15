@@ -5,20 +5,31 @@
  *
  * Lima cek: Beranda 200 + judul utama, /api/stats 200 + total sesuai
  * seed, /api/companies?q=Novell 200 + Novell di hasil, /api/index 200
- * dengan token dari /api/token, /changelog 200 + 2.8.0.
+ * dengan token dari /api/token, /changelog 200 + versi kini.
  * Jumlah perusahaan yang diharapkan dibaca dari seed repo
  * (web/data/companies.json), bukan angka yang dikode keras — data
  * bertambah lewat hunting harian, dan smoke test harus ikut.
+ * Versi yang diharapkan dibaca dari web/package.json, bukan jangkar
+ * yang dikode keras — jangkar kode-keras membusuk (pernah tertinggal
+ * di 2.8.0 padahal versi sudah 2.15.0). Bila versi naik, entri
+ * changelog untuk versi itu wajib ditambahkan di perubahan yang sama,
+ * kalau tidak cek ini gagal — itu sengaja, supaya halaman changelog
+ * tidak pernah tertinggal dari versi yang dirilis.
  * /api/index ber-token: smoke test mengambil token dulu dari
  * /api/token, lalu memanggil /api/index dengan header Authorization
  * Bearer. Semua fetch memakai User-Agent browser biasa dan Referer
  * asal situs sendiri, supaya lolos gerbang token + UA.
- * Dua cek data bersikap jujur soal lingkungan: bila server menjawab 503,
- * artinya Firestore tak terjangkau di lingkungan itu (mis. CI memakai
- * kunci dummy), dan cek itu DILEWATI, bukan gagal, karena 503 adalah
- * jawaban yang dirancang aplikasi untuk data yang tidak bisa dimuat.
- * Status lain yang salah, atau isi yang tidak sesuai, tetap GAGAL.
- * Keluar 1 bila ada yang gagal, 0 bila semua lolos atau dilewati. */
+ * Kelima cek WAJIB berjalan di semua lingkungan, termasuk CI.
+ * Arsitektur seed-first membuat rute data tidak lagi menjawab 503
+ * saat Firestore tak terjangkau (mis. CI memakai kunci dummy):
+ * rute-rute itu jatuh ke seed dan menjawab 200 dengan data seed,
+ * jadi cek data benar-benar menguji jalur data di CI, bukan dilewati.
+ * 503 kini hanya terjadi bila seed ikut tidak bisa dimuat — itu
+ * kerusakan repo, jadi 503 adalah GAGAL, bukan dilewati. Tidak ada
+ * lagi logika SKIP di skrip ini.
+ * Keluar 1 bila ada yang gagal, 0 bila semua lolos. Keluar 2 bila
+ * seed atau package.json tidak bisa dibaca (kerusakan repo, bukan
+ * kegagalan cek). */
 
 import { readFileSync } from "node:fs";
 
@@ -43,6 +54,25 @@ try {
   EXPECTED_TOTAL = seed.length;
 } catch (err) {
   console.error(`Seed tidak bisa dibaca: ${err.message}`);
+  process.exit(2);
+}
+
+/* Versi yang diharapkan: field version di package.json, dibaca sekali
+ * di awal. Sama seperti seed, kegagalan baca adalah kerusakan repo
+ * (kode 2), bukan kegagalan cek. */
+const PACKAGE_PATH = new URL("../package.json", import.meta.url);
+let EXPECTED_VERSION;
+try {
+  const pkg = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"));
+  if (
+    typeof pkg.version !== "string" ||
+    !/^\d+\.\d+\.\d+$/.test(pkg.version)
+  ) {
+    throw new Error("package.json tidak membawa version semver");
+  }
+  EXPECTED_VERSION = pkg.version;
+} catch (err) {
+  console.error(`package.json tidak bisa dibaca: ${err.message}`);
   process.exit(2);
 }
 
@@ -94,8 +124,13 @@ function pass(name, detail) {
   record(name, "PASS", detail);
 }
 
-function skip(name, detail) {
-  record(name, "SKIP", detail);
+/* Detail kegagalan status: 503 mendapat penjelasan karena artinya
+ * khusus — seed-first berarti 503 hanya terjadi bila seed ikut tidak
+ * bisa dimuat, bukan karena Firestore mati. */
+function statusDetail(status) {
+  return status === 503
+    ? "503, data tidak bisa dimuat (seed ikut gagal)"
+    : `status ${status}`;
 }
 
 async function checkHome() {
@@ -108,7 +143,7 @@ async function checkHome() {
     return;
   }
   if (res.status !== 200) {
-    fail(name, `status ${res.status}`);
+    fail(name, statusDetail(res.status));
     return;
   }
   if (!res.text.includes("Lowongan yang dicek, bukan yang dicopas")) {
@@ -127,12 +162,8 @@ async function checkStats() {
     fail(name, err.name === "AbortError" ? "timeout 10 dtk" : String(err));
     return;
   }
-  if (res.status === 503) {
-    skip(name, "503, Firestore tak terjangkau di lingkungan ini");
-    return;
-  }
   if (res.status !== 200) {
-    fail(name, `status ${res.status}`);
+    fail(name, statusDetail(res.status));
     return;
   }
   let data;
@@ -158,12 +189,8 @@ async function checkCompanies() {
     fail(name, err.name === "AbortError" ? "timeout 10 dtk" : String(err));
     return;
   }
-  if (res.status === 503) {
-    skip(name, "503, Firestore tak terjangkau di lingkungan ini");
-    return;
-  }
   if (res.status !== 200) {
-    fail(name, `status ${res.status}`);
+    fail(name, statusDetail(res.status));
     return;
   }
   let data;
@@ -207,12 +234,8 @@ async function checkIndex() {
     fail(name, err.name === "AbortError" ? "timeout 10 dtk" : String(err));
     return;
   }
-  if (res.status === 503) {
-    skip(name, "503, Firestore tak terjangkau di lingkungan ini");
-    return;
-  }
   if (res.status !== 200) {
-    fail(name, `status ${res.status}`);
+    fail(name, statusDetail(res.status));
     return;
   }
   let data;
@@ -245,14 +268,14 @@ async function checkChangelog() {
     return;
   }
   if (res.status !== 200) {
-    fail(name, `status ${res.status}`);
+    fail(name, statusDetail(res.status));
     return;
   }
-  if (!res.text.includes("2.8.0")) {
-    fail(name, "2.8.0 tidak ditemukan");
+  if (!res.text.includes(EXPECTED_VERSION)) {
+    fail(name, `${EXPECTED_VERSION} tidak ditemukan`);
     return;
   }
-  pass(name, "200, 2.8.0 ada");
+  pass(name, `200, ${EXPECTED_VERSION} ada`);
 }
 
 await checkHome();
@@ -262,9 +285,8 @@ await checkIndex();
 await checkChangelog();
 
 const passed = results.filter((r) => r.outcome === "PASS").length;
-const skipped = results.filter((r) => r.outcome === "SKIP").length;
 const failed = results.filter((r) => r.outcome === "FAIL").length;
 console.log(
-  `Ringkasan: ${results.length} diperiksa, ${passed} lolos, ${skipped} dilewati, ${failed} gagal.`,
+  `Ringkasan: ${results.length} diperiksa, ${passed} lolos, ${failed} gagal.`,
 );
 process.exitCode = failed > 0 ? 1 : 0;

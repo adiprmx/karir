@@ -1,0 +1,64 @@
+# Penandaan versi otomatis Karir (OPS-12).
+#
+# Tiap push ke main yang mengubah web/package.json, workflow ini
+# membaca field version lalu membuat tag GitHub vX.Y.Z bila tag itu
+# belum ada. Tag adalah titik rujukan rilis: rollback dan
+# identifikasi versi live merujuk ke tag, bukan ke hash commit.
+# Bila tag sudah ada (mis. push yang hanya mengubah dependensi tanpa
+# menaikkan versi), workflow berhenti dengan sukses tanpa berbuat
+# apa-apa — tidak ada tag ganda, tidak ada penimpaan tag.
+#
+# Disiplin versi: menaikkan versi di package.json WAJIB dibarengi
+# entri CHANGELOG.md dan entri halaman /changelog untuk versi itu
+# (smoke test gagal bila /changelog belum memuat versi kini).
+# Workflow ini hanya membuat tag; ia tidak menulis CHANGELOG.
+#
+# Cadangan manual bila workflow ini pernah nonaktif: dari clone
+# terbaru main, jalankan `git tag -a vX.Y.Z -m "Karir vX.Y.Z" &&
+# git push origin vX.Y.Z` dengan X.Y.Z = versi di package.json.
+name: Release tag
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/package.json"
+  workflow_dispatch:
+
+# Satu run penandaan dalam satu waktu; dua push berurutan tidak
+# boleh membuat tag yang sama secara bersamaan.
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Butuh seluruh riwayat + tag untuk memeriksa apakah tag
+          # versi ini sudah ada.
+          fetch-depth: 0
+      - name: Buat tag dari versi package.json
+        run: |
+          git fetch --tags --quiet
+          VERSION=$(python3 -c "import json; print(json.load(open('web/package.json'))['version'])")
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Versi bukan semver: $VERSION"
+            exit 1
+          fi
+          TAG="v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG sudah ada — tidak membuat tag baru."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Karir $TAG"
+          git push origin "$TAG"
+          echo "Tag $TAG dibuat."

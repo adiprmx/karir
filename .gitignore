@@ -8,3 +8,6 @@ Thumbs.db
 node_modules/
 .next/
 *.log
+# Cadangan Firestore lokal (web/scripts/backup-firestore.mjs):
+# berisi data yang terhubung ke pengguna, tidak boleh di-commit.
+web/backups/
