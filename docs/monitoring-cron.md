@@ -136,6 +136,33 @@ sehingga tidak pernah diteruskan sebagai alert perusahaan, dan
 watcher mengabaikan tipe selain `new-target` / `deadline` /
 `quota` saat meneruskan.
 
+## Heartbeat cron cleanup (S8/C-02)
+
+Cron cleanup (Senin 02:00 WIB) menulis heartbeatnya sendiri ke
+dokumen `cron-runs/cleanup-{tanggal-WIB}` di akhir run — berhasil
+(`status: "ok"`) maupun gagal (`status: "failed"`, dengan pesan
+error dan hasil parsial). Isi: `job: "cleanup"`, durasi,
+`deleted` total, hitungan per koleksi (`analyticsDeleted`,
+`rateLimitsDeleted`, `alertsDeleted`, `changesDeleted`),
+`analyticsHasMore`, dan `error` (kosong bila sukses). Id dokumen
+memakai awalan `cleanup-` supaya tidak menimpa heartbeat recheck
+hari yang sama (PATCH tanpa updateMask mengganti seluruh
+dokumen; kedua cron jalan di pagi yang sama tiap Senin).
+
+Watcher agent-side (`notify_watch.py`, v2.16.3) memantau heartbeat
+ini tiap run, terhadap **Senin terakhir yang run-nya sudah
+seharusnya selesai**: Senin sebelum 02:00 WIB memeriksa Senin
+seminggu sebelumnya; Senin jam 02:00 ke atas memeriksa hari ini;
+Selasa–Minggu memeriksa Senin terakhir (`last_cleanup_monday`).
+Bila dokumen tidak ada (dicek ulang sekali sesudah 180 detik)
+atau `status` bukan `"ok"`, watcher mengirim alarm sekali per
+Senin (penanda `cron-cleanup-miss-{tanggal}` /
+`cron-cleanup-failed-{tanggal}`); baca gagal (mis. 429) dilewati
+tanpa alarm, seperti recheck. Senin sebelum 23 November 2026
+tidak diperiksa: heartbeat cleanup baru ditulis kode v2.16.3,
+jadi run lama tidak pernah punya heartbeat dan "tidak ada" di
+sana bukan kegagalan (cutoff `CLEANUP_HEARTBEAT_START`).
+
 ## Tipe alert
 
 | Tipe | Penulis | Isi |
@@ -144,6 +171,7 @@ watcher mengabaikan tipe selain `new-target` / `deadline` /
 | `deadline` | cron | Batas lamar 0–3 hari lagi; `daysLeft` dihitung ulang watcher saat kirim dari `batasLamar` (NOTIF-09), alert yang sudah lewat batas dilewati + ditandai terkirim |
 | `quota` | lapisan data web (`lib/companies.js`, T15) | Pemakaian baca Firestore mencapai 70% kuota harian (35.000/50.000); satu per hari, id `quota-70-{tanggal}` |
 | `cron-miss`, `cron-truncated` | watcher (penanda dedup) | Bukan alert perusahaan; tidak diteruskan |
+| `cron-cleanup-miss`, `cron-cleanup-failed` | watcher (penanda dedup) | Heartbeat cleanup Senin terakhir tidak ada / run gagal; sekali per Senin; tidak diteruskan |
 
 ## Keamanan jalur cron
 

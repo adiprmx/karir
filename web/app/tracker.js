@@ -296,6 +296,20 @@ function markGuest() {
   dispatchSync();
 }
 
+/* Potret status sinkron saat ini untuk komponen dan penunggu.
+ * accountMerged true hanya bila sinkron penuh sudah berhasil
+ * menggabungkan pelacak akun di sesi ini (syncedUid) — berbeda
+ * dari state "sinkron", yang juga bisa tercapai lewat kirim
+ * perubahan saja (flushPushes) tanpa pernah menggabung akun. */
+function currentSyncInfo() {
+  return {
+    state: syncState,
+    error: syncError,
+    lastSyncedAt,
+    accountMerged: Boolean(activeUid) && syncedUid === activeUid,
+  };
+}
+
 /* Kalimat status sinkron untuk antarmuka (tanpa istilah teknis;
  * yang ditekankan: data lokal tidak pernah hilang bila sinkron
  * gagal). Dipakai petunjuk TrackerControl dan spanduk /lamaran.
@@ -358,6 +372,14 @@ const TRACKER_TOAST_DEFAULTS = {
  * atau kunci tamu bila belum masuk). */
 function readEntries() {
   return readEntriesAt(trackerKeyFor(activeUid));
+}
+
+/* Baca entri pelacak segar dari penyimpanan (S8/C-06): dipakai
+ * ekspor data sesudah menunggu sinkron, supaya entri yang baru
+ * tergabung dari akun ikut — state React di closure penangan
+ * unduh bisa basi sesudah await. */
+export function readTrackerEntries() {
+  return readEntries();
 }
 
 function writeEntries(next) {
@@ -487,14 +509,58 @@ function schedulePush(no) {
   pushTimer = setTimeout(flushPushes, 800);
 }
 
+/* Tunggu sinkron pelacak akun selesai (S8/C-06): dipakai ekspor
+ * data di /pengaturan supaya berkas tidak dibuat sebelum entri
+ * akun tergabung. Bila tidak ada sinkron berjalan dan akun belum
+ * pernah tergabung di sesi ini, satu upaya sinkron manual dipicu
+ * (melewati jeda retry otomatis) — perangkat baru yang sinkron
+ * pertamanya gagal tidak perlu menunggu retry otomatis. Selesai
+ * bila akun tergabung, bila tidak ada sinkron berjalan dan
+ * statusnya menetap (sinkron/tertunda), atau bila timeout
+ * tercapai. Kembalikan potret status saat ini; tidak pernah
+ * melempar dan tidak pernah menunggu lebih dari timeoutMs. Di
+ * luar browser (SSR/tes), langsung kembalikan potret saat ini. */
+export function waitForAccountSync(timeoutMs = 15_000) {
+  if (typeof window === "undefined") return Promise.resolve(currentSyncInfo());
+  if (activeUid && !syncRunning && syncedUid !== activeUid) {
+    runFullSync(activeUid, { manual: true }).catch(() => {});
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      window.removeEventListener("karir-sync-change", onChange);
+      resolve(currentSyncInfo());
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    const onChange = () => {
+      const info = currentSyncInfo();
+      if (info.accountMerged) return finish();
+      /* "mengirim" (sinkron jalan) atau "tamu" (sinkron akan
+       * segera mulai dari listener auth): terus menunggu. */
+      if (
+        !syncRunning &&
+        info.state !== "mengirim" &&
+        info.state !== "tamu"
+      ) {
+        return finish();
+      }
+      /* Sinkron yang sedang jalan tidak selalu diakhiri event
+       * (janjinya selesai tanpa dispatch bila gagal): cek lagi
+       * saat janjinya selesai. */
+      if (syncRunning) syncRunning.then(onChange, onChange);
+    };
+    window.addEventListener("karir-sync-change", onChange);
+    onChange();
+  });
+}
+
 export function useTracker() {
   const [entries, setEntries] = useState({});
   const [loaded, setLoaded] = useState(false);
-  const [syncInfo, setSyncInfo] = useState(() => ({
-    state: syncState,
-    error: syncError,
-    lastSyncedAt,
-  }));
+  const [syncInfo, setSyncInfo] = useState(() => currentSyncInfo());
   const [guestCount, setGuestCount] = useState(0);
   const toastLabels = useLabels(TRACKER_TOAST_DEFAULTS);
 
@@ -515,11 +581,7 @@ export function useTracker() {
       );
     };
     const onSync = () => {
-      setSyncInfo({
-        state: syncState,
-        error: syncError,
-        lastSyncedAt,
-      });
+      setSyncInfo(currentSyncInfo());
     };
     window.addEventListener("karir-tracker-change", onChange);
     window.addEventListener("storage", onChange);
@@ -775,6 +837,10 @@ export function useTracker() {
     syncState: syncInfo.state,
     syncError: syncInfo.error,
     lastSyncedAt: syncInfo.lastSyncedAt,
+    /* S8/C-06: true bila pelacak akun sudah tergabung di sesi
+     * ini — dipakai peringatan ekspor di /pengaturan. */
+    accountMerged: syncInfo.accountMerged === true,
+    waitForSync: waitForAccountSync,
     guestCount,
     save,
     remove,

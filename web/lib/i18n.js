@@ -414,8 +414,11 @@ const DICT = {
     "settings.downloadData": "Unduh data",
     "settings.downloadMine": "Unduh dataku",
     "settings.downloadHint":
-      "Salinan datamu dalam satu berkas JSON: profil akun, tanda lamaran, dan pengaturan di browser ini. Berkas dibuat di perangkatmu, tidak dikirim ke mana pun.",
+      "Salinan datamu dalam satu berkas JSON: profil akun, tanda lamaran, catatan kunjungan bila kamu masuk, dan pengaturan di browser ini. Berkas dibuat di perangkatmu, tidak dikirim ke mana pun.",
     "settings.downloadJson": "Unduh data (JSON)",
+    "settings.downloadSyncWaiting":
+      "Sinkron dengan akun belum selesai. Unduhan menunggu sinkron sebentar supaya semua tanda lamaran ikut.",
+    "settings.downloading": "Menyiapkan…",
     "settings.wipeAll": "Hapus semua data",
     "settings.wipeHint":
       "Menghapus semua data di atas dari browser ini. Bila kamu masuk, tanda lamaran di akun ikut dihapus. Akunnya sendiri tetap ada. Menghapus tidak bisa dibatalkan.",
@@ -914,8 +917,11 @@ const DICT = {
     "settings.downloadData": "Download data",
     "settings.downloadMine": "Download my data",
     "settings.downloadHint":
-      "A copy of your data in one JSON file: account profile, application marks, and settings in this browser. The file is created on your device, not sent anywhere.",
+      "A copy of your data in one JSON file: account profile, application marks, visit records if you are signed in, and settings in this browser. The file is created on your device, not sent anywhere.",
     "settings.downloadJson": "Download data (JSON)",
+    "settings.downloadSyncWaiting":
+      "Sync with your account is not finished yet. The download waits a bit so all application marks are included.",
+    "settings.downloading": "Preparing…",
     "settings.wipeAll": "Delete all data",
     "settings.wipeHint":
       "Deletes all the data above from this browser. If you are signed in, application marks in your account are deleted too. The account itself stays. Deleting cannot be undone.",

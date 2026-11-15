@@ -191,6 +191,14 @@ export default async function Privasi() {
           <Link href="/pengaturan">Pengaturan</Link>, termasuk tombol hapus
           semua data.
         </p>
+        <p>
+          Unduh salinan datamu dari halaman{" "}
+          <Link href="/pengaturan">Pengaturan</Link>: profil akun, tanda
+          lamaran, catatan kunjungan, dan pengaturan di browser ini, dalam
+          satu berkas. Bila kamu masuk akun, catatan kunjunganmu ikut
+          terunduh; bila tidak masuk, yang terunduh hanya data di browser
+          ini.
+        </p>
         <p>Keluar dari akun kapan saja dari menu situs.</p>
         <p>
           Hapus akun belum punya tombol di situs. Minta lewat{" "}
@@ -213,7 +221,7 @@ export default async function Privasi() {
           <Link href="/changelog">Riwayat perubahan</Link>.
         </p>
         <p className="section-note">
-          Terakhir diperbarui 15 November 2026.
+          Terakhir diperbarui 16 November 2026.
         </p>
       </section>
     </div>

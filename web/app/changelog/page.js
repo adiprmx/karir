@@ -24,6 +24,15 @@ const COPY = {
 
 const VERSIONS = [
   {
+    version: "2.16.3",
+    date: "16 November 2026",
+    points: [
+      "Unduhan data di halaman Pengaturan kini lebih lengkap: catatan kunjunganmu ikut terunduh bila kamu masuk akun, dan unduhan menunggu sinkron akun selesai supaya semua tanda lamaran ikut.",
+      "Halaman Privasi kini menjelaskan hakmu mengunduh salinan datamu.",
+      "Pembersihan data lama kini tercatat dan dipantau setiap minggu, supaya kegagalan pembersihan langsung ketahuan.",
+    ],
+  },
+  {
     version: "2.16.2",
     date: "15 November 2026",
     points: [

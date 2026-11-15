@@ -25,6 +25,8 @@ import {
   resetServiceAccountTokenCache,
   writeAnalyticsEvent,
   cleanupOldEvents,
+  fetchUserAnalyticsEvents,
+  USER_EXPORT_MAX_EVENTS,
 } from "./analytics-server.js";
 import {
   trackEvent,
@@ -844,7 +846,7 @@ describe("cleanupOldEvents (ANALITIK-10, mock fetch)", () => {
       queryBody.structuredQuery.from[0].collectionId,
       "analytics_events",
     );
-    assert.equal(queryBody.structuredQuery.limit, 200);
+    assert.equal(queryBody.structuredQuery.limit, 201);
     assert.equal(
       queryBody.structuredQuery.where.fieldFilter.value.timestampValue,
       "2026-08-17T00:00:00.000Z",
@@ -877,7 +879,39 @@ describe("cleanupOldEvents (ANALITIK-10, mock fetch)", () => {
     });
   });
 
-  it("hasil penuh (== maxDelete) → hasMore true", async () => {
+  it("satu baris lebih dari batas → hasMore true, hapus hanya batas", async () => {
+    const docs = [
+      "projects/proyek-uji/databases/(default)/documents/analytics_events/a",
+      "projects/proyek-uji/databases/(default)/documents/analytics_events/b",
+      "projects/proyek-uji/databases/(default)/documents/analytics_events/c",
+    ];
+    let batchBody;
+    const fetchMock = mockFetch([
+      tokenRoute(),
+      [
+        ":runQuery",
+        () => jsonResponse(docs.map((name) => ({ document: { name } }))),
+      ],
+      [
+        ":batchWrite",
+        (_url, options) => {
+          batchBody = JSON.parse(options.body);
+          return jsonResponse({});
+        },
+      ],
+    ]);
+    const result = await cleanupOldEvents({
+      fetchImpl: fetchMock,
+      maxDelete: 2,
+      now: new Date("2026-11-15T00:00:00.000Z"),
+    });
+    assert.equal(result.deleted, 2);
+    assert.equal(result.hasMore, true);
+    /* Baris ketiga hanya penanda sisa, tidak ikut dihapus. */
+    assert.equal(batchBody.writes.length, 2);
+  });
+
+  it("hasil tepat sama dengan batas → hasMore false (C-07)", async () => {
     const docs = [
       "projects/proyek-uji/databases/(default)/documents/analytics_events/a",
       "projects/proyek-uji/databases/(default)/documents/analytics_events/b",
@@ -896,7 +930,7 @@ describe("cleanupOldEvents (ANALITIK-10, mock fetch)", () => {
       now: new Date("2026-11-15T00:00:00.000Z"),
     });
     assert.equal(result.deleted, 2);
-    assert.equal(result.hasMore, true);
+    assert.equal(result.hasMore, false);
   });
 
   it("tanpa SA → melempar (pembersihan batal, bukan diam)", async () => {
@@ -931,6 +965,227 @@ describe("cleanupOldEvents (ANALITIK-10, mock fetch)", () => {
         now: new Date("2026-11-15T00:00:00.000Z"),
       }),
       /Query event lama gagal: HTTP 500/,
+    );
+  });
+});
+
+describe("fetchUserAnalyticsEvents (S8/C-05, mock fetch)", () => {
+  let envLama;
+  let privateKeyUji;
+  before(() => {
+    envLama = {
+      project: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      sa: process.env.FIREBASE_SERVICE_ACCOUNT,
+    };
+    const { privateKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+    });
+    privateKeyUji = privateKey.export({ type: "pkcs8", format: "pem" });
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "proyek-uji";
+    process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify({
+      client_email: "uji@proyek-uji.iam.gserviceaccount.com",
+      private_key: privateKeyUji,
+    });
+  });
+  after(() => {
+    for (const [key, value] of [
+      ["NEXT_PUBLIC_FIREBASE_PROJECT_ID", envLama.project],
+      ["FIREBASE_SERVICE_ACCOUNT", envLama.sa],
+    ]) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    resetServiceAccountTokenCache();
+  });
+  beforeEach(() => {
+    resetServiceAccountTokenCache();
+  });
+
+  function tokenRoute() {
+    return [
+      "oauth2.googleapis.com/token",
+      () => jsonResponse({ access_token: "token-sa-uji", expires_in: 3600 }),
+    ];
+  }
+
+  function eventDoc(fields) {
+    return {
+      document: {
+        name: "projects/proyek-uji/databases/(default)/documents/analytics_events/e1",
+        fields,
+      },
+    };
+  }
+
+  it("batas ekspor 500 event", () => {
+    assert.equal(USER_EXPORT_MAX_EVENTS, 500);
+  });
+
+  it("query menyaring uid yang diminta, hasil terbaru dulu", async () => {
+    let queryBody;
+    const rows = [
+      eventDoc({
+        type: { stringValue: "pageview" },
+        path: { stringValue: "/" },
+        ts: { timestampValue: "2026-11-14T10:00:00.000Z" },
+        visitorHash: { stringValue: "hash-rahasia" },
+        uaFlag: { booleanValue: true },
+        uid: { stringValue: "uid-uji-1" },
+      }),
+      eventDoc({
+        type: { stringValue: "search" },
+        path: { stringValue: "/cari" },
+        q: { stringValue: "gudang" },
+        results: { integerValue: "7" },
+        companyNo: { integerValue: "12" },
+        ts: { timestampValue: "2026-11-15T10:00:00.000Z" },
+        uid: { stringValue: "uid-uji-1" },
+      }),
+    ];
+    const fetchMock = mockFetch([
+      tokenRoute(),
+      [
+        ":runQuery",
+        (_url, options) => {
+          queryBody = JSON.parse(options.body);
+          return jsonResponse(rows);
+        },
+      ],
+    ]);
+    const result = await fetchUserAnalyticsEvents("uid-uji-1", {
+      fetchImpl: fetchMock,
+    });
+    assert.deepEqual(
+      queryBody.structuredQuery.where.fieldFilter,
+      {
+        field: { fieldPath: "uid" },
+        op: "EQUAL",
+        value: { stringValue: "uid-uji-1" },
+      },
+    );
+    /* Tanpa orderBy: query equality saja, tanpa indeks komposit. */
+    assert.equal(queryBody.structuredQuery.orderBy, undefined);
+    assert.equal(result.truncated, false);
+    /* Terbaru dulu, walau Firestore mengembalikan acak. */
+    assert.deepEqual(result.events, [
+      {
+        ts: "2026-11-15T10:00:00.000Z",
+        type: "search",
+        path: "/cari",
+        q: "gudang",
+        results: 7,
+        companyNo: 12,
+      },
+      { ts: "2026-11-14T10:00:00.000Z", type: "pageview", path: "/" },
+    ]);
+    /* Hash pengunjung, penanda bot, dan UID tidak ikut. */
+    assert.equal("visitorHash" in result.events[1], false);
+    assert.equal("uaFlag" in result.events[1], false);
+    assert.equal("uid" in result.events[1], false);
+  });
+
+  it("lebih dari batas: truncated true, hanya batas yang dikembalikan", async () => {
+    const rows = [1, 2, 3].map((i) =>
+      eventDoc({
+        type: { stringValue: "pageview" },
+        path: { stringValue: "/" },
+        ts: { timestampValue: `2026-11-1${i}T10:00:00.000Z` },
+      }),
+    );
+    const fetchMock = mockFetch([
+      tokenRoute(),
+      [":runQuery", () => jsonResponse(rows)],
+    ]);
+    const result = await fetchUserAnalyticsEvents("uid-uji-1", {
+      fetchImpl: fetchMock,
+      limit: 2,
+    });
+    assert.equal(result.truncated, true);
+    assert.equal(result.events.length, 2);
+    /* Dua terbaru yang dipertahankan. */
+    assert.equal(result.events[0].ts, "2026-11-13T10:00:00.000Z");
+    assert.equal(result.events[1].ts, "2026-11-12T10:00:00.000Z");
+  });
+
+  it("tanpa event: daftar kosong, tidak truncated", async () => {
+    const fetchMock = mockFetch([
+      tokenRoute(),
+      [":runQuery", () => jsonResponse([])],
+    ]);
+    assert.deepEqual(
+      await fetchUserAnalyticsEvents("uid-uji-1", { fetchImpl: fetchMock }),
+      { events: [], truncated: false },
+    );
+  });
+
+  it("baris tidak berbentuk benar dilewati, bukan menggagalkan", async () => {
+    const rows = [
+      { document: null },
+      eventDoc({
+        type: { stringValue: "pageview" },
+        path: { stringValue: "/" },
+      }),
+      eventDoc({
+        type: { stringValue: "detail" },
+        path: { stringValue: "/perusahaan/5" },
+        ts: { timestampValue: "2026-11-15T10:00:00.000Z" },
+      }),
+    ];
+    const fetchMock = mockFetch([
+      tokenRoute(),
+      [":runQuery", () => jsonResponse(rows)],
+    ]);
+    const result = await fetchUserAnalyticsEvents("uid-uji-1", {
+      fetchImpl: fetchMock,
+    });
+    assert.equal(result.events.length, 1);
+    assert.equal(result.events[0].type, "detail");
+  });
+
+  it("UID tidak sah melempar 400", async () => {
+    const fetchJanganPanggil = () => {
+      throw new Error("fetch tidak boleh dipanggil");
+    };
+    await assert.rejects(
+      fetchUserAnalyticsEvents("", { fetchImpl: fetchJanganPanggil }),
+      (err) => err.status === 400,
+    );
+    await assert.rejects(
+      fetchUserAnalyticsEvents("x".repeat(129), {
+        fetchImpl: fetchJanganPanggil,
+      }),
+      (err) => err.status === 400,
+    );
+  });
+
+  it("tanpa SA melempar 503", async () => {
+    delete process.env.FIREBASE_SERVICE_ACCOUNT;
+    try {
+      const fetchJanganPanggil = () => {
+        throw new Error("fetch tidak boleh dipanggil");
+      };
+      await assert.rejects(
+        fetchUserAnalyticsEvents("uid-uji-1", {
+          fetchImpl: fetchJanganPanggil,
+        }),
+        (err) => err.status === 503,
+      );
+    } finally {
+      process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify({
+        client_email: "uji@proyek-uji.iam.gserviceaccount.com",
+        private_key: privateKeyUji,
+      });
+    }
+  });
+
+  it("runQuery 500 melempar 500", async () => {
+    const fetchMock = mockFetch([
+      tokenRoute(),
+      [":runQuery", () => jsonResponse({}, 500)],
+    ]);
+    await assert.rejects(
+      fetchUserAnalyticsEvents("uid-uji-1", { fetchImpl: fetchMock }),
+      (err) => err.status === 500,
     );
   });
 });

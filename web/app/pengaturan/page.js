@@ -22,7 +22,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { clearOnboarding, useOnboarding } from "@/app/onboarding";
-import { clearAllTrackerStorage, todayLocal, useTracker } from "@/app/tracker";
+import {
+  clearAllTrackerStorage,
+  readTrackerEntries,
+  todayLocal,
+  useTracker,
+} from "@/app/tracker";
 import { clearRecentSearch, loadRecentSearch } from "@/app/recent";
 import { Icon, showToast } from "@/app/visual";
 import InstallPrompt from "@/app/install-prompt";
@@ -36,6 +41,7 @@ import {
   VISITOR_KEY,
   buildAccountExport,
   clearLocalData,
+  exportSyncNote,
   sendVerificationEmail,
 } from "@/lib/account-data";
 import {
@@ -129,8 +135,11 @@ const DEFAULT_LABELS = {
   downloadData: "Unduh data",
   downloadMine: "Unduh dataku",
   downloadHint:
-    "Salinan datamu dalam satu berkas JSON: profil akun, tanda lamaran, dan pengaturan di browser ini. Berkas dibuat di perangkatmu, tidak dikirim ke mana pun.",
+    "Salinan datamu dalam satu berkas JSON: profil akun, tanda lamaran, catatan kunjungan bila kamu masuk, dan pengaturan di browser ini. Berkas dibuat di perangkatmu, tidak dikirim ke mana pun.",
   downloadJson: "Unduh data (JSON)",
+  downloadSyncWaiting:
+    "Sinkron dengan akun belum selesai. Unduhan menunggu sinkron sebentar supaya semua tanda lamaran ikut.",
+  downloading: "Menyiapkan…",
   wipeAll: "Hapus semua data",
   wipeHint:
     "Menghapus semua data di atas dari browser ini. Bila kamu masuk, tanda lamaran di akun ikut dihapus. Akunnya sendiri tetap ada. Menghapus tidak bisa dibatalkan.",
@@ -179,7 +188,12 @@ export default function Pengaturan() {
     loaded: onboardingLoaded,
     clear: clearChoices,
   } = useOnboarding();
-  const { entries, loaded: trackerLoaded } = useTracker();
+  const {
+    entries,
+    loaded: trackerLoaded,
+    accountMerged,
+    waitForSync,
+  } = useTracker();
   const user = useAuthUser();
   const [recent, setRecent] = useState(null);
   const [recentReady, setRecentReady] = useState(false);
@@ -190,6 +204,7 @@ export default function Pengaturan() {
    * dikonfirmasi) — pola yang sama dengan "Hapus semua data". */
   const [confirmKey, setConfirmKey] = useState(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [accountMsg, setAccountMsg] = useState("");
   const [, setVerifyChecked] = useState(0);
 
@@ -319,10 +334,75 @@ export default function Pengaturan() {
   }
 
   /* Unduh salinan data sebagai berkas JSON. Berkas dibuat di
-   * perangkat ini, tidak dikirim ke mana pun. */
-  function exportData() {
-    const data = buildAccountExport(
-      {
+   * perangkat ini, tidak dikirim ke mana pun.
+   *
+   * S8/C-06: bila masuk akun, tunggu dulu sinkron pelacak akun
+   * selesai (maks 15 detik) supaya entri dari akun ikut — di
+   * perangkat baru, unduh sebelum sinkron selesai akan
+   * kehilangan entri yang hanya ada di akun. Bila sinkron
+   * tetap belum selesai, ekspor tetap jalan dengan catatan di
+   * dalam berkas. Entri dibaca segar sesudah menunggu (bukan
+   * dari state React yang bisa basi sesudah await).
+   *
+   * S8/C-05: bila masuk akun, catatan kunjungan milik akun ini
+   * ikut diambil dari /api/akun/export dan digabung ke berkas.
+   * Bila pengambilan gagal (offline, token kedaluwarsa, server
+   * sibuk), ekspor tetap jalan tanpa catatan kunjungan, dengan
+   * catatan di dalam berkas. */
+  async function exportData() {
+    if (exportBusy) return;
+    setExportBusy(true);
+    try {
+      let syncInfo = null;
+      if (user) {
+        try {
+          syncInfo = await waitForSync(15_000);
+        } catch {
+          syncInfo = null;
+        }
+      }
+      let analyticsEvents = null;
+      let analyticsFailed = false;
+      if (user) {
+        try {
+          const idToken = await user.getIdToken();
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 15_000);
+          try {
+            const res = await fetch("/api/akun/export", {
+              headers: { Authorization: `Bearer ${idToken}` },
+              signal: controller.signal,
+            });
+            if (res.ok) {
+              const body = await res.json();
+              analyticsEvents = Array.isArray(body.events)
+                ? body.events
+                : [];
+            } else {
+              analyticsFailed = true;
+            }
+          } finally {
+            clearTimeout(timer);
+          }
+        } catch {
+          analyticsFailed = true;
+        }
+      }
+      const notes = [];
+      const syncNote = exportSyncNote({
+        signedIn: Boolean(user),
+        accountMerged: syncInfo
+          ? syncInfo.accountMerged === true
+          : accountMerged,
+      });
+      if (syncNote) notes.push(syncNote);
+      if (analyticsFailed) {
+        notes.push(
+          "Catatan kunjungan tidak bisa diambil saat ini, jadi " +
+            "tidak ikut dalam berkas ini. Coba unduh lagi nanti.",
+        );
+      }
+      const data = buildAccountExport({
         profile: user
           ? {
               email: user.email,
@@ -330,25 +410,29 @@ export default function Pengaturan() {
               emailVerified: user.emailVerified,
             }
           : null,
-        trackers: entries || {},
+        trackers: readTrackerEntries(),
         onboarding: onboarding || null,
         recentSearch: recent || null,
         theme: readStored("karir-theme"),
         visitorId: readStored(VISITOR_KEY),
-      },
-    );
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `karir-data-saya-${todayLocal()}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    showToast(labels.toastDownloaded);
+        analyticsEvents,
+        catatanEkspor: notes.length ? notes.join(" ") : null,
+      });
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `karir-data-saya-${todayLocal()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast(labels.toastDownloaded);
+    } finally {
+      setExportBusy(false);
+    }
   }
 
   async function resendVerification() {
@@ -697,9 +781,17 @@ export default function Pengaturan() {
       <section className="panel" aria-label={labels.downloadData}>
         <p className="label">{labels.downloadMine}</p>
         <p className="hint">{labels.downloadHint}</p>
+        {user && !accountMerged ? (
+          <p className="hint">{labels.downloadSyncWaiting}</p>
+        ) : null}
         <div className="actions-row">
-          <button type="button" className="btn" onClick={exportData}>
-            {labels.downloadJson}
+          <button
+            type="button"
+            className="btn"
+            onClick={exportData}
+            disabled={exportBusy}
+          >
+            {exportBusy ? labels.downloading : labels.downloadJson}
           </button>
         </div>
       </section>

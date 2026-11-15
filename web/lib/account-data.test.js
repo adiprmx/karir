@@ -14,6 +14,7 @@ import {
   authErrorMessage,
   buildAccountExport,
   clearLocalData,
+  exportSyncNote,
   passwordResetOutcome,
 } from "./account-data.js";
 
@@ -253,6 +254,8 @@ describe("buildAccountExport", () => {
           catatan: "cek lagi",
         },
       ],
+      /* Tanpa analyticsEvents: tamu maupun gagal ambil mendapat null. */
+      catatanKunjungan: null,
       pengaturan: {
         pilihan: { domisili: "Depok", posisi: "Staff Gudang" },
         pencarianTerakhir: { domisili: "Bogor", posisi: "" },
@@ -320,5 +323,114 @@ describe("buildAccountExport", () => {
     const exported = Date.parse(out.dieksporPada);
     assert.ok(exported >= before.getTime());
     assert.ok(exported <= after.getTime());
+  });
+
+  it("event analitik ikut sebagai catatanKunjungan (S8/C-05)", () => {
+    const out = buildAccountExport(
+      {
+        analyticsEvents: [
+          {
+            ts: "2026-11-15T10:00:00.000Z",
+            type: "search",
+            path: "/cari",
+            q: "gudang",
+            results: 7,
+          },
+          {
+            ts: "2026-11-14T10:00:00.000Z",
+            type: "pageview",
+            path: "/",
+            companyNo: 12,
+            action: "detail",
+            visitor: "nomor-acak",
+          },
+        ],
+      },
+      now,
+    );
+    assert.deepEqual(out.catatanKunjungan, [
+      {
+        ts: "2026-11-15T10:00:00.000Z",
+        type: "search",
+        path: "/cari",
+        q: "gudang",
+        results: 7,
+      },
+      {
+        ts: "2026-11-14T10:00:00.000Z",
+        type: "pageview",
+        path: "/",
+        companyNo: 12,
+        action: "detail",
+        visitor: "nomor-acak",
+      },
+    ]);
+  });
+
+  it("event tidak sah dibuang, field tak dikenal tidak ikut", () => {
+    const out = buildAccountExport(
+      {
+        analyticsEvents: [
+          { type: "pageview", path: "/" },
+          { ts: "2026-11-15T10:00:00.000Z", type: "", path: "/" },
+          {
+            ts: "2026-11-15T10:00:00.000Z",
+            type: "detail",
+            path: "/perusahaan/5",
+            uid: "uid-orang-lain",
+            visitorHash: "hash",
+            results: "tujuh",
+          },
+          null,
+        ],
+      },
+      now,
+    );
+    assert.deepEqual(out.catatanKunjungan, [
+      {
+        ts: "2026-11-15T10:00:00.000Z",
+        type: "detail",
+        path: "/perusahaan/5",
+      },
+    ]);
+  });
+
+  it("catatanEkspor hanya ada bila ada catatan", () => {
+    const withNote = buildAccountExport(
+      { catatanEkspor: "Sinkron belum selesai." },
+      now,
+    );
+    assert.equal(withNote.catatanEkspor, "Sinkron belum selesai.");
+    const withoutNote = buildAccountExport({}, now);
+    assert.equal("catatanEkspor" in withoutNote, false);
+    const emptyNote = buildAccountExport({ catatanEkspor: "" }, now);
+    assert.equal("catatanEkspor" in emptyNote, false);
+  });
+});
+
+describe("exportSyncNote (S8/C-06)", () => {
+  it("tamu tidak mendapat catatan", () => {
+    assert.equal(
+      exportSyncNote({ signedIn: false, accountMerged: false }),
+      null,
+    );
+  });
+
+  it("akun sudah tergabung tidak mendapat catatan", () => {
+    assert.equal(
+      exportSyncNote({ signedIn: true, accountMerged: true }),
+      null,
+    );
+  });
+
+  it("masuk tapi akun belum tergabung mendapat peringatan", () => {
+    const note = exportSyncNote({ signedIn: true, accountMerged: false });
+    assert.equal(typeof note, "string");
+    assert.ok(note.includes("Sinkron dengan akun belum selesai"));
+    assert.ok(note.includes("bisa belum ikut"));
+  });
+
+  it("tanpa argumen tidak mendapat catatan", () => {
+    assert.equal(exportSyncNote(), null);
   });
 });

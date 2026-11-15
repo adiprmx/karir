@@ -191,11 +191,64 @@ function normalizeExportEntry(raw) {
   };
 }
 
+/* Rapikan satu event analitik untuk berkas ekspor. Kembalikan null
+ * bila waktu/jenis/halaman tidak sah. Hanya field yang dikenal
+ * yang disalin, dengan cek tipe — isi dari server tidak pernah
+ * dipercaya mentah-mentah. */
+function normalizeExportEvent(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  if (typeof raw.ts !== "string" || !raw.ts) return null;
+  if (typeof raw.type !== "string" || !raw.type) return null;
+  if (typeof raw.path !== "string") return null;
+  const event = { ts: raw.ts, type: raw.type, path: raw.path };
+  if (typeof raw.q === "string" && raw.q) event.q = raw.q;
+  if (Number.isInteger(raw.results)) event.results = raw.results;
+  if (typeof raw.filter === "string" && raw.filter) {
+    event.filter = raw.filter;
+  }
+  if (Number.isInteger(raw.companyNo)) event.companyNo = raw.companyNo;
+  if (typeof raw.action === "string" && raw.action) {
+    event.action = raw.action;
+  }
+  if (typeof raw.visitor === "string" && raw.visitor) {
+    event.visitor = raw.visitor;
+  }
+  return event;
+}
+
+/* Batas pertahanan di sisi klien untuk event yang ikut diekspor
+ * (server sudah membatasi 500; angka ini hanya pengaman bila
+ * respons server berubah). */
+const EXPORT_EVENTS_MAX = 500;
+
+/* Catatan untuk berkas ekspor bila sinkron pelacak akun belum
+ * selesai saat berkas dibuat (S8/C-06). Kembalikan null bila
+ * tidak masuk akun (tidak ada yang perlu disinkron) atau bila
+ * akun sudah tergabung di sesi ini (entri akun sudah ada di
+ * perangkat). Kalimatnya sengaja berhati-hati ("bisa belum
+ * ikut"): sinkron yang tertunda belum tentu berarti ada entri
+ * yang hilang, tetapi pembaca berkas wajib tahu risikonya. */
+export function exportSyncNote({ signedIn, accountMerged } = {}) {
+  if (!signedIn || accountMerged) return null;
+  return (
+    "Sinkron dengan akun belum selesai saat berkas ini dibuat, " +
+    "jadi sebagian tanda lamaran dari akun bisa belum ikut. " +
+    "Coba unduh lagi setelah sinkron selesai."
+  );
+}
+
 /* Susun isi berkas unduh data pengguna (JSON, dibuat di perangkat,
  * tidak dikirim ke mana pun). Masukan: profil akun (atau null bila
  * belum masuk), peta entri pelacak, pilihan onboarding, pencarian
  * terakhir, tema, dan nomor pengunjung. `now` hanya untuk tes
- * (tanggal ekspor yang tetap); pemanggil biasa tidak mengisinya. */
+ * (tanggal ekspor yang tetap); pemanggil biasa tidak mengisinya.
+ *
+ * S8: dua masukan opsional baru — `analyticsEvents` (daftar event
+ * analitik milik akun dari /api/akun/export; null bila tamu atau
+ * bila pengambilan gagal) menjadi field `catatanKunjungan`, dan
+ * `catatanEkspor` (string, mis. peringatan sinkron belum selesai
+ * atau catatan kunjungan gagal diambil) menjadi field
+ * `catatanEkspor` yang hanya ada bila ada catatan. */
 export function buildAccountExport(data, now) {
   const input = data && typeof data === "object" ? data : {};
   const profile = input.profile;
@@ -213,6 +266,16 @@ export function buildAccountExport(data, now) {
     now instanceof Date && !Number.isNaN(now.getTime())
       ? now.toISOString()
       : new Date().toISOString();
+  const analyticsEvents = Array.isArray(input.analyticsEvents)
+    ? input.analyticsEvents
+        .map(normalizeExportEvent)
+        .filter(Boolean)
+        .slice(0, EXPORT_EVENTS_MAX)
+    : null;
+  const catatanEkspor =
+    typeof input.catatanEkspor === "string" && input.catatanEkspor
+      ? input.catatanEkspor
+      : null;
   return {
     dieksporPada: exportedAt,
     akun:
@@ -227,6 +290,9 @@ export function buildAccountExport(data, now) {
           }
         : null,
     tandaLamaran: entries,
+    /* Catatan kunjungan milik akun ini (null bila tamu, atau bila
+     * pengambilan dari server gagal — lihat catatanEkspor). */
+    catatanKunjungan: analyticsEvents,
     pengaturan: {
       pilihan:
         onboarding && typeof onboarding === "object"
@@ -253,5 +319,10 @@ export function buildAccountExport(data, now) {
       typeof input.visitorId === "string" && input.visitorId
         ? input.visitorId
         : null,
+    /* Hanya ada bila ada yang perlu diketahui pembaca berkas
+     * (mis. sinkron belum selesai atau catatan kunjungan gagal
+     * diambil) — berkas normal tanpa catatan tidak membawa
+     * field ini. */
+    ...(catatanEkspor ? { catatanEkspor } : {}),
   };
 }

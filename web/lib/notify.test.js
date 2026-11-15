@@ -22,6 +22,7 @@ import {
   splitTelegramMessage,
   markAlertsSent,
   buildCronRunRecord,
+  buildCleanupRunRecord,
   TELEGRAM_MESSAGE_LIMIT,
   QUOTA_DAILY_LIMIT,
   QUOTA_ALERT_READS,
@@ -569,5 +570,74 @@ describe("buildCronRunRecord (OPS-01)", () => {
     assert.equal(record.checked.integerValue, "0");
     assert.equal(record.queueTotal.integerValue, "0");
     assert.equal(record.durationMs.integerValue, "1000");
+  });
+});
+
+describe("buildCleanupRunRecord (S8/C-02)", () => {
+  it("bentuk field Firestore lengkap untuk run sukses", () => {
+    const record = buildCleanupRunRecord(
+      {
+        status: "ok",
+        analytics: { deleted: 12, hasMore: false },
+        retention: {
+          rate_limits: { deleted: 3, hasMore: false },
+          alerts: { deleted: 0, hasMore: false },
+          changes: { deleted: 1, hasMore: true },
+        },
+      },
+      {
+        date: "2026-11-16",
+        startedAt: Date.parse("2026-11-15T19:00:00Z"),
+        finishedAt: Date.parse("2026-11-15T19:00:04Z"),
+      },
+    );
+    assert.equal(record.date.stringValue, "2026-11-16");
+    assert.equal(record.job.stringValue, "cleanup");
+    assert.equal(record.status.stringValue, "ok");
+    assert.equal(record.durationMs.integerValue, "4000");
+    assert.equal(record.deleted.integerValue, "16");
+    assert.equal(record.analyticsDeleted.integerValue, "12");
+    assert.equal(record.analyticsHasMore.booleanValue, false);
+    assert.equal(record.rateLimitsDeleted.integerValue, "3");
+    assert.equal(record.alertsDeleted.integerValue, "0");
+    assert.equal(record.changesDeleted.integerValue, "1");
+    assert.equal(record.error.stringValue, "");
+  });
+
+  it("run gagal: status failed, hasil parsial tetap tercatat", () => {
+    const record = buildCleanupRunRecord(
+      {
+        status: "failed",
+        analytics: { deleted: 5, hasMore: false },
+        retention: {
+          rate_limits: { deleted: 2, hasMore: false },
+        },
+        error: "Query alerts lama gagal: HTTP 500.",
+      },
+      {
+        date: "2026-11-16",
+        startedAt: 1000,
+        finishedAt: 2500,
+      },
+    );
+    assert.equal(record.status.stringValue, "failed");
+    assert.equal(record.deleted.integerValue, "7");
+    assert.equal(record.analyticsDeleted.integerValue, "5");
+    assert.equal(record.rateLimitsDeleted.integerValue, "2");
+    assert.equal(record.alertsDeleted.integerValue, "0");
+    assert.equal(record.changesDeleted.integerValue, "0");
+    assert.equal(record.error.stringValue, "Query alerts lama gagal: HTTP 500.");
+  });
+
+  it("tanpa ringkasan: status ok dan semua hitungan nol", () => {
+    const record = buildCleanupRunRecord(null, {
+      date: "2026-11-16",
+      startedAt: 1000,
+      finishedAt: 1000,
+    });
+    assert.equal(record.status.stringValue, "ok");
+    assert.equal(record.deleted.integerValue, "0");
+    assert.equal(record.durationMs.integerValue, "0");
+    assert.equal(record.error.stringValue, "");
   });
 });

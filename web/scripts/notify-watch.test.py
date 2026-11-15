@@ -15,6 +15,7 @@ import os
 import sys
 import unittest
 from contextlib import redirect_stdout
+from datetime import datetime
 
 WATCHER_PATH = "/home/hatch/workspace/.claude-v280/notify_watch.py"
 
@@ -339,6 +340,142 @@ class TestNotifyWatch(unittest.TestCase):
         terkirim = []
         self.w.send_telegram = lambda teks: terkirim.append(teks) or True
         self.assertTrue(self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True))
+        self.assertEqual(terkirim, [])
+
+    # --- heartbeat cleanup mingguan (S8/C-02) ---
+
+    def test_last_cleanup_monday_semua_hari(self):
+        """Senin jam 02:00 ke atas -> hari ini; Selasa-Minggu ->
+        Senin terakhir minggu berjalan."""
+        senin = "2026-11-16"
+        kasus = [
+            # (waktu WIB, Senin yang diharapkan)
+            (datetime(2026, 11, 16, 3, 0), senin),   # Senin 03:00
+            (datetime(2026, 11, 17, 1, 30), senin),  # Selasa 01:30
+            (datetime(2026, 11, 18, 12, 0), senin),  # Rabu
+            (datetime(2026, 11, 19, 23, 59), senin), # Kamis
+            (datetime(2026, 11, 20, 8, 0), senin),   # Jumat
+            (datetime(2026, 11, 21, 8, 0), senin),   # Sabtu
+            (datetime(2026, 11, 22, 23, 59), senin), # Minggu
+            (datetime(2026, 11, 23, 3, 0), "2026-11-23"),  # Senin berikut
+            (datetime(2026, 11, 30, 10, 0), "2026-11-30"), # Senin akhir bulan
+        ]
+        for waktu, harapan in kasus:
+            with self.subTest(waktu=waktu):
+                self.assertEqual(
+                    self.w.last_cleanup_monday(waktu).isoformat(), harapan
+                )
+
+    def test_last_cleanup_monday_tepi_senin(self):
+        """Tepi batas 02:00 WIB di hari Senin: sebelum 02:00 ->
+        Senin seminggu sebelumnya; jam 02:00 ke atas -> hari ini."""
+        self.assertEqual(
+            self.w.last_cleanup_monday(datetime(2026, 11, 16, 1, 30)).isoformat(),
+            "2026-11-09",
+        )
+        self.assertEqual(
+            self.w.last_cleanup_monday(datetime(2026, 11, 16, 0, 5)).isoformat(),
+            "2026-11-09",
+        )
+        self.assertEqual(
+            self.w.last_cleanup_monday(datetime(2026, 11, 16, 2, 0)).isoformat(),
+            "2026-11-16",
+        )
+        self.assertEqual(
+            self.w.last_cleanup_monday(datetime(2026, 11, 16, 2, 30)).isoformat(),
+            "2026-11-16",
+        )
+
+    def test_check_cleanup_run_sehat_tanpa_alarm(self):
+        """Jalur sukses: heartbeat ada + status ok -> tidak ada
+        pesan Telegram apa pun."""
+        self.pasang_call_curl({
+            "/cron-runs/cleanup-2026-11-23": (
+                "200", {"fields": {
+                    "status": {"stringValue": "ok"},
+                    "job": {"stringValue": "cleanup"},
+                }},
+            ),
+        })
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cleanup_run(datetime(2026, 11, 23, 3, 0), dry_run=True)
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("sehat", out.getvalue())
+
+    def test_check_cleanup_run_hilang_dry_run_alarm(self):
+        self.pasang_call_curl({"/cron-runs/cleanup-2026-11-23": ("404", {})})
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cleanup_run(datetime(2026, 11, 23, 3, 0), dry_run=True)
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])  # dry-run tidak mengirim
+        self.assertIn("Cron cleanup Karir belum tercatat berjalan", out.getvalue())
+
+    def test_check_cleanup_run_gagal_dry_run_alarm(self):
+        self.pasang_call_curl({
+            "/cron-runs/cleanup-2026-11-23": (
+                "200", {"fields": {
+                    "status": {"stringValue": "failed"},
+                    "error": {"stringValue": "Query lama gagal: HTTP 500"},
+                }},
+            ),
+        })
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cleanup_run(datetime(2026, 11, 23, 3, 0), dry_run=True)
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("tercatat gagal", out.getvalue())
+        self.assertIn("HTTP 500", out.getvalue())
+
+    def test_check_cleanup_run_baca_gagal_dilewati_tanpa_alarm_palsu(self):
+        self.pasang_call_curl({"/cron-runs/cleanup-2026-11-23": ("429", {})})
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cleanup_run(datetime(2026, 11, 23, 3, 0), dry_run=True)
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("dilewati", out.getvalue())
+
+    def test_check_cleanup_run_sebelum_mulai_dilewati_tanpa_baca(self):
+        """Senin yang diharapkan sebelum CLEANUP_HEARTBEAT_START
+        (run kode lama tanpa heartbeat): dilewati, Firestore tidak
+        dibaca sama sekali, tidak ada alarm."""
+        panggilan = self.pasang_call_curl({})
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            # Senin 16 Nov 03:00 -> Senin 16 Nov (sebelum 23 Nov).
+            hasil1 = self.w.check_cleanup_run(datetime(2026, 11, 16, 3, 0), dry_run=True)
+            # Minggu 22 Nov -> Senin 16 Nov (tetap sebelum 23 Nov).
+            hasil2 = self.w.check_cleanup_run(datetime(2026, 11, 22, 10, 0), dry_run=True)
+        self.assertTrue(hasil1)
+        self.assertTrue(hasil2)
+        self.assertEqual(panggilan, [])
+        self.assertEqual(terkirim, [])
+        self.assertIn("belum dipantau", out.getvalue())
+
+    def test_check_cleanup_run_penanda_sudah_ada_tidak_kirim_lagi(self):
+        self.pasang_call_curl({"/cron-runs/cleanup-2026-11-23": ("404", {})})
+        self.w.marker_exists = lambda mid: True
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        self.assertTrue(
+            self.w.check_cleanup_run(datetime(2026, 11, 23, 3, 0), dry_run=True)
+        )
         self.assertEqual(terkirim, [])
 
 

@@ -15,14 +15,36 @@
  * dipasang (503 generik), Bearer timing-safe, dan service account
  * wajib ada. Kegagalan hapus dicatat di log dan dijawab 500 — run
  * berikutnya mencoba lagi; tidak ada data pengguna yang hilang
- * bila satu run gagal, hanya dokumen lama yang tertunda dihapus. */
+ * bila satu run gagal, hanya dokumen lama yang tertunda dihapus.
+ *
+ * Heartbeat (S8/C-02): di akhir run — berhasil maupun gagal —
+ * ringkasan ditulis ke dokumen cron-runs/cleanup-{tanggal-WIB}
+ * (buildCleanupRunRecord, lib/notify.js), mengikuti pola recheck
+ * (OPS-01). Id dokumen memakai awalan "cleanup-" supaya tidak
+ * menimpa heartbeat recheck hari yang sama (PATCH tanpa
+ * updateMask mengganti seluruh dokumen; kedua cron jalan di pagi
+ * yang sama tiap Senin). Tulis heartbeat best-effort: gagal
+ * menulis tidak menggagalkan run, hanya dicatat di log dan di
+ * ringkasan (heartbeatWritten). Kegagalan guard (401/503) tidak
+ * menulis heartbeat — sama seperti recheck: tanpa token service
+ * account tidak ada yang bisa ditulis, dan pemanggil tanpa izin
+ * tidak boleh meninggalkan jejak. */
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { requireEnv } from "@/lib/require-env";
 import {
   cleanupOldEvents,
   getServiceAccountAccessToken,
+  todayJakarta,
 } from "@/lib/analytics-server";
+import { buildCleanupRunRecord } from "@/lib/notify";
+
+/* Batas durasi fungsi di Vercel (paket Hobby: maks 60 detik),
+ * sama seperti recheck. Anggaran timeout internal (10 detik
+ * analitik, 15 detik per panggilan koleksi) muat di dalamnya
+ * untuk run normal; skenario terburuk sekuensial tetap bisa
+ * terpotong Vercel, dan run minggu berikutnya melanjutkan. */
+export const maxDuration = 60;
 
 /* Kebijakan retensi per koleksi (FIN-08). analytics_events (90 hari)
  * ditangani cleanupOldEvents; tiga koleksi di bawah ditangani
@@ -87,9 +109,13 @@ async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
  * stringValue ISO dibandingkan sebagai string — urutan leksikografis
  * ISO 8601 UTC sama dengan urutan kronologis. Menghapus maks
  * `maxDelete` dokumen tertua per run; kembalikan { deleted, cutoff,
- * hasMore } supaya pemanggil tahu bila masih ada sisa. MELEMPAR bila
- * token/query/hapus gagal — pemanggil cron wajib mencatat
- * kegagalannya, bukan menelan diam. */
+ * hasMore } supaya pemanggil tahu bila masih ada sisa. Query
+ * mengambil satu baris ekstra (maxDelete + 1) supaya `hasMore`
+ * hanya true bila benar-benar ada sisa — tanpa baris ekstra,
+ * jumlah yang persis sama dengan batas akan dilaporkan sebagai
+ * sisa padahal tidak ada (C-07). MELEMPAR bila token/query/hapus
+ * gagal — pemanggil cron wajib mencatat kegagalannya, bukan
+ * menelan diam. */
 export async function cleanupCollection(
   { collection, field, valueType, retentionDays, maxDelete },
   { fetchImpl = fetch, now = new Date(), token, projectId } = {},
@@ -133,7 +159,7 @@ export async function cleanupCollection(
             },
           },
           orderBy: [{ field: { fieldPath: field }, direction: "ASCENDING" }],
-          limit: maxDelete,
+          limit: maxDelete + 1,
         },
       }),
     },
@@ -149,6 +175,10 @@ export async function cleanupCollection(
   if (names.length === 0) {
     return { deleted: 0, cutoff, hasMore: false };
   }
+  /* Baris ke-(maxDelete + 1) hanya penanda sisa, bukan untuk
+   * dihapus: hapus maxDelete pertama saja. */
+  const hasMore = names.length > maxDelete;
+  const toDelete = names.slice(0, maxDelete);
   const batchRes = await fetchWithTimeout(
     fetchImpl,
     `${base}/documents:batchWrite`,
@@ -156,7 +186,7 @@ export async function cleanupCollection(
       method: "POST",
       headers,
       body: JSON.stringify({
-        writes: names.map((name) => ({ delete: name })),
+        writes: toDelete.map((name) => ({ delete: name })),
       }),
     },
     CLEANUP_TIMEOUT_MS,
@@ -164,7 +194,7 @@ export async function cleanupCollection(
   if (!batchRes.ok) {
     throw new Error(`Hapus ${collection} lama gagal: HTTP ${batchRes.status}.`);
   }
-  return { deleted: names.length, cutoff, hasMore: names.length >= maxDelete };
+  return { deleted: toDelete.length, cutoff, hasMore };
 }
 
 /* Perbandingan string timing-safe: panjang beda langsung gagal, isi
@@ -189,6 +219,72 @@ function cronUnavailable() {
   );
 }
 
+const HEARTBEAT_TIMEOUT_MS = 10_000;
+
+/* Tulis heartbeat run ini ke cron-runs/cleanup-{tanggal-WIB}
+ * (S8/C-02), mengikuti pola writeCronRunRecord di route recheck:
+ * PATCH dokumen penuh, best-effort, tidak pernah melempar.
+ * Kembalikan true bila tulis berhasil, false bila gagal —
+ * kegagalan hanya dicatat di log, tidak menggagalkan balasan
+ * cron (watcher akan menganggap run ini tidak tercatat).
+ * Token/projectId boleh tidak diisi: diambil dari cache modul
+ * atau env, supaya jalur gagal (yang belum tentu punya token di
+ * tangan) tetap bisa mencoba menulis heartbeat. */
+async function writeCleanupHeartbeat({
+  token,
+  projectId,
+  today,
+  startedAt,
+  status,
+  analytics,
+  retention,
+  error,
+}) {
+  try {
+    const pid = projectId || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const authToken = token || (await getServiceAccountAccessToken());
+    if (!authToken || !pid) {
+      console.warn(
+        "Heartbeat cleanup tidak ditulis: token service account tidak tersedia.",
+      );
+      return false;
+    }
+    const fsBase =
+      `https://firestore.googleapis.com/v1/projects/${pid}` +
+      `/databases/(default)/documents`;
+    const fields = buildCleanupRunRecord(
+      { status, analytics, retention, error },
+      { date: today, startedAt, finishedAt: Date.now() },
+    );
+    const res = await fetchWithTimeout(
+      fetch,
+      `${fsBase}/cron-runs/cleanup-${today}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fields }),
+      },
+      HEARTBEAT_TIMEOUT_MS,
+    );
+    if (!res.ok) {
+      console.warn(
+        `Heartbeat cleanup gagal ditulis: HTTP ${res.status}.`,
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn(
+      "Heartbeat cleanup gagal ditulis:",
+      err && err.message ? err.message : err,
+    );
+    return false;
+  }
+}
+
 export async function GET(request) {
   /* 1. Keamanan cron: fail-closed. Tanpa CRON_SECRET, rute tidak
    * pernah berjalan — menjawab 503, bukan mengizinkan tanpa auth. */
@@ -211,14 +307,24 @@ export async function GET(request) {
     return cronUnavailable();
   }
 
+  const startedAt = Date.now();
+  const today = todayJakarta();
+
   /* 3. Hapus event analitik lama (90 hari). cleanupOldEvents melempar
-   * bila gagal — catat dan jawab 500 supaya kegagalannya terlihat
-   * di log. */
+   * bila gagal — catat, tulis heartbeat gagal, dan jawab 500 supaya
+   * kegagalannya terlihat di log dan di heartbeat. */
   let analytics;
   try {
     analytics = await cleanupOldEvents();
   } catch (err) {
-    console.warn("Cron cleanup gagal:", err && err.message ? err.message : err);
+    const message = err && err.message ? err.message : String(err);
+    console.warn("Cron cleanup gagal:", message);
+    await writeCleanupHeartbeat({
+      today,
+      startedAt,
+      status: "failed",
+      error: message,
+    });
     return NextResponse.json(
       { error: "Pembersihan event gagal." },
       { status: 500 },
@@ -229,7 +335,10 @@ export async function GET(request) {
    * account untuk semua koleksi (sudah di-cache modul saat langkah
    * 3 mengambilnya). Kegagalan satu koleksi menghentikan run —
    * run berikutnya mencoba lagi — supaya kegagalan terlihat, bukan
-   * tertelan diam. */
+   * tertelan diam. Hasil parsial (analitik + koleksi yang sempat
+   * selesai) ikut di balasan 500 (C-08) dan di heartbeat, supaya
+   * bukti run parsial tidak hilang. */
+  const retention = {};
   try {
     const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
     const token = await getServiceAccountAccessToken();
@@ -238,21 +347,44 @@ export async function GET(request) {
         "Token service account tidak tersedia; pembersihan dibatalkan.",
       );
     }
-    const retention = {};
     for (const policy of RETENTION_POLICIES) {
       retention[policy.collection] = await cleanupCollection(policy, {
         token,
         projectId,
       });
     }
-    return NextResponse.json({ ...analytics, retention });
+    /* 5. Heartbeat (S8/C-02): catat ringkasan run ini ke
+     * cron-runs/cleanup-{tanggal} supaya watcher bisa mendeteksi
+     * run yang hilang atau gagal. Best-effort: gagal menulis
+     * hanya dicatat di ringkasan. */
+    const heartbeatWritten = await writeCleanupHeartbeat({
+      token,
+      projectId,
+      today,
+      startedAt,
+      status: "ok",
+      analytics,
+      retention,
+    });
+    if (!heartbeatWritten) {
+      console.warn(
+        "Heartbeat cleanup gagal ditulis: dokumen cron-runs tidak tercatat.",
+      );
+    }
+    return NextResponse.json({ ...analytics, retention, heartbeatWritten });
   } catch (err) {
-    console.warn(
-      "Cron cleanup retensi gagal:",
-      err && err.message ? err.message : err,
-    );
+    const message = err && err.message ? err.message : String(err);
+    console.warn("Cron cleanup retensi gagal:", message);
+    await writeCleanupHeartbeat({
+      today,
+      startedAt,
+      status: "failed",
+      analytics,
+      retention,
+      error: message,
+    });
     return NextResponse.json(
-      { error: "Pembersihan retensi gagal." },
+      { error: "Pembersihan retensi gagal.", analytics, retention },
       { status: 500 },
     );
   }

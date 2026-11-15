@@ -64,6 +64,8 @@ export default async function PengaturanLayout({ children }) {
     downloadMine: t(locale, "settings.downloadMine"),
     downloadHint: t(locale, "settings.downloadHint"),
     downloadJson: t(locale, "settings.downloadJson"),
+    downloadSyncWaiting: t(locale, "settings.downloadSyncWaiting"),
+    downloading: t(locale, "settings.downloading"),
     wipeAll: t(locale, "settings.wipeAll"),
     wipeHint: t(locale, "settings.wipeHint"),
     confirmWipeAll: t(locale, "settings.confirmWipeAll"),

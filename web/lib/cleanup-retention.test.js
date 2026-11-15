@@ -11,7 +11,10 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { generateKeyPairSync } from "node:crypto";
-import { resetServiceAccountTokenCache } from "./analytics-server.js";
+import {
+  resetServiceAccountTokenCache,
+  todayJakarta,
+} from "./analytics-server.js";
 
 /* --- Env dummy (sebelum impor rute) --- */
 process.env.CRON_SECRET = "rahasia-cron-uji-w1g6-bukan-asli";
@@ -51,6 +54,10 @@ const oldDocs = {
 };
 /* Tulis batchWrite yang ditangkap mock. */
 const deletedNames = [];
+/* Tulis heartbeat cron-runs yang ditangkap mock (S8/C-02). */
+const heartbeatWrites = [];
+/* Bila true, tulis heartbeat dijawab 500 (uji best-effort). */
+let heartbeatFail = false;
 
 function mockResponse({ ok, status, body }) {
   return {
@@ -100,6 +107,19 @@ globalThis.fetch = async (url, options = {}) => {
     }
     return mockResponse({ ok: true, status: 200, body: {} });
   }
+  if (u.includes("/cron-runs/")) {
+    let body = null;
+    try {
+      body = JSON.parse(options.body || "{}");
+    } catch {
+      /* Body bukan JSON: abaikan. */
+    }
+    heartbeatWrites.push({ url: u, body });
+    if (heartbeatFail) {
+      return mockResponse({ ok: false, status: 500 });
+    }
+    return mockResponse({ ok: true, status: 200, body: {} });
+  }
   return mockResponse({ ok: false, status: 404 });
 };
 
@@ -110,6 +130,8 @@ function resetModes() {
 beforeEach(() => {
   resetModes();
   deletedNames.length = 0;
+  heartbeatWrites.length = 0;
+  heartbeatFail = false;
   resetServiceAccountTokenCache();
   process.env.CRON_SECRET = "rahasia-cron-uji-w1g6-bukan-asli";
   process.env.FIREBASE_SERVICE_ACCOUNT = SA_JSON;
@@ -236,7 +258,7 @@ describe("cleanupCollection", () => {
       queryBody.structuredQuery.where.fieldFilter.value,
       { stringValue: "2026-08-17T00:00:00.000Z" },
     );
-    assert.equal(queryBody.structuredQuery.limit, 100);
+    assert.equal(queryBody.structuredQuery.limit, 101);
     const batchBody = JSON.parse(calls[1].body);
     assert.deepEqual(batchBody.writes, [
       { delete: "a/b/alerts/1" },
@@ -279,7 +301,21 @@ describe("cleanupCollection", () => {
     assert.equal(calls.length, 1);
   });
 
-  it("hasil sebanyak batas berarti masih ada sisa (hasMore)", async () => {
+  it("satu baris lebih dari batas berarti masih ada sisa (hasMore)", async () => {
+    const rows = Array.from({ length: 4 }, (_, i) => `a/b/alerts/${i}`);
+    const { fetchImpl, calls } = stubFetch({ rows });
+    const res = await cleanupCollection(
+      { ...POLICY, maxDelete: 3 },
+      { fetchImpl, now: NOW, token: "token-uji", projectId: "proyek-uji" },
+    );
+    assert.equal(res.deleted, 3);
+    assert.equal(res.hasMore, true);
+    /* Baris keempat hanya penanda sisa, tidak ikut dihapus. */
+    const batchBody = JSON.parse(calls[1].body);
+    assert.equal(batchBody.writes.length, 3);
+  });
+
+  it("hasil tepat sama dengan batas berarti tidak ada sisa (C-07)", async () => {
     const rows = Array.from({ length: 3 }, (_, i) => `a/b/alerts/${i}`);
     const { fetchImpl } = stubFetch({ rows });
     const res = await cleanupCollection(
@@ -287,7 +323,7 @@ describe("cleanupCollection", () => {
       { fetchImpl, now: NOW, token: "token-uji", projectId: "proyek-uji" },
     );
     assert.equal(res.deleted, 3);
-    assert.equal(res.hasMore, true);
+    assert.equal(res.hasMore, false);
   });
 
   it("query gagal melempar", async () => {
@@ -390,5 +426,69 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     const res = await getCleanup(cleanupRequest());
     assert.equal(res.status, 500);
     assert.equal((await res.json()).error, "Pembersihan retensi gagal.");
+  });
+
+  it("200: heartbeat ditulis ke cron-runs/cleanup-{tanggal WIB} (S8/C-02)", async () => {
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.heartbeatWritten, true);
+    assert.equal(heartbeatWrites.length, 1);
+    const today = todayJakarta();
+    assert.ok(
+      heartbeatWrites[0].url.endsWith(`/cron-runs/cleanup-${today}`),
+      `id dokumen heartbeat salah: ${heartbeatWrites[0].url}`,
+    );
+    const fields = heartbeatWrites[0].body.fields;
+    assert.equal(fields.date.stringValue, today);
+    assert.equal(fields.job.stringValue, "cleanup");
+    assert.equal(fields.status.stringValue, "ok");
+    assert.equal(fields.deleted.integerValue, "3");
+    assert.equal(fields.analyticsDeleted.integerValue, "0");
+    assert.equal(fields.rateLimitsDeleted.integerValue, "2");
+    assert.equal(fields.alertsDeleted.integerValue, "0");
+    assert.equal(fields.changesDeleted.integerValue, "1");
+    assert.equal(fields.error.stringValue, "");
+  });
+
+  it("retensi gagal: 500 menyertakan hasil parsial + heartbeat gagal (C-08)", async () => {
+    modes.alerts = "fail";
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.equal(body.error, "Pembersihan retensi gagal.");
+    /* Hasil analitik yang sudah terhapus tidak hilang dari
+     * balasan, begitu pula koleksi retensi yang sempat selesai. */
+    assert.equal(body.analytics.deleted, 0);
+    assert.equal(body.retention.rate_limits.deleted, 2);
+    assert.equal(heartbeatWrites.length, 1);
+    const fields = heartbeatWrites[0].body.fields;
+    assert.equal(fields.status.stringValue, "failed");
+    assert.equal(fields.analyticsDeleted.integerValue, "0");
+    assert.equal(fields.rateLimitsDeleted.integerValue, "2");
+    assert.equal(typeof fields.error.stringValue, "string");
+    assert.notEqual(fields.error.stringValue, "");
+  });
+
+  it("event gagal: 500 + heartbeat gagal ditulis", async () => {
+    modes.analytics_events = "fail";
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, "Pembersihan event gagal.");
+    assert.equal(heartbeatWrites.length, 1);
+    const fields = heartbeatWrites[0].body.fields;
+    assert.equal(fields.status.stringValue, "failed");
+    assert.equal(fields.deleted.integerValue, "0");
+    assert.notEqual(fields.error.stringValue, "");
+  });
+
+  it("tulis heartbeat gagal: run tetap 200, heartbeatWritten false", async () => {
+    heartbeatFail = true;
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.heartbeatWritten, false);
+    assert.equal(body.retention.rate_limits.deleted, 2);
+    assert.equal(heartbeatWrites.length, 1);
   });
 });

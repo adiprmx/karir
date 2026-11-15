@@ -452,3 +452,55 @@ export function buildCronRunRecord(summary, { date, startedAt, finishedAt }) {
     snapshotWritten: { booleanValue: s.snapshotWritten === true },
   };
 }
+
+/* Ringkasan run cron cleanup untuk heartbeat (S8/C-02): bentuk
+ * field Firestore yang sama polanya dengan buildCronRunRecord,
+ * ditulis route cleanup ke dokumen cron-runs/cleanup-{tanggal-WIB}.
+ * Id dokumen memakai awalan "cleanup-" dengan sengaja: PATCH
+ * tanpa updateMask MENGGANTI seluruh dokumen, jadi bila cleanup
+ * memakai id tanggal yang sama dengan recheck, heartbeat recheck
+ * hari itu (run 01:00 WIB) akan tertimpa heartbeat cleanup
+ * (run Senin 02:00 WIB). Field `job` membedakan keduanya bagi
+ * pembaca koleksi. `status` "ok" bila seluruh run berhasil,
+ * "failed" bila ada langkah yang gagal (analitik atau retensi) —
+ * heartbeat ditulis di kedua jalur supaya watcher bisa membedakan
+ * "cron jalan tapi gagal" dari "cron tidak jalan sama sekali".
+ * `retention` berisi hasil per koleksi (boleh parsial bila run
+ * gagal di tengah); `error` berisi pesan kegagalan (tanpa secret,
+ * tanpa UID — pesan error cleanup tidak memuat keduanya). */
+export function buildCleanupRunRecord(
+  summary,
+  { date, startedAt, finishedAt },
+) {
+  const s = summary || {};
+  const analytics = s.analytics || {};
+  const retention = s.retention || {};
+  const analyticsDeleted = Number(analytics.deleted) || 0;
+  const rateLimitsDeleted = Number(retention.rate_limits?.deleted) || 0;
+  const alertsDeleted = Number(retention.alerts?.deleted) || 0;
+  const changesDeleted = Number(retention.changes?.deleted) || 0;
+  return {
+    date: { stringValue: date },
+    job: { stringValue: "cleanup" },
+    status: { stringValue: s.status === "failed" ? "failed" : "ok" },
+    startedAt: { stringValue: new Date(startedAt).toISOString() },
+    finishedAt: { stringValue: new Date(finishedAt).toISOString() },
+    durationMs: {
+      integerValue: String(Math.max(0, finishedAt - startedAt)),
+    },
+    deleted: {
+      integerValue: String(
+        analyticsDeleted +
+          rateLimitsDeleted +
+          alertsDeleted +
+          changesDeleted,
+      ),
+    },
+    analyticsDeleted: { integerValue: String(analyticsDeleted) },
+    analyticsHasMore: { booleanValue: analytics.hasMore === true },
+    rateLimitsDeleted: { integerValue: String(rateLimitsDeleted) },
+    alertsDeleted: { integerValue: String(alertsDeleted) },
+    changesDeleted: { integerValue: String(changesDeleted) },
+    error: { stringValue: typeof s.error === "string" ? s.error : "" },
+  };
+}

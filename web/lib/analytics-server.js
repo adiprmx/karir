@@ -421,9 +421,11 @@ export async function writeAnalyticsEvent(
  * Memakai token service account (melewati rules; hapus anonim
  * ditutup aturan). Menghapus maks `maxDelete` dokumen tertua per
  * run; kembalikan { deleted, cutoff, hasMore } supaya pemanggil
- * tahu bila masih ada sisa. MELEMPAR bila SA/token/query/hapus
- * gagal — pemanggil cron wajib mencatat kegagalannya, bukan
- * menelan diam (kegagalan diam adalah pelajaran BE-02/ADM-05). */
+ * tahu bila masih ada sisa. Query mengambil satu baris ekstra
+ * (maxDelete + 1) supaya `hasMore` hanya true bila benar-benar
+ * ada sisa (C-07). MELEMPAR bila SA/token/query/hapus gagal —
+ * pemanggil cron wajib mencatat kegagalannya, bukan menelan diam
+ * (kegagalan diam adalah pelajaran BE-02/ADM-05). */
 export async function cleanupOldEvents({
   retentionDays = ANALYTICS_RETENTION_DAYS,
   maxDelete = CLEANUP_MAX_DELETE,
@@ -467,7 +469,7 @@ export async function cleanupOldEvents({
             },
           },
           orderBy: [{ field: { fieldPath: "ts" }, direction: "ASCENDING" }],
-          limit: maxDelete,
+          limit: maxDelete + 1,
         },
       }),
     },
@@ -482,6 +484,10 @@ export async function cleanupOldEvents({
   if (names.length === 0) {
     return { deleted: 0, cutoff, hasMore: false };
   }
+  /* Baris ke-(maxDelete + 1) hanya penanda sisa, bukan untuk
+   * dihapus: hapus maxDelete pertama saja. */
+  const hasMore = names.length > maxDelete;
+  const toDelete = names.slice(0, maxDelete);
   const batchRes = await fetchWithTimeout(
     fetchImpl,
     `${base}/documents:batchWrite`,
@@ -489,12 +495,142 @@ export async function cleanupOldEvents({
       method: "POST",
       headers,
       body: JSON.stringify({
-        writes: names.map((name) => ({ delete: name })),
+        writes: toDelete.map((name) => ({ delete: name })),
       }),
     },
   );
   if (!batchRes.ok) {
     throw new Error(`Hapus event lama gagal: HTTP ${batchRes.status}.`);
   }
-  return { deleted: names.length, cutoff, hasMore: names.length >= maxDelete };
+  return { deleted: toDelete.length, cutoff, hasMore };
+}
+
+/* Batas event per ekspor data pengguna (S8/C-05): cukup untuk
+ * jejak kunjungan satu akun dalam retensi 90 hari, tanpa membuat
+ * satu unduhan menjadi berkas raksasa. */
+export const USER_EXPORT_MAX_EVENTS = 500;
+
+/* Error dengan status HTTP yang disarankan pemanggil (503 bila
+ * konfigurasi/token tidak tersedia, 500 bila Firestore gagal,
+ * 400 bila masukan tidak sah). Pesan tidak pernah memuat UID. */
+function statusError(message, status) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+function firestoreString(fields, key) {
+  const value = fields && fields[key] && fields[key].stringValue;
+  return typeof value === "string" ? value : null;
+}
+
+function firestoreInteger(fields, key) {
+  const raw = fields && fields[key] && fields[key].integerValue;
+  if (raw === undefined || raw === null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isInteger(n) ? n : null;
+}
+
+/* Rapikan satu dokumen analytics_events menjadi event ekspor.
+ * Hanya field yang berguna bagi pemiliknya yang dikembalikan:
+ * hash pengunjung (turunan alamat internet) dan penanda bot
+ * tidak ikut; UID tidak ikut (sudah jelas milik peminta).
+ * Kembalikan null bila dokumen tidak berbentuk benar (tanpa
+ * ts/type/path) — baris seperti itu dilewati, bukan menggagalkan
+ * seluruh ekspor. */
+function parseUserAnalyticsEvent(fields) {
+  const ts = fields && fields.ts && fields.ts.timestampValue;
+  const type = firestoreString(fields, "type");
+  const path = firestoreString(fields, "path");
+  if (typeof ts !== "string" || !ts || !type || path === null) {
+    return null;
+  }
+  const event = { ts, type, path };
+  const q = firestoreString(fields, "q");
+  if (q) event.q = q;
+  const results = firestoreInteger(fields, "results");
+  if (results !== null) event.results = results;
+  const filter = firestoreString(fields, "filter");
+  if (filter) event.filter = filter;
+  const companyNo = firestoreInteger(fields, "companyNo");
+  if (companyNo !== null) event.companyNo = companyNo;
+  const action = firestoreString(fields, "action");
+  if (action) event.action = action;
+  const visitor = firestoreString(fields, "visitor");
+  if (visitor) event.visitor = visitor;
+  return event;
+}
+
+/* Ambil event analitik milik satu UID (S8/C-05), dipakai endpoint
+ * GET /api/akun/export supaya pengguna bisa mengunduh jejak
+ * kunjungannya sendiri. UID HANYA dari ID token yang sudah
+ * diverifikasi pemanggil — fungsi ini tidak pernah menerima UID
+ * dari query/body, dan UID tidak pernah ditulis ke log.
+ * Query hanya menyaring uid (equality, tanpa orderBy) supaya
+ * tidak butuh indeks komposit Firestore; urutan terbaru-dulu
+ * diurutkan di sini. Kembalikan { events, truncated }: truncated
+ * true bila event milik UID itu lebih banyak dari batas.
+ * MELEMPAR bila SA/token/query gagal (err.status 503 untuk
+ * token/konfigurasi, 500 untuk query, 400 untuk UID tidak sah)
+ * — pemanggil memetakan ke balasan HTTP generik. */
+export async function fetchUserAnalyticsEvents(
+  uid,
+  { fetchImpl = fetch, limit = USER_EXPORT_MAX_EVENTS } = {},
+) {
+  if (typeof uid !== "string" || uid.length < 1 || uid.length > MAX_UID) {
+    throw statusError("UID tidak valid.", 400);
+  }
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (!projectId) {
+    throw statusError("NEXT_PUBLIC_FIREBASE_PROJECT_ID belum dipasang.", 503);
+  }
+  const token = await getServiceAccountAccessToken({ fetchImpl });
+  if (!token) {
+    throw statusError("Token service account tidak tersedia.", 503);
+  }
+  const max =
+    Number.isInteger(limit) && limit > 0 ? limit : USER_EXPORT_MAX_EVENTS;
+  const base =
+    `https://firestore.googleapis.com/v1/projects/${projectId}` +
+    `/databases/(default)`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  const queryRes = await fetchWithTimeout(
+    fetchImpl,
+    `${base}/documents:runQuery`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: "analytics_events" }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "uid" },
+              op: "EQUAL",
+              value: { stringValue: uid },
+            },
+          },
+          limit: max + 1,
+        },
+      }),
+    },
+  );
+  if (!queryRes.ok) {
+    throw statusError(`Query event pengguna gagal: HTTP ${queryRes.status}.`, 500);
+  }
+  const rows = await queryRes.json().catch(() => []);
+  const events = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const fields = row && row.document && row.document.fields;
+    if (!fields) continue;
+    const event = parseUserAnalyticsEvent(fields);
+    if (event) events.push(event);
+  }
+  /* Terbaru dulu; satu baris ekstra menandai ada sisa. */
+  events.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
+  const truncated = events.length > max;
+  return { events: events.slice(0, max), truncated };
 }

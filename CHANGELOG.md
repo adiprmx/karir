@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## 2.16.3 — 2026-11-16
+
+Ekspor data akun lengkap + heartbeat cleanup dan pemantauan mingguan (S8).
+
+- Endpoint baru `GET /api/akun/export`: pengguna yang masuk akun bisa mengunduh catatan kunjungannya (maks 500 event; tanpa indeks komposit baru, query equality UID saja). Tombol unduh di /pengaturan menggabungkan event itu ke berkas ekspor. Tanpa token → 401; batas laju 5/menit per IP.
+- Ekspor di perangkat baru tidak lagi parsial diam-diam: unduhan menunggu sinkron akun selesai (maks 15 detik), dan bila sinkron belum selesai, berkas tetap dibuat dengan catatan penjelasan + peringatan di halaman.
+- Halaman /privasi kini menyebut hak mengunduh salinan data (tautan ke /pengaturan); tanggal kebijakan dimajukan ke 16 November 2026.
+- Cron cleanup (Senin 02:00 WIB) kini menulis heartbeat `cron-runs/cleanup-{tanggal}` di akhir run (sukses maupun gagal, dengan hasil parsial) dan memakai `maxDuration = 60`; watcher agent-side memantau heartbeat itu tiap run terhadap Senin terakhir (alarm sekali per Senin bila tidak ada atau gagal; Senin sebelum 23 Nov 2026 tidak diperiksa karena run lama memakai kode tanpa heartbeat).
+- Perbaikan pembersihan: penghitung sisa (`hasMore`) tidak lagi salah lapor saat jumlah tepat di batas, dan balasan gagal retensi kini menyertakan hasil yang sempat selesai.
+- Tes: 1168 total (1091 node:test + 48 pytest + 29 unittest watcher, termasuk 8 test baru logika tanggal Senin dan pemeriksaan cleanup).
+
 ## 2.16.2 — 2026-11-15
 
 Perbaikan footer halaman pendek di HP yang tertutup bilah navigasi bawah.
