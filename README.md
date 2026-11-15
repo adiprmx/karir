@@ -2,7 +2,7 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Daftar ini berisi 639 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 300 perusahaan sedang ada lowongan.</p>
+<p align="center">Daftar ini berisi 639 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 301 perusahaan sedang ada lowongan.</p>
 
 Status tiap perusahaan netral: yang dicatat hanya apakah portalnya sedang ada lowongan, untuk peran apa pun.
 
@@ -26,13 +26,13 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 <tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/150"><img src="https://www.google.com/s2/favicons?domain=www.yamaha-motor.co.id&sz=64" width="48" height="48" alt="Yamaha"><br>Yamaha</a><br>Operator Produksi</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/162"><img src="https://www.google.com/s2/favicons?domain=careers.ey.com&sz=64" width="48" height="48" alt="EY"><br>EY</a><br>Office Boy</td></tr>
 <tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/190"><img src="https://www.google.com/s2/favicons?domain=rotio.id&sz=64" width="48" height="48" alt="Roti O"><br>Roti O</a><br>Pelaksana Gudang</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/200"><img src="https://www.google.com/s2/favicons?domain=richeesefactory.com&sz=64" width="48" height="48" alt="Richeese Factory"><br>Richeese Factory</a><br>Crew Outlet</td></tr>
 <tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/230"><img src="https://www.google.com/s2/favicons?domain=apotek-k24.com&sz=64" width="48" height="48" alt="Apotek K-24"><br>Apotek K-24</a><br>Staff Gudang</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/235"><img src="https://www.google.com/s2/favicons?domain=www.mrdiy.com&sz=64" width="48" height="48" alt="MR DIY Indonesia"><br>MR DIY Indonesia</a><br>Store Crew</td></tr>
-<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/263"><img src="https://www.google.com/s2/favicons?domain=staffinc.co&sz=64" width="48" height="48" alt="Staffinc"><br>Staffinc</a><br>Warehouse Staff</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/299"><img src="assets/logos/angkasa-pura-supports.png" height="48" alt="Angkasa Pura Supports"><br>Angkasa Pura Supports</a><br>Cleaning Service</td></tr>
+<tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/263"><img src="https://www.google.com/s2/favicons?domain=staffinc.co&sz=64" width="48" height="48" alt="Staffinc"><br>Staffinc</a><br>Warehouse Staff</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/299"><img src="assets/logos/angkasa-pura-supports.png" height="48" alt="Angkasa Pura Supports"><br>Angkasa Pura Supports</a><br>Train Attendant</td></tr>
 <tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/330"><img src="https://www.google.com/s2/favicons?domain=fore.coffee&sz=64" width="48" height="48" alt="Fore Coffee"><br>Fore Coffee</a><br>Barista</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/342"><img src="https://www.google.com/s2/favicons?domain=ranchmarket.jobseeker.software&sz=64" width="48" height="48" alt="Ranch Market &amp; Farmers Market"><br>Ranch Market &amp; Farmers Market</a><br>Operational Cashier</td></tr>
 </table>
 
 <h2 align="center">Hasil cek 639 kanal</h2>
 
-300 dari 639 kanal ada lowongan.
+301 dari 639 kanal ada lowongan.
 
 <p align="center">
   <img src="assets/status-bar.svg" alt="Sebaran status 639 perusahaan" width="100%">
@@ -40,10 +40,10 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 
 | Status | Jumlah |
 | --- | --- |
-| Ada lowongan | 300 |
+| Ada lowongan | 301 |
 | Tidak ada lowongan | 160 |
 | Tidak dapat diverifikasi | 122 |
-| Portal tidak bisa dibuka | 57 |
+| Portal tidak bisa dibuka | 56 |
 
 80 perusahaan tidak punya tautan karir. 76 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 4 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: Olive Fried Chicken (204), PT Dwi Indah (315), PT Cintas Sentul Raya (321), PT Best Logistics Service Indonesia (355, BLSI).
 
