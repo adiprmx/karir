@@ -1,9 +1,9 @@
-import { getStatsOrSeed } from "@/lib/companies";
+import { getStatsWithSource } from "@/lib/companies";
 
 /* Data di-render saat request, bukan saat build. */
 export const dynamic = "force-dynamic";
-import { getLocale } from "@/lib/i18n";
-import { CountUp, StatusDot } from "@/app/visual";
+import { getLocale, t } from "@/lib/i18n";
+import { CountUp, Icon, StatusDot } from "@/app/visual";
 import Visited from "@/app/metode/visited";
 import { FraudWarning } from "@/app/fraud-warning";
 
@@ -11,6 +11,14 @@ export const metadata = {
   title: "Metode pengecekan",
   description:
     "Cara daftar Karir dibuat: tiap kanal karir resmi dibuka langsung di browser, lewat navigasi situs resmi perusahaan.",
+  /* SEO-05: blok openGraph; SEO-04: kanonis /metode (W2b). */
+  openGraph: {
+    title: "Metode pengecekan",
+    description:
+      "Cara daftar Karir dibuat: tiap kanal karir resmi dibuka langsung di browser, lewat navigasi situs resmi perusahaan.",
+    url: "/metode",
+  },
+  alternates: { canonical: "/metode" },
 };
 
 const COPY = {
@@ -81,7 +89,12 @@ function numClass(status) {
 }
 
 export default async function Metode() {
-  const [locale, stats] = await Promise.all([getLocale(), getStatsOrSeed()]);
+  const [locale, statsWithSource] = await Promise.all([
+    getLocale(),
+    getStatsWithSource(),
+  ]);
+  /* INFO-12: angka dari data cadangan ditandai ke pengguna. */
+  const { stats, source } = statsWithSource;
 
   return (
     <div className="wrap">
@@ -90,6 +103,13 @@ export default async function Metode() {
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
       </div>
+
+      {source === "seed" && (
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          {t(locale, "common.seedNote")}
+        </p>
+      )}
 
       <section className="dash-section anim-fade-up" aria-label="Yang dicek">
         <p className="section-label">Yang dicek</p>

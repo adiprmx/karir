@@ -6,6 +6,14 @@ export const metadata = {
   title: "Pertanyaan umum",
   description:
     "Jawaban singkat untuk hal yang paling sering ditanyakan soal Karir: cara pakai, gratis atau tidak, cara data dicek, dan cara berkontribusi.",
+  /* SEO-05: blok openGraph; SEO-04: kanonis /faq (W2b). */
+  openGraph: {
+    title: "Pertanyaan umum",
+    description:
+      "Jawaban singkat untuk hal yang paling sering ditanyakan soal Karir: cara pakai, gratis atau tidak, cara data dicek, dan cara berkontribusi.",
+    url: "/faq",
+  },
+  alternates: { canonical: "/faq" },
 };
 
 const COPY = {
@@ -66,6 +74,19 @@ const QA = [
 export default async function Faq() {
   const locale = await getLocale();
 
+  /* SEO-07: schema FAQPage dibangun dari daftar tanya jawab yang
+   * sama dengan yang tampil di halaman, jadi isinya tidak mungkin
+   * berbeda dari yang dilihat pengunjung. */
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: QA.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
+
   return (
     <div className="wrap">
       <div className="page-head anim-fade-up">
@@ -78,6 +99,13 @@ export default async function Faq() {
       </section>
 
       <FraudWarning locale={locale} />
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
     </div>
   );
 }

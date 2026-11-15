@@ -268,6 +268,25 @@ const DICT = {
      * kunci lama tidak diubah. --- */
     "dash.viewOnMap": "Lihat di peta",
     /* --- akhir W1-TRACKER --- */
+    /* --- W2b (SEO + berbagi + penanda seed, Fase 5): hanya kunci baru
+     * di blok ini, nilai kunci lama tidak diubah. --- */
+    "footer.feed": "Umpan RSS",
+    "home.shareKarirTitle": "Bantu temanmu menemukan lowongan yang benar",
+    "home.shareKarirText":
+      "Bagikan Karir ke teman yang sedang mencari kerja. Gratis, tanpa daftar.",
+    "home.shareKarir": "Bagikan Karir",
+    "home.shareKarirMsg":
+      "Karir — lowongan yang dicek, bukan yang dicopas. Cari kanal karir resmi di {url}",
+    "home.shareTargetsMsg":
+      "Lowongan di Karir ({n} perusahaan ada lowongan): {url}",
+    "search.emptyHelp": "Baca cara data dicek di halaman Metode",
+    "search.metaDescription":
+      "Cari kanal karir resmi perusahaan Indonesia berdasarkan domisili, posisi, kategori, kota, dan status. Hasil diurutkan dari yang paling cocok.",
+    "dash.metaDescription":
+      "Angka data Karir: sebaran status kanal, kategori terbanyak, dan perusahaan yang ada lowongan — semua dihitung langsung dari data.",
+    "detail.shortenerNote":
+      "Tautan ini memakai pemendek, jadi tujuan akhirnya tidak terlihat dari tautannya. Periksa dulu bahwa halaman tujuannya memang milik perusahaan ini sebelum mengisi data apa pun.",
+    /* --- akhir W2b --- */
   },
   en: {
     "nav.home": "Home",
@@ -534,6 +553,24 @@ const DICT = {
      * kunci lama tidak diubah. --- */
     "dash.viewOnMap": "View on map",
     /* --- akhir W1-TRACKER --- */
+    /* --- W2b (SEO + sharing + seed marker, Fase 5): new keys only in
+     * this block, existing key values untouched. --- */
+    "footer.feed": "RSS feed",
+    "home.shareKarirTitle": "Help a friend find a real opening",
+    "home.shareKarirText":
+      "Share Karir with a friend who is looking for work. Free, no sign-up.",
+    "home.shareKarir": "Share Karir",
+    "home.shareKarirMsg":
+      "Karir — openings that were checked, not copied. Search official career channels at {url}",
+    "home.shareTargetsMsg": "Openings on Karir ({n} companies with openings): {url}",
+    "search.emptyHelp": "Read how data is checked on the Method page",
+    "search.metaDescription":
+      "Search official career channels of Indonesian companies by location, role, category, city, and status. Results are ranked by best match.",
+    "dash.metaDescription":
+      "Karir data in numbers: channel status breakdown, top categories, and companies with openings — all computed directly from the data.",
+    "detail.shortenerNote":
+      "This link uses a URL shortener, so its final destination is not visible from the link. Check that the destination page really belongs to this company before entering any data.",
+    /* --- akhir W2b --- */
   },
 };
 

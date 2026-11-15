@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCompaniesOrSeed, getStatsOrSeed, getTargetsOrSeed, STATUS_ORDER } from "@/lib/companies";
+import { getCompaniesOrSeed, getStatsWithSource, getTargetsOrSeed, STATUS_ORDER } from "@/lib/companies";
 import { countBy, topEntries } from "@/lib/search";
 import { largestRemainderPercents } from "@/lib/percentages";
 import { getLocale, t } from "@/lib/i18n";
@@ -13,7 +13,19 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata() {
   const locale = await getLocale();
-  return { title: t(locale, "dash.metaTitle") };
+  const description = t(locale, "dash.metaDescription");
+  return {
+    title: t(locale, "dash.metaTitle"),
+    /* SEO-05: deskripsi dan OG unik per halaman. */
+    description,
+    openGraph: {
+      title: t(locale, "dash.title"),
+      description,
+      url: "/dasbor",
+    },
+    /* SEO-04: kanonis /dasbor (pass metadata kanonis, W2b). */
+    alternates: { canonical: "/dasbor" },
+  };
 }
 
 /* Warna per status mengikuti makna: hijau ada lowongan,
@@ -68,12 +80,15 @@ function RecheckList({ title, status, list, locale }) {
 }
 
 export default async function Dasbor() {
-  const [companies, stats, targets, locale] = await Promise.all([
+  const [companies, statsWithSource, targets, locale] = await Promise.all([
     getCompaniesOrSeed(),
-    getStatsOrSeed(),
+    getStatsWithSource(),
     getTargetsOrSeed(),
     getLocale(),
   ]);
+  /* DASH-06: angka dari data cadangan ditandai ke pengguna, bukan
+   * disajikan diam-diam seolah data terbaru. */
+  const { stats, source } = statsWithSource;
   const total = stats.total;
   /* Persentase per status memakai sisa terbesar (DASH-07) supaya
    * jumlahnya tepat 100%; total 0 memberi 0% di semua baris. */
@@ -112,6 +127,13 @@ export default async function Dasbor() {
         <h1>{t(locale, "dash.title")}</h1>
         <p className="lede">{t(locale, "dash.numbersNote", { n: total })}</p>
       </div>
+
+      {source === "seed" && (
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          {t(locale, "common.seedNote")}
+        </p>
+      )}
 
       <DashboardPersonal />
 

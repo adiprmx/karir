@@ -285,6 +285,12 @@ export default function Mulai() {
                     </button>
                   ))}
                 </div>
+                {/* UR-08: titik bantuan di langkah 1 — sebelumnya
+                  * /mulai tanpa tautan bantuan kontekstual apa pun. */}
+                <p className="hint">
+                  Bingung mulai dari mana?{" "}
+                  <Link href="/faq">Lihat pertanyaan umum.</Link>
+                </p>
               </>
             )}
             {step === 2 && (
@@ -338,7 +344,10 @@ export default function Mulai() {
                         <span className="num">{preview.matched}</span> kanal cocok
                       </p>
                       <p className="hint">
-                        {preview.verified} di antaranya lowongan terverifikasi.
+                        {preview.verified} di antaranya lowongan{" "}
+                        {/* TS-04: kata "terverifikasi" menaut ke
+                          * definisinya di halaman Metode. */}
+                        <Link href="/metode">terverifikasi</Link>.
                       </p>
                       {/* ONB-10: tiga teratas akhirnya ditampilkan —
                         * sebelumnya dihitung tetapi tidak pernah

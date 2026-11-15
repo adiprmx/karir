@@ -12,6 +12,19 @@ import { formatDate } from "@/app/components";
  * gagal bila Firestore tidak bisa dijangkau dari mesin build. */
 export const dynamic = "force-dynamic";
 
+/* SEO-04 + MKT-03 + DET-09 (satu pass metadata kanonis, W2b):
+ * canonical ditulis PER HALAMAN, bukan di root layout — canonical
+ * di root akan diwariskan ke semua halaman yang tidak menimpanya
+ * (termasuk /lamaran dan /pengaturan) dan mengklaim "/" sebagai
+ * kanonis mereka. Beranda memakai "/"; halaman lain memakai
+ * jalurnya sendiri; /cari memakai "/cari" polos supaya URL
+ * berparameter tidak menciptakan duplikat. */
+export const metadata = {
+  alternates: { canonical: "/" },
+};
+
+const SITE_URL = "https://karir-adiprmx.vercel.app";
+
 /* Posisi yang dicari pencari kerja lulusan SMK (dari brief produk). */
 const ROLE_NAMES = [
   "Helper Gudang",
@@ -53,17 +66,49 @@ export default async function Beranda() {
   const latestMs = latestDate ? Date.parse(`${latestDate}T00:00:00Z`) : 0;
   const fresh = isFreshData(latestMs);
 
-  const shareText =
-    (locale === "en"
-      ? `Openings on Karir (${targets.length} companies):\n`
-      : `Lowongan di Karir (${targets.length} perusahaan):\n`) +
-    targets
-      .map(
-        (c) =>
-          `- ${c.perusahaan}: https://karir-adiprmx.vercel.app/perusahaan/${c.no}`,
-      )
-      .join("\n");
+  /* MKT-06: "Bagikan daftar lowongan" tidak lagi mengirim cuplikan
+   * puluhan tautan yang basi keesokan hari — yang dikirim satu
+   * tautan ke daftar live (/cari dengan filter "Ada lowongan") plus
+   * jumlah perusahaan saat ini. */
+  const shareText = t(locale, "home.shareTargetsMsg", {
+    n: targets.length,
+    url: `${SITE_URL}/cari?status=${encodeURIComponent("Ada lowongan")}`,
+  });
   const waHref = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+
+  /* MKT-05: ajakan membagikan Karir itu sendiri (bukan daftarnya). */
+  const waShareKarirHref = `https://wa.me/?text=${encodeURIComponent(
+    t(locale, "home.shareKarirMsg", { url: `${SITE_URL}/` }),
+  )}`;
+
+  /* SEO-07 + MKT-11: data terstruktur beranda — Organization dan
+   * WebSite dengan SearchAction supaya mesin pencari tahu cara
+   * mencari di situs ini. */
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: "Karir",
+        url: SITE_URL,
+        logo: `${SITE_URL}/icon.svg`,
+      },
+      {
+        "@type": "WebSite",
+        name: "Karir",
+        url: SITE_URL,
+        inLanguage: "id",
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${SITE_URL}/cari?posisi={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  };
 
   const heroLabels = {
     domisili: t(locale, "home.domisili"),
@@ -169,7 +214,9 @@ export default async function Beranda() {
             <div>
               <p className="kicker ok">
                 <Icon name="check" size={14} />
-                {t(locale, "home.targetsLead")}
+                {/* TS-04: kata "terverifikasi" menaut ke definisinya
+                  * di halaman Metode, bukan sekadar klaim. */}
+                <Link href="/metode">{t(locale, "home.targetsLead")}</Link>
               </p>
               <h2 id="target-h">
                 {t(locale, "home.targetsHeading", { n: targets.length })}
@@ -266,6 +313,38 @@ export default async function Beranda() {
           </p>
         </Reveal>
       </section>
+
+      {/* MKT-05: ajakan membagikan Karir itu sendiri — sebelumnya
+        * beranda hanya punya "Bagikan daftar lowongan". Tautan
+        * WhatsApp (pola yang sama dengan tombol berbagi lain di
+        * situs ini), jadi berfungsi tanpa JavaScript. */}
+      <section className="sec" aria-labelledby="share-h">
+        <Reveal>
+          <h2 id="share-h">{t(locale, "home.shareKarirTitle")}</h2>
+          <p>{t(locale, "home.shareKarirText")}</p>
+          <div className="actions-row no-print">
+            <a
+              className="btn"
+              href={waShareKarirHref}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Icon name="share" size={16} />
+              {t(locale, "home.shareKarir")}
+              {/* AKSES-13: beri tahu pembaca layar bahwa tautan
+                * membuka tab baru (WhatsApp). */}
+              <span className="sr-only"> {t(locale, "common.newTab")}</span>
+            </a>
+          </div>
+        </Reveal>
+      </section>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
     </div>
   );
 }

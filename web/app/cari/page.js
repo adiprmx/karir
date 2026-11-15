@@ -17,7 +17,20 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata() {
   const locale = await getLocale();
-  return { title: t(locale, "search.metaTitle") };
+  const description = t(locale, "search.metaDescription");
+  return {
+    title: t(locale, "search.metaTitle"),
+    /* SEO-05: deskripsi dan OG unik per halaman. */
+    description,
+    openGraph: {
+      title: t(locale, "search.title"),
+      description,
+      url: "/cari",
+    },
+    /* SEO-04: kanonis /cari polos — URL berparameter (domisili,
+     * posisi, filter) adalah duplikat dari halaman ini. */
+    alternates: { canonical: "/cari" },
+  };
 }
 
 export default async function Cari({ searchParams }) {
@@ -54,6 +67,7 @@ export default async function Cari({ searchParams }) {
     apply: t(locale, "search.apply"),
     empty: t(locale, "search.empty"),
     emptyHint: t(locale, "search.emptyHint"),
+    emptyHelp: t(locale, "search.emptyHelp"),
     loading: t(locale, "search.loading"),
     seedNote: t(locale, "common.seedNote"),
     error: t(locale, "search.error"),

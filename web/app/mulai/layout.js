@@ -5,6 +5,8 @@ export const metadata = {
   title: "Mulai",
   description:
     "Tiga langkah menemukan kanal lowongan yang cocok: pilih domisili dan posisi, lalu lihat kanal yang sesuai.",
+  /* SEO-04 + MKT-03 (pass metadata kanonis, W2b). */
+  alternates: { canonical: "/mulai" },
 };
 
 export default function MulaiLayout({ children }) {

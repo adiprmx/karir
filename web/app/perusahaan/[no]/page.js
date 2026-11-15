@@ -7,6 +7,7 @@ import {
   daysSince,
   daysUntil,
   formatDate,
+  isShortenerUrl,
   linkifySegments,
   safeLink,
   splitContacts,
@@ -70,6 +71,15 @@ export async function generateMetadata({ params }) {
       type: "website",
       url: `${SITE_URL}/perusahaan/${company.no}`,
     },
+    /* MKT-02: kartu X memakai judul/deskripsi perusahaan, bukan
+     * judul/deskripsi generik situs dari root layout. */
+    twitter: {
+      card: "summary_large_image",
+      title: company.perusahaan,
+      description,
+    },
+    /* DET-09 + SEO-04 + MKT-03 (satu pass metadata kanonis, W2b). */
+    alternates: { canonical: `/perusahaan/${company.no}` },
   };
 }
 
@@ -85,6 +95,16 @@ export default async function CompanyDetail({ params }) {
   /* Portal yang diketahui tidak bisa dibuka tetap boleh dicoba, tapi
    * tombolnya bukan lagi ajakan utama (DET-05). */
   const portalDead = company.status === "Portal tidak bisa dibuka";
+  /* TS-07: kanal bertautan pemendek mendapat catatan kehati-hatian —
+   * tujuannya tidak terlihat dari tautannya. Pemendek muncul di data
+   * sebagai portal utama (linktr.ee) maupun di kanal lain (bit.ly). */
+  const portalShortened = hasLink && isShortenerUrl(company.link_karir);
+  const channelsShortened = Boolean(
+    company.kontak_lain &&
+      linkifySegments(company.kontak_lain).some(
+        (s) => s.href && isShortenerUrl(s.href),
+      ),
+  );
   const hasChannels = Boolean(
     company.email_hrd || company.wa_hrd || company.kontak_lain,
   );
@@ -126,6 +146,31 @@ export default async function CompanyDetail({ params }) {
         url,
         description,
         inLanguage: locale,
+      },
+      /* SEO-07: BreadcrumbList mengikuti navigasi yang tampil di
+       * halaman (Beranda → Cari → perusahaan ini). */
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Beranda",
+            item: SITE_URL,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Cari",
+            item: `${SITE_URL}/cari`,
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: company.perusahaan,
+            item: url,
+          },
+        ],
       },
     ],
   };
@@ -191,6 +236,12 @@ export default async function CompanyDetail({ params }) {
           <p className="note-line">
             <Icon name="info" size={16} />
             {t(locale, "detail.noLink")}
+          </p>
+        )}
+        {portalShortened && (
+          <p className="note-line">
+            <Icon name="alert" size={16} />
+            {t(locale, "detail.shortenerNote")}
           </p>
         )}
         <DetailActions
@@ -294,6 +345,12 @@ export default async function CompanyDetail({ params }) {
                     newTab={t(locale, "common.newTab")}
                   />
                 </dd>
+                {channelsShortened && (
+                  <p className="note-line">
+                    <Icon name="alert" size={16} />
+                    {t(locale, "detail.shortenerNote")}
+                  </p>
+                )}
               </div>
             )}
           </dl>

@@ -635,3 +635,14 @@ export async function getStats() {
 export async function getStatsOrSeed() {
   return computeStats(await getCompaniesOrSeed());
 }
+
+/* Seperti getStats(), plus asal data ("live" | "seed") — dipakai
+ * halaman Dasbor, Tentang, dan Metode supaya angka dari data
+ * cadangan ditandai ke pengguna (DASH-06, INFO-12). Memakai
+ * resolveCompanies yang sama dengan getCompanies(), jadi tidak ada
+ * baca tambahan bila dipanggil bersamaan dengan pemanggil daftar
+ * lain di halaman yang sama. */
+export async function getStatsWithSource() {
+  const { list, source } = await resolveCompanies();
+  return { stats: computeStats(list), source };
+}

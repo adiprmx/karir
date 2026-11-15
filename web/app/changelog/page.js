@@ -4,6 +4,14 @@ export const metadata = {
   title: "Riwayat perubahan",
   description:
     "Apa yang berubah di tiap versi Karir, dari versi pertama sampai versi full stack.",
+  /* SEO-05: blok openGraph; SEO-04: kanonis /changelog (W2b). */
+  openGraph: {
+    title: "Riwayat perubahan",
+    description:
+      "Apa yang berubah di tiap versi Karir, dari versi pertama sampai versi full stack.",
+    url: "/changelog",
+  },
+  alternates: { canonical: "/changelog" },
 };
 
 const COPY = {

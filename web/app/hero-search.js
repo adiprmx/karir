@@ -244,7 +244,14 @@ export default function HeroSearch({ labels, nos, targetMask, roles }) {
         <p className="viz-cap" aria-live="polite">
           <strong key={caption}>{caption}</strong>
           {ranked && verifiedMatched > 0 && (
-            <> {fill(labels.vizVerified, { n: verifiedMatched })}</>
+            <>
+              {/* TS-04: kata "terverifikasi" menaut ke definisinya
+                * di halaman Metode, bukan sekadar klaim. */}
+              {" "}
+              <Link href="/metode">
+                {fill(labels.vizVerified, { n: verifiedMatched })}
+              </Link>
+            </>
           )}
         </p>
         <ul className="legend">

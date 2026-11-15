@@ -4,6 +4,46 @@ export function safeLink(url) {
   return typeof url === "string" && /^https?:\/\//.test(url);
 }
 
+/* Domain pemendek tautan (TS-07): tujuan akhir tautan seperti ini
+ * tidak terlihat dari tautannya, jadi halaman detail menampilkan
+ * catatan kehati-hatian di samping kanal yang memakainya. Daftar
+ * mencakup host yang muncul di data (bit.ly, linktr.ee, lnkd.in,
+ * t.ly, tinyurl.com, s.id) dan pemendek umum lainnya. */
+const SHORTENER_HOSTS = new Set([
+  "bit.ly",
+  "linktr.ee",
+  "tinyurl.com",
+  "tiny.cc",
+  "s.id",
+  "lnkd.in",
+  "t.ly",
+  "cutt.ly",
+  "shorturl.at",
+  "goo.gl",
+  "is.gd",
+  "rebrand.ly",
+  "ow.ly",
+  "buff.ly",
+  "t.co",
+  "shorte.st",
+]);
+
+/* True bila URL memakai domain pemendek (atau subdomainnya).
+ * URL yang tidak bisa diurai bukan pemendek. */
+export function isShortenerUrl(url) {
+  let host = "";
+  try {
+    host = new URL(String(url)).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (SHORTENER_HOSTS.has(host)) return true;
+  for (const h of SHORTENER_HOSTS) {
+    if (host.endsWith(`.${h}`)) return true;
+  }
+  return false;
+}
+
 /* Penjelasan satu kalimat per status, diambil dari makna yang sudah
  * ditulis di FAQ dan halaman Tentang, bukan klaim baru. */
 export const STATUS_EXPLAIN = {

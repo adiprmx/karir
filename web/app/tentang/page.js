@@ -1,6 +1,6 @@
-import { getStatsOrSeed } from "@/lib/companies";
-import { getLocale } from "@/lib/i18n";
-import { CountUp } from "@/app/visual";
+import { getStatsWithSource } from "@/lib/companies";
+import { getLocale, t } from "@/lib/i18n";
+import { CountUp, Icon } from "@/app/visual";
 import { formatDate } from "@/app/components";
 
 /* Data di-render saat request, bukan saat build. */
@@ -10,6 +10,14 @@ export const metadata = {
   title: "Tentang",
   description:
     "Karir adalah daftar kanal karir resmi perusahaan Indonesia yang dicek langsung di browser. Masuk akun itu pilihan, bukan kewajiban.",
+  /* SEO-05: blok openGraph; SEO-04: kanonis /tentang (W2b). */
+  openGraph: {
+    title: "Tentang",
+    description:
+      "Karir adalah daftar kanal karir resmi perusahaan Indonesia yang dicek langsung di browser. Masuk akun itu pilihan, bukan kewajiban.",
+    url: "/tentang",
+  },
+  alternates: { canonical: "/tentang" },
 };
 
 const COPY = {
@@ -22,7 +30,8 @@ const COPY = {
 
 export default async function Tentang() {
   const locale = await getLocale();
-  const stats = await getStatsOrSeed();
+  /* INFO-12: angka dari data cadangan ditandai ke pengguna. */
+  const { stats, source } = await getStatsWithSource();
   const total = stats.total;
   const targets = stats.byStatus["Ada lowongan"] || 0;
   /* Kesegaran data dihitung dari data, bukan tanggal hardcode (S6):
@@ -46,6 +55,13 @@ export default async function Tentang() {
         <h1>{COPY.title[locale]}</h1>
         <p className="lede">{COPY.lede[locale]}</p>
       </div>
+
+      {source === "seed" && (
+        <p className="note-line">
+          <Icon name="info" size={16} />
+          {t(locale, "common.seedNote")}
+        </p>
+      )}
 
       <section className="dash-section anim-fade-up" aria-label="Angka data">
         <p className="section-label">Angka data</p>

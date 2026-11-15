@@ -10,6 +10,14 @@ export const metadata = {
   title: "Peta lowongan",
   description:
     "Lokasi perusahaan yang ada lowongan, dipetakan berdasarkan kota.",
+  /* SEO-05: blok openGraph; SEO-04: kanonis /peta (W2b). */
+  openGraph: {
+    title: "Peta lowongan",
+    description:
+      "Lokasi perusahaan yang ada lowongan, dipetakan berdasarkan kota.",
+    url: "/peta",
+  },
+  alternates: { canonical: "/peta" },
 };
 
 export default async function Peta() {

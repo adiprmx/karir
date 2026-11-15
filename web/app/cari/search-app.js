@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { useCompanyIndex, rank } from "@/app/company-index";
 import { matchCity } from "@/lib/cities";
 import { SEARCH_PAGE_SIZE as PAGE_SIZE } from "@/lib/search";
@@ -548,6 +549,12 @@ export default function SearchApp({ initial, initialResults, categories, statuse
                   <div className="state">
                     <strong>{labels.empty}</strong>
                     <p>{labels.emptyHint}</p>
+                    {/* UR-08: titik bantuan di state kosong — pengunjung
+                      * yang tidak menemukan apa pun diarahkan ke cara
+                      * data dicek, bukan ditinggal tanpa jalan keluar. */}
+                    <p className="more">
+                      <Link href="/metode">{labels.emptyHelp}</Link>
+                    </p>
                     <button type="button" className="btn" onClick={reset}>
                       {labels.reset}
                     </button>

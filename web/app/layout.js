@@ -96,6 +96,17 @@ export default async function RootLayout({ children }) {
     <html lang={locale} className={jakarta.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/* MKT-10: umpan RSS perubahan lowongan — pembaca umpan
+          * menemukannya lewat tautan ini. Ditulis langsung sebagai
+          * tag link (bukan lewat metadata alternates) supaya selalu
+          * ada di semua halaman tanpa bergantung pada semantik
+          * gabung metadata antar-segmen. */}
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title="Karir — Perubahan lowongan"
+          href="/feed.xml"
+        />
         <noscript>
           <style>{`.reveal{opacity:1!important;transform:none!important}`}</style>
         </noscript>
@@ -135,6 +146,7 @@ export default async function RootLayout({ children }) {
               <Link href="/pengaturan">{t(locale, "footer.settings")}</Link>
               <Link href="/privasi">{t(locale, "footer.privacyPolicy")}</Link>
               <Link href="/syarat">{t(locale, "footer.terms")}</Link>
+              <Link href="/feed.xml">{t(locale, "footer.feed")}</Link>
               <a
                 href="https://github.com/adiprmx/karir"
                 target="_blank"
