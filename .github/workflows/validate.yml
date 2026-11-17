@@ -60,13 +60,14 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: python3 scripts/check-consistency.py --live
       # Cek jumlah seed vs live (P-01, mendukung BE2-03): satu panggilan
-      # /api/stats, murah kuota. Mode laporan — hanya mencetak selisih,
-      # tidak menggagalkan CI. Ambang penegakan (--max-drift) ditetapkan
-      # di P-02 sesudah drift ditutup; sampai saat itu, selisih yang
-      # sudah diketahui tidak boleh membuat CI merah.
-      # always(): laporan ini harus jalan walau langkah konsistensi
-      # di atas gagal (drift live yang sudah diketahui) — kalau tidak,
-      # laporan drift justru tidak pernah terbit saat paling dibutuhkan.
-      - name: Check seed count vs live count (report mode)
+      # /api/stats, murah kuota. Ambang penegakan ditetapkan P-02:
+      # --max-drift 0 — jumlah seed WAJIB sama persis dengan total live
+      # (drift penutup: keduanya 685). Hunting menambah perusahaan lewat
+      # impor Firestore + commit CSV/seed yang sama, jadi di luar jendela
+      # impor-komitmen (tanpa CI yang jalan) keduanya selalu sama.
+      # always(): cek ini harus jalan walau langkah konsistensi di atas
+      # gagal (drift live yang sudah diketahui) — kalau tidak, laporan
+      # drift justru tidak pernah terbit saat paling dibutuhkan.
+      - name: Check seed count vs live count
         if: ${{ always() && github.ref == 'refs/heads/main' }}
-        run: python3 scripts/check-seed-live.py
+        run: python3 scripts/check-seed-live.py --max-drift 0
