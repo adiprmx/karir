@@ -9,6 +9,7 @@ on:
       - "scripts/validate.py"
       - "scripts/test_validate.py"
       - "scripts/check-consistency.py"
+      - "scripts/check-seed-live.py"
   pull_request:
     paths:
       - "data/daftar-link-karir.csv"
@@ -17,6 +18,7 @@ on:
       - "scripts/validate.py"
       - "scripts/test_validate.py"
       - "scripts/check-consistency.py"
+      - "scripts/check-seed-live.py"
 
 jobs:
   validate:

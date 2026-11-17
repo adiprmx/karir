@@ -45,13 +45,24 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 def fetch_json(url):
     """GET JSON lewat curl; kembalikan dict atau None bila gagal total."""
     for attempt in range(1, 4):
+        # Penanda " HTTP_CODE=" (tanpa \n, tanpa @ di depan):
+        # - \n dalam format -w diubah curl menjadi baris baru
+        #   sungguhan, sementara string Python "\\n" adalah
+        #   backslash + n literal — ketidakcocokan itu membuat
+        #   parse SELALU gagal (bug commit P-01 pertama, ditemukan
+        #   18 Nov 2026 saat menguji melawan produksi).
+        # - nilai -w yang diawali @ dibaca curl sebagai NAMA FILE
+        #   format (bukan format literal) — penanda @@ juga gagal.
+        # " HTTP_CODE=" tidak punya ambiguitas di kedua sisi, dan
+        # rpartition mengambil kemunculan TERAKHIR, jadi isi JSON
+        # tidak bisa mengacaukannya.
         cmd = [
             "curl", "-sS", "--max-time", "30", url,
             "-H", f"User-Agent: {UA}",
-            "-w", "\\nHTTP:%{http_code}",
+            "-w", " HTTP_CODE=%{http_code}",
         ]
         out = subprocess.run(cmd, capture_output=True, text=True).stdout
-        text, _, http = out.rpartition("\\nHTTP:")
+        text, _, http = out.rpartition("HTTP_CODE=")
         if http.strip() == "200":
             try:
                 return json.loads(text)
