@@ -183,6 +183,20 @@ Melawan pratinjau Vercel: `E2E_BASE_URL=https://<pratinjau> npm run
 test:e2e`, atau lewat workflow `e2e-preview.yml` (lebih andal dari
 mesin yang egress-nya terbatas — runner CI punya internet penuh).
 
+Catatan VAPID di pratinjau (ditemukan P-01, 18 Nov 2026):
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY` di Vercel hanya ditargetkan ke
+Production, jadi deployment pratinjau TIDAK punya kunci VAPID dan
+`subscribePush` selalu mengembalikan "gagal" di sana — perilaku
+benar aplikasi, bukan bug. Langkah push di
+`e2e/alur-utama.spec.js` karena itu menerima dua hasil pada
+pratinjau (aktif, atau toast gagal + nol pemanggilan subscribe),
+sementara pada localhost dan produksi hasil aktif WAJIB. Bukti
+penuh alur push selalu datang dari run App CI (build dengan kunci
+VAPID sekali pakai). Bila target env VAPID kelak diperluas ke
+Preview (keputusan owner, lewat dashboard Vercel — bukan lewat
+repo ini), tes otomatis menguji jalur aktif di pratinjau tanpa
+perubahan.
+
 Catatan race yang ditemukan P-01 (untuk P-14, bukan diperbaiki di
 sini): `/cari` menjalankan `history.replaceState` (sinkronisasi URL,
 debounce 600 mdtk sesudah mount — `app/cari/search-app.js`) dan

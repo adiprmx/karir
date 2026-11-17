@@ -156,16 +156,71 @@ test("alur utama: cari, daftar, lacak, push, ekspor", async ({ page }) => {
     await page
       .getByRole("button", { name: "Aktifkan notifikasi" })
       .click();
-    await expect(
-      page.getByText("Notifikasi aktif di browser ini."),
-    ).toBeVisible();
-    /* Klien benar-benar memanggil endpoint subscribe dengan
-     * langganan palsu dan token akun. */
-    expect(push.calls.length).toBe(1);
-    expect(push.calls[0].body.subscription.endpoint).toBe(
-      FAKE_SUBSCRIPTION.endpoint,
+    /* Deployment pratinjau Vercel TIDAK punya kunci publik VAPID:
+     * env NEXT_PUBLIC_VAPID_PUBLIC_KEY di Vercel hanya ditargetkan
+     * ke Production (terverifikasi via API Vercel 18 Nov 2026;
+     * kunci privatnya juga hanya Production). Tanpa kunci itu,
+     * subscribePush mengembalikan "gagal" sebelum memanggil
+     * PushManager, dan UI menampilkan toast gagal — perilaku benar
+     * aplikasi pada deployment tanpa kunci, bukan bug. Karena itu
+     * langkah ini menerima dua hasil PADA PRATINJAU: aktif (bila
+     * kunci ada) atau toast gagal (bila kunci tidak ada). Pada
+     * localhost dan produksi — yang kuncinya selalu ada (CI
+     * men-generate kunci sekali pakai untuk build; produksi
+     * memakai kunci Vercel) — hasil aktif WAJIB; toast gagal di
+     * sana berarti bug nyata dan tes gagal. Bukti penuh alur push
+     * (langganan + pemanggilan subscribe) selalu diuji di run App
+     * CI; run pratinjau membuktikan tombol dan penanganan
+     * errornya. Bila owner kelak memperluas target env VAPID ke
+     * Preview, langkah ini otomatis menguji jalur aktif di
+     * pratinjau tanpa perubahan tes. */
+    const host = new URL(page.url()).hostname;
+    const isPreview =
+      host.endsWith(".vercel.app") && host !== "karir-adiprmx.vercel.app";
+    const success = page.getByText("Notifikasi aktif di browser ini.");
+    const failed = page.getByText(
+      "Notifikasi belum bisa diaktifkan. Coba lagi sebentar lagi.",
     );
-    expect(push.calls[0].authorization.startsWith("Bearer ")).toBe(true);
+    /* Tunggu salah satu hasil muncul (toast gagal bertahan 3,6
+     * detik; polling toPass berjalan jauh lebih cepat dari itu). */
+    let outcome = "tidak-ada-hasil";
+    try {
+      await expect(async () => {
+        const ok = await success.isVisible().catch(() => false);
+        const bad = await failed.isVisible().catch(() => false);
+        expect(ok || bad).toBe(true);
+      }).toPass({ timeout: 15_000 });
+      outcome = (await success.isVisible().catch(() => false))
+        ? "aktif"
+        : "gagal";
+    } catch {
+      outcome = "tidak-ada-hasil";
+    }
+    if (outcome === "aktif") {
+      /* Klien benar-benar memanggil endpoint subscribe dengan
+       * langganan palsu dan token akun. */
+      expect(push.calls.length).toBe(1);
+      expect(push.calls[0].body.subscription.endpoint).toBe(
+        FAKE_SUBSCRIPTION.endpoint,
+      );
+      expect(push.calls[0].authorization.startsWith("Bearer ")).toBe(true);
+      return;
+    }
+    if (outcome === "gagal" && isPreview) {
+      /* Pratinjau tanpa kunci VAPID: tidak ada pemanggilan
+       * subscribe yang boleh terjadi (subscribePush berhenti
+       * sebelum memanggil PushManager). */
+      expect(push.calls.length).toBe(0);
+      test.info().annotations.push({
+        type: "pratinjau-tanpa-vapid",
+        description:
+          "Deployment pratinjau tidak punya kunci VAPID (env Vercel hanya Production); langkah push membuktikan penanganan gagal, bukan aktivasi.",
+      });
+      return;
+    }
+    throw new Error(
+      `Langkah push berakhir "${outcome}" pada host ${host} — diharapkan aktif.`,
+    );
   });
 
   await test.step("ekspor data memuat pelacak dan akun", async () => {
