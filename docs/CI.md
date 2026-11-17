@@ -36,10 +36,17 @@ Enam workflow di `.github/workflows/`:
   (Playwright, `npm run test:e2e`). Branch `fase2/**` ikut
   menjalankan CI penuh supaya paket Fase 2 terbukti hijau sebelum
   push ke main, bukan sesudahnya.
-- `e2e-preview.yml` — manual (`workflow_dispatch`): menjalankan
-  suite E2E yang sama melawan URL deployment pratinjau Vercel
-  (input `base_url`), tanpa server lokal. Dipakai tiap paket Fase 2
-  untuk membuktikan pratinjaunya lolos E2E sebelum merge.
+- `e2e-preview.yml` — menjalankan suite E2E yang sama melawan URL
+  deployment pratinjau Vercel, tanpa server lokal. Otomatis di
+  tiap push ke `fase2/**` (menunggu status "Vercel" pada commit
+  sampai sukses, lalu menguji URL alias branch
+  `karir-git-<branch>-adiprmx.vercel.app`); manual juga bisa lewat
+  `workflow_dispatch` dengan input `base_url` (URL deployment
+  mana pun). Pemicu push ada karena GitHub tidak bisa men-dispatch
+  workflow yang belum ada di branch default (API 404) — tanpa
+  pemicu push, pratinjau paket tidak bisa dibuktikan sebelum merge.
+  Dipakai tiap paket Fase 2 untuk membuktikan pratinjaunya lolos
+  E2E sebelum merge.
 - `validate.yml` — jalan bila data atau skrip validasi berubah:
   `scripts/validate.py` dan `scripts/check-consistency.py` (CSV vs
   seed, tanpa live). Cek live (`--live`) hanya di `main`, karena

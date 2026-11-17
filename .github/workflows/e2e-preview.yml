@@ -1,12 +1,24 @@
 # E2E melawan deployment pratinjau Vercel (P-01, kriteria 6).
-# Dijalankan manual (workflow_dispatch) dengan URL pratinjau sebagai
-# input, sesudah Vercel selesai men-deploy branch paket. Suite yang
-# sama dengan langkah E2E di app.yml, tetapi melawan URL luar tanpa
-# menjalankan server lokal (E2E_BASE_URL di playwright.config.mjs).
-# Mock Auth/Firestore/push di dalam tes berlaku juga di sini, jadi
-# tidak ada akun, langganan, atau data yang dibuat di produksi.
-# Cara pakai: Actions > E2E preview > Run workflow > pilih branch
-# paket > isi base_url dengan URL pratinjau Vercel.
+# Suite yang sama dengan langkah E2E di app.yml, tetapi melawan URL
+# pratinjau tanpa menjalankan server lokal (E2E_BASE_URL di
+# playwright.config.mjs). Mock Auth/Firestore/push di dalam tes
+# berlaku juga di sini, jadi tidak ada akun, langganan, atau data
+# yang dibuat di produksi.
+#
+# Dua pemicu:
+# - push ke branch fase2/** — otomatis: menunggu status "Vercel"
+#   pada commit sampai sukses, lalu menguji URL alias branch
+#   (https://karir-git-<branch>-adiprmx.vercel.app, "/" menjadi "-").
+#   Pemicu ini ada karena GitHub TIDAK BISA men-dispatch workflow
+#   yang belum ada di branch default (API mengembalikan 404) —
+#   tanpa pemicu push, kriteria 6 tidak bisa dibuktikan sebelum
+#   merge ke main.
+# - workflow_dispatch manual dengan input base_url (URL deployment
+#   pratinjau mana pun), untuk pengujian ad-hoc sesudah workflow
+#   ini ada di main. Input dilewatkan lewat env, TIDAK
+#   diinterpolasi ke skrip shell (anti script injection).
+# Push baru ke branch yang sama membatalkan run yang masih jalan
+# (concurrency), supaya E2E selalu menguji deployment terbaru.
 name: E2E preview
 
 on:
@@ -16,6 +28,12 @@ on:
         description: "URL deployment pratinjau Vercel yang diuji"
         required: true
         type: string
+  push:
+    branches: ["fase2/**"]
+
+concurrency:
+  group: e2e-preview-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   e2e-preview:
@@ -27,6 +45,42 @@ jobs:
           node-version: "24.x"
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - name: Tentukan URL pratinjau
+        env:
+          INPUT_BASE_URL: ${{ inputs.base_url }}
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -n "$INPUT_BASE_URL" ]; then
+            echo "E2E_BASE_URL=$INPUT_BASE_URL" >> "$GITHUB_ENV"
+            echo "URL pratinjau dari input dispatch."
+            exit 0
+          fi
+          # Tunggu deployment Vercel untuk commit ini selesai
+          # (status "Vercel" = success), maks 10 menit.
+          STATE="belum-ada"
+          for i in $(seq 1 40); do
+            STATE=$(curl -s --max-time 20 -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/$REPO/commits/$SHA/status" \
+              | python3 -c "import json,sys; d=json.load(sys.stdin); print(next((s['state'] for s in d.get('statuses',[]) if s.get('context')=='Vercel'), 'belum-ada'))" 2>/dev/null \
+              || echo "belum-ada")
+            echo "Status Vercel: $STATE (cek ke-$i dari 40)"
+            if [ "$STATE" = "success" ]; then break; fi
+            if [ "$STATE" = "failure" ] || [ "$STATE" = "error" ]; then
+              echo "Deployment Vercel gagal — E2E pratinjau tidak bisa jalan." >&2
+              exit 1
+            fi
+            sleep 15
+          done
+          if [ "$STATE" != "success" ]; then
+            echo "Timeout menunggu deployment Vercel (10 menit)." >&2
+            exit 1
+          fi
+          ALIAS=$(printf '%s' "$REF_NAME" | tr '[:upper:]/' '[:lower:]-')
+          echo "E2E_BASE_URL=https://karir-git-$ALIAS-adiprmx.vercel.app" >> "$GITHUB_ENV"
+          echo "URL pratinjau: https://karir-git-$ALIAS-adiprmx.vercel.app"
       - name: Install
         working-directory: web
         run: npm ci
@@ -35,8 +89,6 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: E2E against preview
         working-directory: web
-        env:
-          E2E_BASE_URL: ${{ inputs.base_url }}
         run: npm run test:e2e
       - name: Upload E2E artifacts on failure
         if: failure()
