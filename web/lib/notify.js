@@ -486,6 +486,10 @@ export function buildCleanupRunRecord(
   const rateLimitsDeleted = Number(retention.rate_limits?.deleted) || 0;
   const alertsDeleted = Number(retention.alerts?.deleted) || 0;
   const changesDeleted = Number(retention.changes?.deleted) || 0;
+  /* P-03: tiga koleksi retensi baru (nilai interim, 18 Nov 2026). */
+  const reportsDeleted = Number(retention.reports?.deleted) || 0;
+  const auditLogsDeleted = Number(retention.audit_logs?.deleted) || 0;
+  const cronRunsDeleted = Number(retention["cron-runs"]?.deleted) || 0;
   return {
     date: { stringValue: date },
     job: { stringValue: "cleanup" },
@@ -500,7 +504,10 @@ export function buildCleanupRunRecord(
         analyticsDeleted +
           rateLimitsDeleted +
           alertsDeleted +
-          changesDeleted,
+          changesDeleted +
+          reportsDeleted +
+          auditLogsDeleted +
+          cronRunsDeleted,
       ),
     },
     analyticsDeleted: { integerValue: String(analyticsDeleted) },
@@ -508,6 +515,9 @@ export function buildCleanupRunRecord(
     rateLimitsDeleted: { integerValue: String(rateLimitsDeleted) },
     alertsDeleted: { integerValue: String(alertsDeleted) },
     changesDeleted: { integerValue: String(changesDeleted) },
+    reportsDeleted: { integerValue: String(reportsDeleted) },
+    auditLogsDeleted: { integerValue: String(auditLogsDeleted) },
+    cronRunsDeleted: { integerValue: String(cronRunsDeleted) },
     error: { stringValue: typeof s.error === "string" ? s.error : "" },
   };
 }

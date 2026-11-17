@@ -5,10 +5,15 @@
  * Koleksi yang dicadangkan (semua koleksi tingkat atas di
  * firestore.rules, ditambah grup subkoleksi items): companies,
  * alerts, meta, rate_limits, audit_logs, reports, changes,
- * user_profiles, analytics_events, dan items pelacak pengguna
+ * user_profiles, analytics_events, cron-runs, push_subscriptions,
+ * dan items pelacak pengguna
  * (user_trackers/{uid}/items — dokumen induk user_trackers hanya
  * wadah, datanya ada di subkoleksi items, jadi yang diekspor adalah
  * grup koleksi items lewat runQuery, bukan induknya).
+ * `cron-runs` dan `push_subscriptions` ditambahkan pada P-03
+ * (menutup celah D2): langganan push tidak dapat dibangun ulang
+ * dari sumber lain bila hilang, dan heartbeat cron adalah jejak
+ * diagnosis masalah berulang.
  *
  * Autentikasi: service account dari env FIREBASE_SERVICE_ACCOUNT
  * (string JSON yang sama dengan yang dipakai route server), ditukar
@@ -26,9 +31,10 @@
  * Dokumen disimpan dalam format mentah REST Firestore (name +
  * fields + stempel waktu), bukan hasil decode — format mentah bisa
  * ditulis kembali apa adanya lewat REST saat pemulihan, dan tidak
- * ada informasi yang hilang dalam konversi. Pemulihan (restore)
- * belum otomatis: dokumen ditulis kembali per koleksi lewat
- * endpoint create/patch REST dengan token yang sama.
+ * ada informasi yang hilang dalam konversi. Pemulihan drill
+ * otomatis: scripts/restore-firestore.mjs (ke koleksi uji
+ * restore_drill_*, dengan verifikasi terhadap manifest); pemulihan
+ * ke produksi mengikuti runbook docs/PEMULIHAN.md Skenario 6.
  *
  * Cadangan berisi data yang terhubung ke pengguna (audit_logs,
  * reports, user_profiles, pelacak) — JANGAN di-commit ke repo.
@@ -56,7 +62,9 @@ export const COLLECTIONS = [
   "audit_logs",
   "changes",
   "companies",
+  "cron-runs",
   "meta",
+  "push_subscriptions",
   "rate_limits",
   "reports",
   "user_profiles",

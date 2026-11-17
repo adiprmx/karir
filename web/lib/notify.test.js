@@ -599,6 +599,9 @@ describe("buildCleanupRunRecord (S8/C-02)", () => {
           rate_limits: { deleted: 3, hasMore: false },
           alerts: { deleted: 0, hasMore: false },
           changes: { deleted: 1, hasMore: true },
+          reports: { deleted: 2, hasMore: false },
+          audit_logs: { deleted: 0, hasMore: false },
+          "cron-runs": { deleted: 4, hasMore: false },
         },
       },
       {
@@ -611,12 +614,15 @@ describe("buildCleanupRunRecord (S8/C-02)", () => {
     assert.equal(record.job.stringValue, "cleanup");
     assert.equal(record.status.stringValue, "ok");
     assert.equal(record.durationMs.integerValue, "4000");
-    assert.equal(record.deleted.integerValue, "16");
+    assert.equal(record.deleted.integerValue, "22");
     assert.equal(record.analyticsDeleted.integerValue, "12");
     assert.equal(record.analyticsHasMore.booleanValue, false);
     assert.equal(record.rateLimitsDeleted.integerValue, "3");
     assert.equal(record.alertsDeleted.integerValue, "0");
     assert.equal(record.changesDeleted.integerValue, "1");
+    assert.equal(record.reportsDeleted.integerValue, "2");
+    assert.equal(record.auditLogsDeleted.integerValue, "0");
+    assert.equal(record.cronRunsDeleted.integerValue, "4");
     assert.equal(record.error.stringValue, "");
   });
 
@@ -642,6 +648,9 @@ describe("buildCleanupRunRecord (S8/C-02)", () => {
     assert.equal(record.rateLimitsDeleted.integerValue, "2");
     assert.equal(record.alertsDeleted.integerValue, "0");
     assert.equal(record.changesDeleted.integerValue, "0");
+    assert.equal(record.reportsDeleted.integerValue, "0");
+    assert.equal(record.auditLogsDeleted.integerValue, "0");
+    assert.equal(record.cronRunsDeleted.integerValue, "0");
     assert.equal(record.error.stringValue, "Query alerts lama gagal: HTTP 500.");
   });
 

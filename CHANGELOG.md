@@ -2,6 +2,18 @@
 
 Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-MM-DD`.
 
+## Belum dirilis
+
+Cadangan & pemulihan (P-03, Fase 2): semua koleksi Firestore tercakup cadangan, restore drill otomatis, retensi tiga koleksi baru, arsip changes bulanan, skrip impor/write-back berversi, dan ekspor Auth bulanan terenkripsi.
+
+- Cadangan Firestore kini mencakup `cron-runs` dan `push_subscriptions` (menutup celah D2); workflow backup melaporkan ukuran artifact terhadap batas 500 MB dengan peringatan di atas 70% (D5).
+- Skrip drill restore baru `web/scripts/restore-firestore.mjs`: memulihkan cadangan ke koleksi uji `restore_drill_*` (tidak pernah menulis ke produksi), memverifikasi hitungan terhadap manifest + bentuk dokumen push_subscriptions, dan membersihkan koleksi uji sesudah drill. Runbook pemulihan lengkap di `docs/PEMULIHAN.md` (Skenario 5–7).
+- Retensi baru di cron cleanup: `reports` 180 hari, `audit_logs` 365 hari, `cron-runs` 90 hari (nilai INTERIM ditetapkan koordinator 18 Nov 2026, menunggu konfirmasi pemilik sebelum P-09); heartbeat cleanup mencatat hitungan hapus ketiga koleksi. Anggaran hapus per run naik dari 600 menjadi 900 — tetap jauh di bawah batas 20.000/hari.
+- Arsip bulanan `changes` (D4): workflow baru `archive-changes.yml` mengarsipkan dokumen berumur >150 hari ke `data/archives/` tiap tanggal 1, sebelum cleanup menghapus dokumen berumur >180 hari.
+- Skrip impor kanonis, write-back, dan token service account kini berversi di `scripts/` (menutup T11/DX-08): jalur secret lewat environment variable, tanpa nilai default yang mengarah ke mesin tertentu; dibuktikan dengan salinan bersih yang menjalankan `--help`/dry-run.
+- Ekspor Firebase Auth bulanan terenkripsi (D6): skrip baru `web/scripts/export-auth.mjs` (tanpa hash kata sandi) + workflow `export-auth.yml` (enkripsi gpg AES-256, passphrase dari secret `AUTH_EXPORT_PASSPHRASE`; hanya berkas .gpg yang menjadi artifact).
+- Watcher agent-side kini memantau kegagalan `backup.yml` (jendela 8 hari, karena cadangan hanya jalan mingguan) selain write-back dan validate.
+
 ## 2.17.0 — 2026-11-16
 
 Notifikasi web push (T10, S8): pelanggan yang masuk akun bisa mengaktifkan pemberitahuan lowongan baru langsung di perangkatnya.

@@ -12,6 +12,10 @@ node_modules/
 # Cadangan Firestore lokal (web/scripts/backup-firestore.mjs):
 # berisi data yang terhubung ke pengguna, tidak boleh di-commit.
 web/backups/
+# Ekspor Auth lokal (web/scripts/export-auth.mjs): berisi daftar
+# akun (UID + email) — TIDAK PERNAH di-commit; hanya berkas .gpg
+# yang diunggah sebagai artifact workflow.
+web/auth-exports/
 # Artefak pengujian P-01: laporan cakupan node:test (NODE_V8_COVERAGE),
 # hasil Playwright (trace/screenshot/video), dan laporan HTML Playwright.
 web/coverage/

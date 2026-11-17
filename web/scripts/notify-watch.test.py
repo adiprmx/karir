@@ -15,7 +15,7 @@ import os
 import sys
 import unittest
 from contextlib import redirect_stdout
-from datetime import datetime
+from datetime import datetime, timezone
 
 WATCHER_PATH = "/home/hatch/workspace/.claude-v280/notify_watch.py"
 
@@ -42,6 +42,7 @@ class TestNotifyWatch(unittest.TestCase):
             "marker_exists": self.w.marker_exists,
             "write_marker": self.w.write_marker,
             "ensure_token": self.w.ensure_token,
+            "gh_api_get": self.w.gh_api_get,
         }
 
     def tearDown(self):
@@ -477,6 +478,175 @@ class TestNotifyWatch(unittest.TestCase):
             self.w.check_cleanup_run(datetime(2026, 11, 23, 3, 0), dry_run=True)
         )
         self.assertEqual(terkirim, [])
+
+    # --- alarm kegagalan workflow (P-02, DATA P1-5; P-03: + backup.yml) ---
+
+    def pasang_gh_api(self, peta):
+        """peta: nama workflow -> daftar run (dict GitHub API)."""
+
+        def tiruan(path):
+            for wf, runs in peta.items():
+                if wf in path:
+                    return {"workflow_runs": runs}
+            return {"workflow_runs": []}
+
+        self.w.gh_api_get = tiruan
+
+    def run_github(self, run_id, conclusion, created_at, title="run uji"):
+        return {
+            "id": run_id,
+            "conclusion": conclusion,
+            "created_at": created_at,
+            "display_title": title,
+        }
+
+    def test_workflows_dipantau_mencakup_backup_dengan_jendela_8_hari(self):
+        self.assertEqual(
+            self.w.WORKFLOWS_DIPANTAU,
+            ("write-back.yml", "validate.yml", "backup.yml"),
+        )
+        self.assertEqual(self.w.WORKFLOW_JENDELA_JAM, 24)
+        self.assertEqual(
+            self.w.WORKFLOW_JENDELA_JAM_KHUSUS, {"backup.yml": 8 * 24}
+        )
+
+    def test_check_workflow_runs_gagal_backup_dry_run_alarm(self):
+        self.pasang_gh_api({
+            "backup.yml": [
+                self.run_github(111, "failure", "2026-11-18T01:00:00Z"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_workflow_runs(
+                datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+                dry_run=True,
+            )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])  # dry-run tidak mengirim
+        self.assertIn("backup.yml run 111", out.getvalue())
+
+    def test_check_workflow_runs_backup_5_hari_lalu_masih_alarm(self):
+        """backup.yml jalan mingguan: kegagalan 5 hari lalu masih
+        dalam jendela 8 hari — dialarmkan (jendela 24 jam akan
+        melewatkannya)."""
+        self.pasang_gh_api({
+            "backup.yml": [
+                self.run_github(112, "failure", "2026-11-13T02:00:00Z"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: False
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_workflow_runs(
+                datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+                dry_run=True,
+            )
+        self.assertTrue(hasil)
+        self.assertIn("backup.yml run 112", out.getvalue())
+
+    def test_check_workflow_runs_backup_9_hari_lalu_tidak_alarm(self):
+        self.pasang_gh_api({
+            "backup.yml": [
+                self.run_github(113, "failure", "2026-11-09T02:00:00Z"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: False
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_workflow_runs(
+                datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+                dry_run=True,
+            )
+        self.assertTrue(hasil)
+        self.assertNotIn("backup.yml run 113", out.getvalue())
+
+    def test_check_workflow_runs_write_back_2_hari_lalu_tidak_alarm(self):
+        """write-back.yml tetap memakai jendela 24 jam."""
+        self.pasang_gh_api({
+            "write-back.yml": [
+                self.run_github(114, "failure", "2026-11-16T01:00:00Z"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: False
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_workflow_runs(
+                datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+                dry_run=True,
+            )
+        self.assertTrue(hasil)
+        self.assertNotIn("write-back.yml run 114", out.getvalue())
+
+    def test_check_workflow_runs_sukses_tidak_alarm(self):
+        self.pasang_gh_api({
+            "backup.yml": [
+                self.run_github(115, "success", "2026-11-18T01:00:00Z"),
+            ],
+            "validate.yml": [
+                self.run_github(116, "cancelled", "2026-11-18T01:00:00Z"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        self.assertTrue(self.w.check_workflow_runs(
+            datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+            dry_run=True,
+        ))
+        self.assertEqual(terkirim, [])
+
+    def test_check_workflow_runs_api_gagal_dilewati_tanpa_alarm_palsu(self):
+        self.w.gh_api_get = lambda path: None
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_workflow_runs(
+                datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+                dry_run=True,
+            )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("dilewati", out.getvalue())
+
+    def test_check_workflow_runs_penanda_sudah_ada_tidak_kirim_lagi(self):
+        self.pasang_gh_api({
+            "backup.yml": [
+                self.run_github(117, "failure", "2026-11-18T01:00:00Z"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: True
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        self.assertTrue(self.w.check_workflow_runs(
+            datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+            dry_run=True,
+        ))
+        self.assertEqual(terkirim, [])
+
+    def test_check_workflow_runs_kirim_telegram_dan_tulis_penanda(self):
+        self.pasang_gh_api({
+            "backup.yml": [
+                self.run_github(118, "failure", "2026-11-18T01:00:00Z"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        penanda = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        self.w.write_marker = lambda mid, tipe: penanda.append((mid, tipe)) or True
+        hasil = self.w.check_workflow_runs(
+            datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+            dry_run=False,
+        )
+        self.assertTrue(hasil)
+        self.assertEqual(len(terkirim), 1)
+        self.assertIn("backup.yml run 118", terkirim[0])
+        self.assertEqual(penanda, [("wf-fail-backup-118", "wf-fail-backup")])
 
 
 if __name__ == "__main__":

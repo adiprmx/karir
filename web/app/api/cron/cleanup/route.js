@@ -1,15 +1,16 @@
-/* Cron pembersihan retensi (ANALITIK-10, S8; FIN-08): hapus dokumen
- * lama dari empat koleksi Firestore — event analitik mentah lebih
- * tua dari 90 hari (maks 200/run, lewat cleanupOldEvents di
- * lib/analytics-server.js) ditambah tiga koleksi di bawah (lewat
+/* Cron pembersihan retensi (ANALITIK-10, S8; FIN-08; P-03): hapus
+ * dokumen lama dari tujuh koleksi Firestore — event analitik mentah
+ * lebih tua dari 90 hari (maks 200/run, lewat cleanupOldEvents di
+ * lib/analytics-server.js) ditambah enam koleksi di bawah (lewat
  * cleanupCollection di berkas ini). Dijalankan Vercel Cron tiap
  * Senin 02:00 WIB (vercel.json).
  *
- * Anggaran hapus per run: 200 (analitik) + 200 + 100 + 100 = maks
- * 600 hapus per run, seminggu sekali — jauh di bawah batas hapus
- * Firestore 20.000/hari. Tiap koleksi dihapus dalam satu panggilan
- * batchWrite (maks 500 tulis/panggilan; tiap koleksi <= 200).
- * Bila masih ada sisa (hasMore), run minggu berikutnya melanjutkan.
+ * Anggaran hapus per run: 200 (analitik) + 200 + 100 + 100 + 100
+ * + 100 + 100 = maks 900 hapus per run, seminggu sekali — jauh di
+ * bawah batas hapus Firestore 20.000/hari. Tiap koleksi dihapus
+ * dalam satu panggilan batchWrite (maks 500 tulis/panggilan; tiap
+ * koleksi <= 200). Bila masih ada sisa (hasMore), run minggu
+ * berikutnya melanjutkan.
  *
  * Guard sama seperti recheck: fail-closed bila CRON_SECRET belum
  * dipasang (503 generik), Bearer timing-safe, dan service account
@@ -46,8 +47,9 @@ import { buildCleanupRunRecord } from "@/lib/notify";
  * terpotong Vercel, dan run minggu berikutnya melanjutkan. */
 export const maxDuration = 60;
 
-/* Kebijakan retensi per koleksi (FIN-08). analytics_events (90 hari)
- * ditangani cleanupOldEvents; tiga koleksi di bawah ditangani
+/* Kebijakan retensi per koleksi (FIN-08; P-03 menambah tiga
+ * koleksi terakhir). analytics_events (90 hari) ditangani
+ * cleanupOldEvents; enam koleksi di bawah ditangani
  * cleanupCollection di berkas ini.
  *
  * - rate_limits (7 hari, field updatedAt timestamp): semua jendela
@@ -64,7 +66,29 @@ export const maxDuration = 60;
  *   berubah hanya menampilkan 10 terbaru (maks 50) dan watchdog
  *   write-back hanya memeriksa 10 terbaru; 180 hari menyimpan
  *   riwayat setengah tahun sebagai jejak audit tanpa menumpuk
- *   tanpa batas.
+ *   tanpa batas. SEBELUM penghapusan, dokumen changes berumur
+ *   >150 hari diarsipkan ke repo oleh workflow arsip bulanan
+ *   (web/scripts/archive-changes.mjs + archive-changes.yml) —
+ *   arsip adalah prasyarat penghapusan, bukan kegiatan sesudahnya.
+ * - reports (180 hari, field dibuat string ISO — P-03, INTERIM):
+ *   laporan dukungan dibaca admin dari 100 terbaru; laporan lebih
+ *   tua dari 180 hari tidak lagi ditindaklanjuti. Nilai interim
+ *   ditetapkan koordinator 18 Nov 2026, menunggu konfirmasi pemilik
+ *   sebelum P-09. Catatan: dokumen reports TIDAK punya field
+ *   status — retensi berlaku untuk semua laporan lama, bukan hanya
+ *   yang sudah ditangani.
+ * - audit_logs (365 hari, field at string ISO — P-03, INTERIM):
+ *   jejak audit admin (penulis: writeAudit di app/admin/page.js).
+ *   Satu tahun memberi jendela investigasi yang wajar tanpa
+ *   akumulasi tanpa batas. Nilai interim, ditetapkan koordinator
+ *   18 Nov 2026, menunggu konfirmasi pemilik sebelum P-09.
+ * - cron-runs (90 hari, field startedAt string ISO — P-03,
+ *   INTERIM): heartbeat harian/mingguan; riwayat lebih tua dari
+ *   90 hari bernilai forensik rendah (tren kesehatan cron cukup
+ *   dibaca dari 3 bulan terakhir). Dokumen heartbeat run yang
+ *   sedang berjalan tidak pernah terhapus (umurnya 0 hari).
+ *   Nilai interim, ditetapkan koordinator 18 Nov 2026, menunggu
+ *   konfirmasi pemilik sebelum P-09.
  * Dokumen tanpa field penanda umur tidak pernah cocok dengan query
  * dan dibiarkan — semua penulis mengisi field itu. */
 export const RETENTION_POLICIES = [
@@ -87,6 +111,27 @@ export const RETENTION_POLICIES = [
     field: "createdAt",
     valueType: "stringValue",
     retentionDays: 180,
+    maxDelete: 100,
+  },
+  {
+    collection: "reports",
+    field: "dibuat",
+    valueType: "stringValue",
+    retentionDays: 180,
+    maxDelete: 100,
+  },
+  {
+    collection: "audit_logs",
+    field: "at",
+    valueType: "stringValue",
+    retentionDays: 365,
+    maxDelete: 100,
+  },
+  {
+    collection: "cron-runs",
+    field: "startedAt",
+    valueType: "stringValue",
+    retentionDays: 90,
     maxDelete: 100,
   },
 ];
@@ -331,7 +376,7 @@ export async function GET(request) {
     );
   }
 
-  /* 4. Retensi tiga koleksi lain (FIN-08). Satu token service
+  /* 4. Retensi enam koleksi lain (FIN-08 + P-03). Satu token service
    * account untuk semua koleksi (sudah di-cache modul saat langkah
    * 3 mengambilnya). Kegagalan satu koleksi menghentikan run —
    * run berikutnya mencoba lagi — supaya kegagalan terlihat, bukan
