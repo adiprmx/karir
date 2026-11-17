@@ -12,11 +12,38 @@
 # ~/.claude-v280/write_back.py). Field statis, dokumen baru, dan
 # dokumen hilang hanya dilaporkan di log, tidak diterapkan otomatis.
 #
+# OPSI A (P-02, K-08): sesudah CSV + seed ditulis, README.md dan
+# assets/status-bar.svg DIREGENERASI dari CSV baru (skrip deterministik
+# scripts/regenerate_readme.py) SEBELUM validasi jalan. Tanpa ini,
+# validasi check-consistency.py menuntut angka README cocok dengan CSV
+# yang baru — dan setiap write-back yang mengubah hitungan status
+# dijamin gagal commit (kegagalan struktural 17 Nov 2026, run
+# 44004753295; CI main merah 2 hari).
+#
+# PENGAMAN FLIP MASSAL (P-02, K-08): bila satu run menemukan > 10
+# perubahan status, SEMUA perubahan status DITAHAN (tanggal_cek tetap
+# disalin) dan run dicatat mass_flip=true di output + ringkasan.
+# Flip harian normal pada operasi sehat diharapkan kecil (0-5); 10
+# adalah jumlah flip 17 Nov 2026 yang terbukti 93%-nya salah
+# (verifikasi O-01). Ambang ini nilai awal, ditinjau ulang setelah
+# 2 minggu data recheck yang sudah diperbaiki (P-04).
+#
+# HOLDLIST STATUS (P-02): data/holdlist-status.txt — nomor yang
+# statusnya ditahan (satu nomor per baris + alasan + tanggal tahan).
+# Write-back melewati STATUS nomor dalam holdlist (tanggal_cek tetap
+# disalin). Holdlist di-commit ke repo supaya keadaannya transparan
+# dan dapat diaudit.
+#
 # Skrip Python di bawah ini adalah KEMBAR RINGAN dari write_back.py
 # (transport berbeda: API publik vs service account; runtime
 # berbeda: runner GitHub vs VM). Bila aturan penerapannya berubah,
 # ubah KEDUANYA. write_back.py tetap implementasi utama (punya mode
 # --include-static, --allow-new, dan --mock untuk pengujian).
+#
+# ALARM KEGAGALAN (P-02, DATA P1-5): watcher agent-side
+# notify_watch.py memeriksa run workflow ini + validate.yml tiap pagi
+# via GitHub API dan mengirim notifikasi Telegram bila ada kegagalan.
+# Kegagalan 17 Nov yang baru diketahui lewat audit tidak boleh terulang.
 #
 # DEGRADASI: bila API menyajikan data SEED (Firestore tidak bisa
 # dibaca, mis. kuota habis) atau tidak bisa dijangkau, workflow
@@ -64,6 +91,10 @@ jobs:
           yang live-nya lebih baru ke CSV + seed, lalu memvalidasi.
           Keluar 0 tanpa menulis bila sumbernya seed atau API tidak
           bisa dijangkau (lihat catatan di kepala workflow ini).
+          Pengaman flip massal + holdlist status (P-02, K-08): bila
+          flip status > 10 dalam satu run, SEMUA perubahan status
+          ditahan (tanggal_cek tetap jalan); nomor dalam holdlist
+          selalu ditahan statusnya.
           """
           import csv
           import json
@@ -84,6 +115,10 @@ jobs:
               "Ada lowongan", "Tidak ada lowongan",
               "Tidak dapat diverifikasi", "Portal tidak bisa dibuka",
           }
+          # Ambang pengaman flip massal (K-08): nilai awal, ditinjau
+          # ulang setelah 2 minggu data recheck yang sudah diperbaiki.
+          MASS_FLIP_THRESHOLD = 10
+          HOLDLIST_PATH = "data/holdlist-status.txt"
 
           def fetch(path):
               url = BASE + path
@@ -106,12 +141,34 @@ jobs:
               except (ValueError, AttributeError):
                   return None
 
-          def finish(changed, count, summary):
+          def load_holdlist(path):
+              """Baca holdlist: {no: alasan}. Baris komentar (#) dilewati."""
+              held = {}
+              try:
+                  with open(path, encoding="utf-8") as fh:
+                      for line in fh:
+                          line = line.strip()
+                          if not line or line.startswith("#"):
+                              continue
+                          parts = [p.strip() for p in line.split("|")]
+                          try:
+                              held[int(parts[0])] = (
+                                  parts[1] if len(parts) > 1 else "")
+                          except ValueError:
+                              print(f"  holdlist: baris tidak valid dilewati: "
+                                    f"{line[:60]!r}")
+              except OSError:
+                  print("  holdlist tidak ditemukan — dianggap kosong")
+              return held
+
+          def finish(changed, count, summary, mass_flip=False, held=0):
               out = os.environ.get("GITHUB_OUTPUT", "")
               if out:
                   with open(out, "a", encoding="utf-8") as fh:
                       fh.write(f"changed={'true' if changed else 'false'}\n")
                       fh.write(f"count={count}\n")
+                      fh.write(f"mass_flip={'true' if mass_flip else 'false'}\n")
+                      fh.write(f"held={held}\n")
               with open("write-back-summary.txt", "w", encoding="utf-8") as fh:
                   fh.write(summary)
               sys.exit(0)
@@ -141,11 +198,17 @@ jobs:
           entries = changes.get("changes") or []
           print(f"entri changes terbaru: {len(entries)}")
 
+          holdlist = load_holdlist(HOLDLIST_PATH)
+          print(f"holdlist status: {len(holdlist)} nomor ditahan")
+
           with open("data/daftar-link-karir.csv", newline="", encoding="utf-8") as fh:
               rows = list(csv.DictReader(fh))
           by_no = {int(r["no"]): r for r in rows}
 
-          applied = []
+          # Tahap 1: kumpulkan kandidat perubahan (tanpa menulis dulu),
+          # supaya pengaman flip massal dapat menilai jumlah flip
+          # SEBELUM satu baris pun diubah.
+          candidates = []
           for no in sorted(set(live) & set(by_no)):
               live_row = live[no]
               row = by_no[no]
@@ -156,24 +219,52 @@ jobs:
                   continue
               if csv_date is not None and live_date < csv_date:
                   continue
-              if (live_row.get("status") != row["status"]
-                      or live_row.get("tanggal_cek") != row["tanggal_cek"]):
-                  applied.append(
-                      (no, row["perusahaan"],
-                       f"{row['status']} -> {live_row['status']}, "
-                       f"cek {row['tanggal_cek']} -> {live_row['tanggal_cek']}"))
-                  row["status"] = live_row["status"]
-                  row["tanggal_cek"] = live_row["tanggal_cek"]
+              status_diff = live_row.get("status") != row["status"]
+              date_diff = live_row.get("tanggal_cek") != row["tanggal_cek"]
+              if status_diff or date_diff:
+                  candidates.append((no, row, live_row, status_diff, date_diff))
           for no in sorted(set(live) - set(by_no)):
               print(f"  no {no}: ada di live tapi tidak ada di CSV — tidak ditambahkan")
           for no in sorted(set(by_no) - set(live)):
               print(f"  no {no}: ada di CSV tapi hilang di live — tidak dihapus")
 
-          print(f"perubahan: {len(applied)}")
+          flips = [c for c in candidates if c[3] and c[0] not in holdlist]
+          mass_flip = len(flips) > MASS_FLIP_THRESHOLD
+          if mass_flip:
+              print(f"PENGAMAN FLIP MASSAL: {len(flips)} flip status "
+                    f"(> {MASS_FLIP_THRESHOLD}) — SEMUA perubahan status "
+                    f"ditahan run ini, tanggal_cek tetap jalan.")
+
+          applied = []
+          held = []
+          for no, row, live_row, status_diff, date_diff in candidates:
+              hold_status = no in holdlist or (mass_flip and status_diff)
+              old = (f"{row['status']} -> {live_row['status']}, "
+                     f"cek {row['tanggal_cek']} -> {live_row['tanggal_cek']}")
+              if hold_status and status_diff:
+                  held.append((no, row["perusahaan"], old,
+                               holdlist.get(no, "pengaman flip massal")))
+              if hold_status:
+                  # Status ditahan; tanggal_cek tetap disalin bila beda.
+                  if date_diff:
+                      applied.append((no, row["perusahaan"],
+                                      f"status DITAHAN ({row['status']}), "
+                                      f"cek {row['tanggal_cek']} -> "
+                                      f"{live_row['tanggal_cek']}"))
+                      row["tanggal_cek"] = live_row["tanggal_cek"]
+                  continue
+              applied.append((no, row["perusahaan"], old))
+              row["status"] = live_row["status"]
+              row["tanggal_cek"] = live_row["tanggal_cek"]
+
+          print(f"perubahan: {len(applied)} (status ditahan: {len(held)})")
           for no, name, desc in applied:
               print(f"  no {no} {name[:40]}: {desc}")
+          for no, name, desc, reason in held:
+              print(f"  DITAHAN no {no} {name[:40]}: {desc} [{reason[:60]}]")
           if not applied:
-              finish(False, 0, "write-back: tidak ada perubahan live.\n")
+              finish(False, 0, "write-back: tidak ada perubahan live.\n",
+                     mass_flip=mass_flip, held=len(held))
 
           with open("data/daftar-link-karir.csv", "w", newline="", encoding="utf-8") as fh:
               w = csv.DictWriter(fh, fieldnames=FIELDS, lineterminator="\r\n")
@@ -186,11 +277,25 @@ jobs:
               fh.write(json.dumps(seed, indent=1, ensure_ascii=False))
 
           summary = ("write-back harian: "
-                     f"{len(applied)} perusahaan diperbarui dari Firestore\n\n")
+                     f"{len(applied)} perusahaan diperbarui dari Firestore\n")
+          if held:
+              summary += (f"{len(held)} perubahan status DITAHAN "
+                          f"({'pengaman flip massal' if mass_flip else 'holdlist'})\n")
+          summary += "\n"
           for no, name, desc in applied:
               summary += f"- no {no} {name}: {desc}\n"
-          finish(True, len(applied), summary)
+          for no, name, desc, reason in held:
+              summary += f"- DITAHAN no {no} {name}: {desc}\n"
+          finish(True, len(applied), summary,
+                 mass_flip=mass_flip, held=len(held))
           PY
+      # Opsi A (P-02, K-08): regenerasi README + status-bar.svg dari
+      # CSV baru SEBELUM validasi jalan — kalau tidak, validasi
+      # check-consistency.py gagal pada angkanya sendiri (kegagalan
+      # struktural 17 Nov 2026).
+      - name: Regenerasi README + status-bar.svg
+        if: steps.sync.outputs.changed == 'true'
+        run: python3 scripts/regenerate_readme.py
       - name: Validasi hasil write-back
         if: steps.sync.outputs.changed == 'true'
         run: |
@@ -202,7 +307,7 @@ jobs:
           git config user.name "karir-write-back[bot]"
           git config user.email "karir-write-back[bot]@users.noreply.github.com"
           git pull --rebase origin main || git pull --rebase origin HEAD
-          git add data/daftar-link-karir.csv web/data/companies.json
+          git add data/daftar-link-karir.csv web/data/companies.json README.md assets/status-bar.svg
           git commit -F write-back-summary.txt
           git push origin HEAD:main
           rm -f write-back-summary.txt

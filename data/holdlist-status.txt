@@ -1,0 +1,44 @@
+# Holdlist status (P-02, K-08; rencana-kuota-drift.md §B3.2-§B3.3).
+#
+# Nomor yang tercantum di sini DITAHAN statusnya: write-back TIDAK
+# menyalin perubahan status live ke CSV untuk nomor ini (tanggal_cek
+# tetap disalin — tanggal cek adalah fakta, bukan klaim status).
+# Impor --sync-status juga tidak pernah mengubah status nomor ini.
+#
+# Format: satu nomor per baris: "no | alasan | tanggal tahan (WIB)".
+# Baris diawali "#" adalah komentar. Nomor dikeluarkan dari daftar ini
+# satu per satu sesuai putusan verifikasi (HIDUP -> dipulihkan di
+# Firestore; MATI -> write-back ke CSV; DIBLOKIR -> tinjau mingguan).
+#
+# Isi awal 18 Nov 2026: 27 portal arah A dari verifikasi O-01 yang
+# flip recheck-nya terbukti SALAH (22 HIDUP + 4 DIBLOKIR + 1 tautan
+# usang no. 62). EMC Healthcare (382) TIDAK ada di sini: putusannya
+# MATI fungsional, status live "Portal tidak bisa dibuka" BENAR dan
+# CSV mengikutinya lewat write-back.
+18 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+20 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+23 | O-01 DIBLOKIR 403: portal aktif, tinjau mingguan | 2026-11-18
+35 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+37 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+39 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+51 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+62 | O-01 MATI-tautan-usang: tautan diperbarui, pulihkan di Firestore | 2026-11-18
+72 | O-01 DIBLOKIR 403: portal aktif, tinjau mingguan | 2026-11-18
+79 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+94 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+101 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+121 | O-01 DIBLOKIR 403: portal aktif, tinjau mingguan | 2026-11-18
+129 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+151 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+157 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+158 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+160 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+168 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+235 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+244 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+281 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+374 | O-01 DIBLOKIR 403: portal aktif, tinjau mingguan | 2026-11-18
+466 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+497 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+528 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+579 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
