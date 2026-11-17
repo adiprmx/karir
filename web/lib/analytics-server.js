@@ -9,8 +9,18 @@
  * pun bisa dibanjiri siapa pun tanpa melewati rate limit route).
  * Validasi bentuk event tinggal di sini (validateEvent), bukan di
  * rules. Field ts selalu timestamp (timestampValue). */
-import { createHash, createSign } from "node:crypto";
+import { createHash } from "node:crypto";
 import { requireEnv } from "./require-env.js";
+/* Penukaran token service account tinggal di satu modul bersama
+ * (BE2-24, P-04): lib/service-account-token.js. Diimpor di sini
+ * untuk pemakaian internal (writeAnalyticsEvent, cleanupOldEvents,
+ * fetchUserAnalyticsEvents) dan diekspor ulang supaya pemanggil
+ * lama (route cleanup, test) tidak berubah. */
+import {
+  getServiceAccountAccessToken,
+  resetServiceAccountTokenCache,
+} from "./service-account-token.js";
+export { getServiceAccountAccessToken, resetServiceAccountTokenCache };
 
 /* Tipe event analitik (MKT-07 menambahkan "share"): aksi berbagi
  * yang berhasil — tombol bagikan di halaman detail, tautan WhatsApp
@@ -232,93 +242,6 @@ async function fetchWithTimeout(fetchImpl, url, options, ms = 10_000) {
   } finally {
     clearTimeout(timer);
   }
-}
-
-function parseServiceAccount() {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!raw) return null;
-  try {
-    const sa = JSON.parse(raw);
-    if (!sa.client_email || !sa.private_key) return null;
-    return sa;
-  } catch {
-    return null;
-  }
-}
-
-/* Cache token akses service account (berlaku 1 jam; dipakai ulang
- * dengan margin aman 5 menit supaya tiap event tidak menukar JWT
- * baru ke Google). */
-let saTokenCache = null; // { token, expiresAtMs }
-
-/* Kosongkan cache token (dipakai test supaya tiap kasus mulai dari
- * keadaan bersih). */
-export function resetServiceAccountTokenCache() {
-  saTokenCache = null;
-}
-
-/* Tukar service account (env FIREBASE_SERVICE_ACCOUNT) menjadi access
- * token Firestore — pola yang sama dengan getAccessToken di route
- * cron recheck. Kembalikan token, atau null bila SA tidak dipasang,
- * tidak valid, atau penukaran gagal. null BUKAN error fatal bagi
- * penulis event (fallback ke API key); bagi pembersihan retensi,
- * null berarti batal (lihat cleanupOldEvents). */
-export async function getServiceAccountAccessToken({
-  fetchImpl = fetch,
-  nowMs = Date.now(),
-} = {}) {
-  if (saTokenCache && saTokenCache.expiresAtMs > nowMs + 5 * 60 * 1000) {
-    return saTokenCache.token;
-  }
-  const sa = parseServiceAccount();
-  if (!sa) return null;
-  const now = Math.floor(nowMs / 1000);
-  const header = Buffer.from(
-    JSON.stringify({ alg: "RS256", typ: "JWT" }),
-  ).toString("base64url");
-  const payload = Buffer.from(
-    JSON.stringify({
-      iss: sa.client_email,
-      scope: "https://www.googleapis.com/auth/datastore",
-      aud: "https://oauth2.googleapis.com/token",
-      exp: now + 3600,
-      iat: now,
-    }),
-  ).toString("base64url");
-  const signer = createSign("RSA-SHA256");
-  signer.update(`${header}.${payload}`);
-  let signature;
-  try {
-    signature = signer.sign(sa.private_key, "base64url");
-  } catch {
-    return null;
-  }
-  const jwt = `${header}.${payload}.${signature}`;
-  let res;
-  try {
-    res = await fetchWithTimeout(
-      fetchImpl,
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-          assertion: jwt,
-        }).toString(),
-      },
-    );
-  } catch {
-    return null;
-  }
-  if (!res.ok) return null;
-  const body = await res.json().catch(() => null);
-  if (!body || !body.access_token) return null;
-  saTokenCache = {
-    token: body.access_token,
-    expiresAtMs: nowMs + 3600 * 1000,
-  };
-  return body.access_token;
 }
 
 /* Susun body Firestore REST untuk satu event. Tidak ada field IP.

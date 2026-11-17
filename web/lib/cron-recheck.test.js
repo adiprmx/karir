@@ -14,8 +14,12 @@
  * dilewati (cron hanya jalan dari data live), fase alert sebelum
  * loop cek (NOTIF-15, alert new-target + deadline, id deterministik,
  * 409 = sudah ada, gagal tulis dikeluarkan dari snapshot NOTIF-06),
- * loop cek portal (portal mati -> status berubah + perubahan
- * tercatat), marker kesegaran, dan heartbeat cron-runs (OPS-01).
+ * loop cek portal (P-04: portal tidak bisa dihubungi TIDAK mengubah
+ * status + gagal_cek naik; portal 403 tidak pernah di-flip; 404
+ * berulang flip + changes sumber "recheck"; 5xx two-strike;
+ * portal mati yang pulih flip ke "Tidak dapat diverifikasi";
+ * gagal jangkau lalu pulih tidak pernah mengubah status),
+ * marker kesegaran, dan heartbeat cron-runs (OPS-01).
  * Wiring digest web push (T10, RENDAH-5) juga dites di sini:
  * impor `web-push` di lib/push.js dipetakan ke stub test
  * (lib/webpush-test-loader.mjs) supaya pemanggilan sendPushDigest
@@ -37,6 +41,7 @@ import { generateKeyPairSync } from "node:crypto";
  * lewat impor dinamis rute) resolve ke stub test. */
 import { generateVAPIDKeys } from "web-push";
 import { revalidateCompanies } from "./companies.js";
+import { resetServiceAccountTokenCache } from "./service-account-token.js";
 import { webpushStub } from "./webpush-test-stub.mjs";
 
 /* --- Env dummy (sebelum impor rute) --- */
@@ -156,7 +161,13 @@ function snapshotDoc(nos) {
 /* Mode tiap sumber tiruan. `alerts` mengendalikan POST /alerts:
  * "ok" = 200 (baru dibuat), "exists" = 409, "failed" = 500.
  * `pushList` mengendalikan GET /push_subscriptions: "ok" =
- * satu langganan tiruan, "failed" = 500. */
+ * satu langganan tiruan, "failed" = 500.
+ * `docs` mengganti daftar dokumen perusahaan (null = dua dokumen
+ * default). `portalStatus` memetakan substring URL portal ke
+ * status HTTP yang dijawab mock fetch (default 404 untuk URL yang
+ * tidak dipetakan) — dipakai tes portal mati/diblokir/5xx (P-04).
+ * `prevRun` adalah dokumen cron-runs kemarin (null = 404, tidak
+ * ada strike) — dipakai tes two-strike 5xx (P-04). */
 const modes = {
   marker: "ok",
   list: "ok",
@@ -165,8 +176,17 @@ const modes = {
   snapshotNos: [],
   alerts: "ok",
   pushList: "ok",
+  docs: null,
+  portalStatus: {},
+  prevRun: null,
 };
-const recorded = { patch: [], post: [], alertIds: [], pushListCalls: [] };
+const recorded = {
+  patch: [],
+  post: [],
+  alertIds: [],
+  pushListCalls: [],
+  portalChecks: [],
+};
 
 /* Satu dokumen langganan push tiruan (bentuk REST Firestore),
  * dipakai test wiring digest (RENDAH-5). Kunci berbentuk benar
@@ -197,10 +217,14 @@ function resetModes() {
   modes.snapshotNos = [];
   modes.alerts = "ok";
   modes.pushList = "ok";
+  modes.docs = null;
+  modes.portalStatus = {};
+  modes.prevRun = null;
   recorded.patch.length = 0;
   recorded.post.length = 0;
   recorded.alertIds.length = 0;
   recorded.pushListCalls.length = 0;
+  recorded.portalChecks.length = 0;
 }
 
 function mockResponse({ ok, status, body }) {
@@ -270,12 +294,21 @@ globalThis.fetch = async (url, options = {}) => {
       ok: true,
       status: 200,
       body: {
-        documents: [
+        documents: modes.docs || [
           companyDoc(1, "Perusahaan Uji Satu", "Ada lowongan"),
           companyDoc(2, "Perusahaan Uji Dua", "Tidak ada lowongan"),
         ],
       },
     });
+  }
+  if (u.includes("/cron-runs/")) {
+    /* Baca dokumen run kemarin untuk two-strike 5xx (P-04).
+     * PATCH heartbeat tidak sampai ke sini (cabang PATCH di atas
+     * mendahuluinya). */
+    if (modes.prevRun) {
+      return mockResponse({ ok: true, status: 200, body: modes.prevRun });
+    }
+    return mockResponse({ ok: false, status: 404 });
   }
   if (u.includes("/push_subscriptions")) {
     /* Daftar langganan push — hanya sendPushDigest yang
@@ -290,12 +323,25 @@ globalThis.fetch = async (url, options = {}) => {
       body: { documents: [pushSubscriptionDoc()] },
     });
   }
+  /* URL lain = cek portal oleh checkUrl (bukan Firestore): status
+   * dari modes.portalStatus, default 404. Tiap pemanggilan
+   * dicatat supaya tes retry bisa menghitung percobaan. */
+  recorded.portalChecks.push({ url: u, method });
+  for (const [match, status] of Object.entries(modes.portalStatus)) {
+    if (u.includes(match)) {
+      return mockResponse({ ok: status < 400, status });
+    }
+  }
   return mockResponse({ ok: false, status: 404 });
 };
 
 beforeEach(() => {
   revalidateCompanies();
   resetModes();
+  /* Cache token service account dipakai bersama semua jalur
+   * (BE2-24): dikosongkan tiap test supaya tes "tukar token
+   * gagal" tidak tertolong cache dari tes sebelumnya. */
+  resetServiceAccountTokenCache();
   webpushStub.reset();
   process.env.CRON_SECRET = "secret-cron-uji-bukan-asli";
   process.env.FIREBASE_SERVICE_ACCOUNT = SA_JSON;
@@ -395,7 +441,13 @@ describe("prasyarat jalan", () => {
 
 /* --- Run penuh: fase alert + loop cek + marker + heartbeat --- */
 describe("run penuh (snapshot belum ada)", () => {
-  it("200 + ringkasan lengkap; portal mati mengubah status + tercatat", async () => {
+  it("200 + ringkasan lengkap; portal tidak bisa dihubungi TIDAK mengubah status (BE2-01, P-04)", async () => {
+    /* Perusahaan no 1 bertautan localhost: penjaga SSRF menolaknya
+     * sebelum fetch, jadi checkUrl mengembalikan status null —
+     * "tidak diketahui", BUKAN portal mati. Sebelum P-04, run ini
+     * membalik statusnya ke "Portal tidak bisa dibuka"; sejak P-04
+     * status tidak disentuh, tanggal cek tidak diperbarui, dan
+     * hanya gagal_cek yang naik. */
     const res = await getRecheck(cronRequest());
     assert.equal(res.status, 200);
     const body = await res.json();
@@ -407,10 +459,14 @@ describe("run penuh (snapshot belum ada)", () => {
       dead: 0,
       total: 1,
     });
-    assert.equal(body.checked, 1);
-    assert.equal(body.changed, 1);
+    assert.equal(body.checked, 0);
+    assert.equal(body.changed, 0);
     assert.equal(body.updated, 0);
-    assert.equal(body.skipped, 0);
+    assert.equal(body.skipped, 1);
+    assert.equal(body.unreachable, 1);
+    assert.deepEqual(body.unreachableNos, [1]);
+    assert.equal(body.blocked, 0);
+    assert.equal(body.serverError, 0);
     assert.equal(body.truncated, false);
     assert.equal(body.openSkipped, 0);
     /* Run pertama: snapshot belum ada -> tanpa alert, snapshot ditulis. */
@@ -421,9 +477,108 @@ describe("run penuh (snapshot belum ada)", () => {
     assert.equal(body.alertPhaseTruncated, false);
     assert.equal(body.snapshotKnown, true);
     assert.equal(body.snapshotWritten, true);
-    assert.equal(body.markerBumped, true);
+    /* Tidak ada perubahan status/tanggal cek -> marker tidak naik. */
+    assert.equal(body.markerBumped, false);
     assert.equal(body.heartbeatWritten, true);
-    /* PATCH status perusahaan no 1 ke Portal tidak bisa dibuka. */
+    /* Retry tidak pernah me-fetch target yang ditolak SSRF:
+     * dua percobaan checkUrl, nol pemanggilan fetch portal. */
+    assert.equal(recorded.portalChecks.length, 0);
+    /* Satu-satunya PATCH perusahaan no 1: gagal_cek 0 -> 1,
+     * tanpa status dan tanpa tanggal_cek. */
+    const companyPatches = recorded.patch.filter((p) =>
+      p.url.includes("/companies/1?"),
+    );
+    assert.equal(companyPatches.length, 1);
+    assert.ok(
+      companyPatches[0].url.includes("updateMask.fieldPaths=gagal_cek"),
+    );
+    assert.equal(
+      companyPatches[0].url.includes("updateMask.fieldPaths=status"),
+      false,
+    );
+    assert.equal(
+      companyPatches[0].url.includes("updateMask.fieldPaths=tanggal_cek"),
+      false,
+    );
+    assert.equal(
+      companyPatches[0].body.fields.gagal_cek.integerValue,
+      "1",
+    );
+    /* Tidak ada entri changes: tidak ada yang berubah. */
+    assert.equal(
+      recorded.post.filter((p) => p.url.endsWith("/changes")).length,
+      0,
+    );
+    /* Heartbeat ditulis ke cron-runs/{tanggal WIB} dengan
+     * pencacah unreachable + daftar nomornya. */
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.ok(heartbeat, "tidak ada PATCH heartbeat cron-runs");
+    assert.equal(heartbeat.body.fields.unreachable.integerValue, "1");
+    assert.deepEqual(
+      heartbeat.body.fields.unreachableNos.arrayValue.values,
+      [{ integerValue: "1" }],
+    );
+    assert.equal(heartbeat.body.fields.blocked.integerValue, "0");
+    assert.equal(heartbeat.body.fields.serverError.integerValue, "0");
+    /* Marker TIDAK naik: tidak ada PATCH bump rev. */
+    assert.equal(
+      recorded.patch.filter((p) =>
+        p.url.includes("/meta/lastChange?updateMask.fieldPaths=rev"),
+      ).length,
+      0,
+    );
+    /* Snapshot ditulis dengan nomor target saat ini (no 1 —
+     * statusnya tetap ada lowongan). */
+    const snapshotPatch = recorded.patch.find((p) =>
+      p.url.includes("/meta/targets"),
+    );
+    assert.ok(snapshotPatch, "tidak ada PATCH snapshot");
+    assert.deepEqual(
+      snapshotPatch.body.fields.targetNos.arrayValue.values,
+      [{ integerValue: "1" }],
+    );
+  });
+});
+
+/* --- Keputusan recheck (P-04, kriteria 1-3 + K-11) ---
+ * Portal diuji lewat IP literal TEST-NET (203.0.113.x): penjaga
+ * SSRF mengizinkannya tanpa DNS, lalu mock fetch global menjawab
+ * status dari modes.portalStatus. Tanpa jaringan nyata. */
+describe("keputusan recheck (P-04)", () => {
+  function docsSatuPortal({ no = 1, status = "Ada lowongan", link, gagalCek } = {}) {
+    const overrides = {
+      link_karir: { stringValue: link },
+    };
+    if (gagalCek !== undefined) {
+      overrides.gagal_cek = { integerValue: String(gagalCek) };
+    }
+    return [
+      companyDoc(no, "Perusahaan Uji Satu", status, overrides),
+      companyDoc(2, "Perusahaan Uji Dua", "Tidak ada lowongan"),
+    ];
+  }
+
+  it("portal benar-benar mati (404 berulang): flip + changes sumber recheck", async () => {
+    modes.docs = docsSatuPortal({ link: "http://203.0.113.31/karir" });
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.checked, 1);
+    assert.equal(body.changed, 1);
+    assert.equal(body.updated, 0);
+    assert.equal(body.skipped, 0);
+    assert.equal(body.unreachable, 0);
+    assert.equal(body.blocked, 0);
+    assert.equal(body.serverError, 0);
+    /* Retry 1x: dua percobaan HEAD ke portal yang sama. */
+    const portalCalls = recorded.portalChecks.filter((c) =>
+      c.url.includes("203.0.113.31"),
+    );
+    assert.equal(portalCalls.length, 2);
+    assert.ok(portalCalls.every((c) => c.method === "HEAD"));
+    /* PATCH status ke Portal tidak bisa dibuka. */
     const statusPatch = recorded.patch.find((p) =>
       p.url.includes("/companies/1?"),
     );
@@ -436,7 +591,7 @@ describe("run penuh (snapshot belum ada)", () => {
       statusPatch.body.fields.tanggal_cek.stringValue,
       todayWib(),
     );
-    /* Perubahan tercatat di koleksi changes. */
+    /* Perubahan tercatat dengan sumber "recheck" (K-10). */
     const change = recorded.post.find((p) => p.url.endsWith("/changes"));
     assert.ok(change, "tidak ada POST changes");
     assert.equal(change.body.fields.companyNo.integerValue, "1");
@@ -445,27 +600,167 @@ describe("run penuh (snapshot belum ada)", () => {
       change.body.fields.to.stringValue,
       "Portal tidak bisa dibuka",
     );
-    /* Heartbeat ditulis ke cron-runs/{tanggal WIB}. */
+    assert.equal(change.body.fields.sumber.stringValue, "recheck");
+    assert.equal(body.markerBumped, true);
+  });
+
+  it("portal 403: diblokir, TIDAK di-flip, masuk blockedNos (K-11)", async () => {
+    modes.docs = docsSatuPortal({ link: "http://203.0.113.32/karir" });
+    modes.portalStatus = { "203.0.113.32": 403 };
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.checked, 1);
+    assert.equal(body.changed, 0);
+    assert.equal(body.updated, 1);
+    assert.equal(body.skipped, 1);
+    assert.equal(body.blocked, 1);
+    assert.deepEqual(body.blockedNos, [1]);
+    assert.equal(body.unreachable, 0);
+    /* PATCH hanya memperbarui tanggal cek; status tetap. */
+    const patch = recorded.patch.find((p) =>
+      p.url.includes("/companies/1?"),
+    );
+    assert.ok(patch, "tidak ada PATCH perusahaan no 1");
+    assert.equal(patch.body.fields.status.stringValue, "Ada lowongan");
+    assert.equal(patch.body.fields.tanggal_cek.stringValue, todayWib());
+    assert.equal(
+      recorded.post.filter((p) => p.url.endsWith("/changes")).length,
+      0,
+    );
     const heartbeat = recorded.patch.find((p) =>
       p.url.includes(`/cron-runs/${todayWib()}`),
     );
-    assert.ok(heartbeat, "tidak ada PATCH heartbeat cron-runs");
-    /* Marker rev naik (PATCH bump meta/lastChange dengan rev 2).
-     * PATCH pencacah refill dari lapisan data juga menuju URL yang
-     * sama, jadi dibedakan lewat updateMask rev+updatedAt. */
-    const markerPatch = recorded.patch.find((p) =>
-      p.url.includes("/meta/lastChange?updateMask.fieldPaths=rev"),
-    );
-    assert.ok(markerPatch, "tidak ada PATCH bump marker");
-    assert.equal(markerPatch.body.fields.rev.integerValue, "2");
-    /* Snapshot ditulis dengan nomor target saat ini (no 1). */
-    const snapshotPatch = recorded.patch.find((p) =>
-      p.url.includes("/meta/targets"),
-    );
-    assert.ok(snapshotPatch, "tidak ada PATCH snapshot");
+    assert.equal(heartbeat.body.fields.blocked.integerValue, "1");
     assert.deepEqual(
-      snapshotPatch.body.fields.targetNos.arrayValue.values,
+      heartbeat.body.fields.blockedNos.arrayValue.values,
       [{ integerValue: "1" }],
+    );
+  });
+
+  it("portal 5xx strike pertama: dicatat, TIDAK di-flip", async () => {
+    modes.docs = docsSatuPortal({ link: "http://203.0.113.33/karir" });
+    modes.portalStatus = { "203.0.113.33": 500 };
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.checked, 1);
+    assert.equal(body.changed, 0);
+    assert.equal(body.updated, 1);
+    assert.equal(body.skipped, 1);
+    assert.equal(body.serverError, 1);
+    assert.deepEqual(body.serverErrorNos, [1]);
+    assert.equal(
+      recorded.post.filter((p) => p.url.endsWith("/changes")).length,
+      0,
+    );
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.deepEqual(
+      heartbeat.body.fields.serverErrorNos.arrayValue.values,
+      [{ integerValue: "1" }],
+    );
+  });
+
+  it("portal 5xx strike kedua (kemarin juga 5xx): flip ke mati", async () => {
+    modes.docs = docsSatuPortal({ link: "http://203.0.113.34/karir" });
+    modes.portalStatus = { "203.0.113.34": 503 };
+    modes.prevRun = {
+      fields: {
+        serverErrorNos: {
+          arrayValue: { values: [{ integerValue: "1" }] },
+        },
+      },
+    };
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.checked, 1);
+    assert.equal(body.changed, 1);
+    assert.equal(body.serverError, 0);
+    assert.deepEqual(body.serverErrorNos, []);
+    const statusPatch = recorded.patch.find((p) =>
+      p.url.includes("/companies/1?"),
+    );
+    assert.equal(
+      statusPatch.body.fields.status.stringValue,
+      "Portal tidak bisa dibuka",
+    );
+    const change = recorded.post.find((p) => p.url.endsWith("/changes"));
+    assert.ok(change, "tidak ada POST changes");
+    assert.equal(change.body.fields.sumber.stringValue, "recheck");
+  });
+
+  it("portal mati yang pulih: flip ke Tidak dapat diverifikasi + gagal_cek reset", async () => {
+    modes.docs = docsSatuPortal({
+      status: "Portal tidak bisa dibuka",
+      link: "http://203.0.113.35/karir",
+      gagalCek: 3,
+    });
+    modes.portalStatus = { "203.0.113.35": 200 };
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.checked, 1);
+    assert.equal(body.changed, 1);
+    const statusPatch = recorded.patch.find((p) =>
+      p.url.includes("/companies/1?"),
+    );
+    assert.equal(
+      statusPatch.body.fields.status.stringValue,
+      "Tidak dapat diverifikasi",
+    );
+    /* Cek definitif mereset rantai kegagalan jangkau. */
+    assert.equal(statusPatch.body.fields.gagal_cek.integerValue, "0");
+    const change = recorded.post.find((p) => p.url.endsWith("/changes"));
+    assert.equal(change.body.fields.from.stringValue, "Portal tidak bisa dibuka");
+    assert.equal(
+      change.body.fields.to.stringValue,
+      "Tidak dapat diverifikasi",
+    );
+  });
+
+  it("gagal jangkau sekali lalu pulih: status TIDAK PERNAH berubah (kriteria 3a)", async () => {
+    /* Run 1: portal tidak bisa dihubungi (localhost) — status
+     * tetap, hanya gagal_cek naik. */
+    const res1 = await getRecheck(cronRequest());
+    assert.equal(res1.status, 200);
+    const body1 = await res1.json();
+    assert.equal(body1.unreachable, 1);
+    assert.equal(body1.changed, 0);
+    assert.equal(
+      recorded.post.filter((p) => p.url.endsWith("/changes")).length,
+      0,
+    );
+    /* Run 2 (keesokan hari): portal yang sama kini hidup, dengan
+     * gagal_cek=1 yang tersimpan dari run 1. Status tetap
+     * "Ada lowongan", tanggal cek diperbarui, gagal_cek reset. */
+    resetModes();
+    modes.docs = docsSatuPortal({
+      link: "http://203.0.113.36/karir",
+      gagalCek: 1,
+    });
+    modes.portalStatus = { "203.0.113.36": 200 };
+    revalidateCompanies();
+    resetServiceAccountTokenCache();
+    const res2 = await getRecheck(cronRequest());
+    assert.equal(res2.status, 200);
+    const body2 = await res2.json();
+    assert.equal(body2.checked, 1);
+    assert.equal(body2.changed, 0);
+    assert.equal(body2.updated, 1);
+    assert.equal(body2.unreachable, 0);
+    const patch = recorded.patch.find((p) =>
+      p.url.includes("/companies/1?"),
+    );
+    assert.ok(patch, "tidak ada PATCH perusahaan no 1 di run 2");
+    assert.equal(patch.body.fields.status.stringValue, "Ada lowongan");
+    assert.equal(patch.body.fields.tanggal_cek.stringValue, todayWib());
+    assert.equal(patch.body.fields.gagal_cek.integerValue, "0");
+    assert.equal(
+      recorded.post.filter((p) => p.url.endsWith("/changes")).length,
+      0,
     );
   });
 });

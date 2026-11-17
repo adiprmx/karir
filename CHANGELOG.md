@@ -4,6 +4,13 @@ Semua perubahan penting pada daftar ini dicatat di sini. Format tanggal: `YYYY-M
 
 ## Belum dirilis
 
+Perbaikan cron recheck (P-04, Fase 2): cron berhenti membalik status perusahaan dari kegagalan jangkau sesaat — penyebab 26 dari 28 flip salah pada 16–17 Nov 2026 (verifikasi manual O-01).
+
+- Portal yang tidak bisa dihubungi (`status: null` sesudah retry 1x) kini diperlakukan sebagai "tidak diketahui": status tidak diubah, tanggal cek tidak diperbarui, dihitung `skipped` + pencacah `unreachable` di heartbeat, dan pencacah `gagal_cek` perusahaan naik 1 (K-10). Portal yang menjawab 403/diblokir tidak pernah di-flip (K-11): dihitung `blocked`, nomornya masuk `blockedNos` (antrean tinjau manual) di heartbeat. Hanya 404/410 (sesudah retry) dan 5xx (two-strike 2 run berturut-turut, dibaca dari dokumen `cron-runs` kemarin) yang boleh membalik status ke "Portal tidak bisa dibuka".
+- Entri `changes` dari recheck kini membawa `sumber: "recheck"` (K-10), membedakannya dari flip manusia ("admin"). `checkUrl` menghapus kredensial dari URL sebelum fetch dan membatalkan badan respons GET fallback (BE2-26). Penukaran token service account dikonsolidasikan ke satu modul `lib/service-account-token.js` dengan satu cache yang dipakai bersama semua jalur (BE2-24).
+- Throughput antrean: paralelisme batch 8 → 16, timeout cek 8 → 5 detik (baseline run 18 Nov 2026 01:36 WIB: checked=48, openSkipped=185, queueTotal=317). Skrip ukur baru `web/scripts/ukur-antrean-recheck.mjs` membaca dokumen `cron-runs` dan memutus target openSkipped = 0 pada tiga run berturut-turut; pengukuran nyata ditunda ke observasi pasca-merge (kuota Firestore habis saat implementasi).
+- Tes: 1300 total (49 baru P-04, termasuk regresi gagal-jangkau-lalu-pulih dan portal benar-benar mati). Lint 0 error, build sukses. Verifikasi live (tiga run tanpa flip palsu) didokumentasikan sebagai observasi pasca-merge.
+
 Cadangan & pemulihan (P-03, Fase 2): semua koleksi Firestore tercakup cadangan, restore drill otomatis, retensi tiga koleksi baru, arsip changes bulanan, skrip impor/write-back berversi, dan ekspor Auth bulanan terenkripsi.
 
 - Cadangan Firestore kini mencakup `cron-runs` dan `push_subscriptions` (menutup celah D2); workflow backup melaporkan ukuran artifact terhadap batas 500 MB dengan peringatan di atas 70% (D5).

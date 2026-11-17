@@ -195,6 +195,14 @@ function docToCompany(d) {
     email_hrd: s("email_hrd"),
     wa_hrd: s("wa_hrd"),
     kontak_lain: s("kontak_lain"),
+    /* Kegagalan jangkau beruntun (K-10, P-04): dihitung cron recheck
+     * saat portal tidak bisa dihubungi (status null), direset ke 0
+     * saat cek definitif berhasil. Hanya dipetakan bila field-nya
+     * ada di dokumen — perusahaan yang tidak pernah gagal cek tidak
+     * membawa field ini. */
+    ...(f.gagal_cek && f.gagal_cek.integerValue != null
+      ? { gagal_cek: Number(f.gagal_cek.integerValue) }
+      : {}),
   };
 }
 

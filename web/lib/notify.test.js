@@ -527,6 +527,12 @@ describe("buildCronRunRecord (OPS-01)", () => {
         updated: 117,
         skipped: 173,
         openSkipped: 0,
+        unreachable: 5,
+        blocked: 2,
+        serverError: 1,
+        unreachableNos: [37, 101],
+        blockedNos: [121, 374],
+        serverErrorNos: [160],
         truncated: true,
         alerts: 2,
         alertsFailed: 0,
@@ -554,6 +560,22 @@ describe("buildCronRunRecord (OPS-01)", () => {
     assert.equal(record.durationMs.integerValue, "52000");
     assert.equal(record.checked.integerValue, "120");
     assert.equal(record.openSkipped.integerValue, "0");
+    /* Pencacah P-04: hasil cek tidak diketahui/diblokir/5xx +
+     * daftar nomornya (hanya nomor perusahaan, tanpa URL). */
+    assert.equal(record.unreachable.integerValue, "5");
+    assert.equal(record.blocked.integerValue, "2");
+    assert.equal(record.serverError.integerValue, "1");
+    assert.deepEqual(record.unreachableNos.arrayValue.values, [
+      { integerValue: "37" },
+      { integerValue: "101" },
+    ]);
+    assert.deepEqual(record.blockedNos.arrayValue.values, [
+      { integerValue: "121" },
+      { integerValue: "374" },
+    ]);
+    assert.deepEqual(record.serverErrorNos.arrayValue.values, [
+      { integerValue: "160" },
+    ]);
     assert.equal(record.telegram.stringValue, "sent");
     assert.equal(record.telegramMarked.integerValue, "2");
     assert.equal(record.push.stringValue, "sent");
@@ -579,6 +601,13 @@ describe("buildCronRunRecord (OPS-01)", () => {
     assert.equal(record.status.stringValue, "ok");
     assert.equal(record.checked.integerValue, "0");
     assert.equal(record.queueTotal.integerValue, "0");
+    /* Pencacah P-04 hilang -> nol; daftar nomor hilang -> kosong. */
+    assert.equal(record.unreachable.integerValue, "0");
+    assert.equal(record.blocked.integerValue, "0");
+    assert.equal(record.serverError.integerValue, "0");
+    assert.deepEqual(record.unreachableNos.arrayValue.values, []);
+    assert.deepEqual(record.blockedNos.arrayValue.values, []);
+    assert.deepEqual(record.serverErrorNos.arrayValue.values, []);
     assert.equal(record.durationMs.integerValue, "1000");
     /* Field push (T10) ikut memakai nilai bawaan bila tidak ada. */
     assert.equal(record.push.stringValue, "none");
