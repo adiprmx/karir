@@ -28,6 +28,6 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "eslint": "^10.14.0",
-    "eslint-config-next": "^16.4.5"
+    "eslint-config-next": "^16.4.6"
   }
 }
