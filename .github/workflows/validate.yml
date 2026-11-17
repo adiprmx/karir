@@ -10,6 +10,7 @@ on:
       - "scripts/test_validate.py"
       - "scripts/check-consistency.py"
       - "scripts/check-seed-live.py"
+      - ".github/workflows/validate.yml"
   pull_request:
     paths:
       - "data/daftar-link-karir.csv"
@@ -19,6 +20,7 @@ on:
       - "scripts/test_validate.py"
       - "scripts/check-consistency.py"
       - "scripts/check-seed-live.py"
+      - ".github/workflows/validate.yml"
 
 jobs:
   validate:
@@ -53,6 +55,9 @@ jobs:
       # tidak menggagalkan CI. Ambang penegakan (--max-drift) ditetapkan
       # di P-02 sesudah drift ditutup; sampai saat itu, selisih yang
       # sudah diketahui tidak boleh membuat CI merah.
+      # always(): laporan ini harus jalan walau langkah konsistensi
+      # di atas gagal (drift live yang sudah diketahui) — kalau tidak,
+      # laporan drift justru tidak pernah terbit saat paling dibutuhkan.
       - name: Check seed count vs live count (report mode)
-        if: github.ref == 'refs/heads/main'
+        if: ${{ always() && github.ref == 'refs/heads/main' }}
         run: python3 scripts/check-seed-live.py
