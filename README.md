@@ -2,7 +2,7 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Daftar ini berisi 662 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 311 perusahaan sedang ada lowongan.</p>
+<p align="center">Daftar ini berisi 685 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 325 perusahaan sedang ada lowongan.</p>
 
 Status tiap perusahaan netral: yang dicatat hanya apakah portalnya sedang ada lowongan, untuk peran apa pun.
 
@@ -30,22 +30,22 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 <tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/330"><img src="https://www.google.com/s2/favicons?domain=fore.coffee&sz=64" width="48" height="48" alt="Fore Coffee"><br>Fore Coffee</a><br>Barista</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/342"><img src="https://www.google.com/s2/favicons?domain=ranchmarket.jobseeker.software&sz=64" width="48" height="48" alt="Ranch Market &amp; Farmers Market"><br>Ranch Market &amp; Farmers Market</a><br>Operational Cashier</td></tr>
 </table>
 
-<h2 align="center">Hasil cek 662 kanal</h2>
+<h2 align="center">Hasil cek 685 kanal</h2>
 
-311 dari 662 kanal ada lowongan.
+325 dari 685 kanal ada lowongan.
 
 <p align="center">
-  <img src="assets/status-bar.svg" alt="Sebaran status 662 perusahaan" width="100%">
+  <img src="assets/status-bar.svg" alt="Sebaran status 685 perusahaan" width="100%">
 </p>
 
 | Status | Jumlah |
 | --- | --- |
-| Ada lowongan | 311 |
-| Tidak ada lowongan | 164 |
-| Tidak dapat diverifikasi | 127 |
+| Ada lowongan | 325 |
+| Tidak ada lowongan | 166 |
+| Tidak dapat diverifikasi | 134 |
 | Portal tidak bisa dibuka | 60 |
 
-86 perusahaan tidak punya tautan karir. 82 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 4 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: Olive Fried Chicken (204), PT Dwi Indah (315), PT Cintas Sentul Raya (321), PT Best Logistics Service Indonesia (355, BLSI).
+98 perusahaan tidak punya tautan karir. 94 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 4 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: Olive Fried Chicken (204), PT Dwi Indah (315), PT Cintas Sentul Raya (321), PT Best Logistics Service Indonesia (355, BLSI).
 
 <h2 align="center">Contoh lowongan yang sedang buka</h2>
 

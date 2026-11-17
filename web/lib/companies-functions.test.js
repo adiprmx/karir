@@ -279,10 +279,10 @@ describe("varian OrSeed saat Firestore gagal (QA-07)", () => {
     const targets = await getTargetsOrSeed();
     const categories = await getCategoriesOrSeed();
     const stats = await getStatsOrSeed();
-    /* Seed asli repo: 662 baris. */
-    assert.equal(stats.total, 662);
+    /* Seed asli repo: 685 baris. */
+    assert.equal(stats.total, 685);
     assert.ok(targets.length > 0);
-    assert.ok(targets.length < 662);
+    assert.ok(targets.length < 685);
     for (const c of targets) assert.equal(c.status, "Ada lowongan");
     assert.ok(categories.length > 0);
     assert.ok(categories.includes("Retail"));

@@ -190,9 +190,9 @@ describe("seed-first: degradasi saat Firestore bermasalah", () => {
     revalidateCompanies();
     const hasil = await getCompaniesWithSource();
     assert.equal(hasil.source, "seed");
-    assert.equal(hasil.companies.length, 662);
+    assert.equal(hasil.companies.length, 685);
     assert.equal(hasil.companies[0].perusahaan, "Unilever Indonesia");
-    assert.equal(hasil.seedDate, "2026-11-16");
+    assert.equal(hasil.seedDate, "2026-11-17");
     /* Marker 429: refill tidak dicoba sama sekali. */
     assert.equal(rec.list.length, 0);
     assert.equal(rec.marker.length, 1);
@@ -204,7 +204,7 @@ describe("seed-first: degradasi saat Firestore bermasalah", () => {
     revalidateCompanies();
     const hasil = await getCompaniesWithSource();
     assert.equal(hasil.source, "seed");
-    assert.equal(hasil.companies.length, 662);
+    assert.equal(hasil.companies.length, 685);
     assert.equal(rec.list.length, 1);
     assert.equal(rec.patch.length, 0);
   });
@@ -215,7 +215,7 @@ describe("seed-first: degradasi saat Firestore bermasalah", () => {
     revalidateCompanies();
     const hasil = await getCompaniesWithSource();
     assert.equal(hasil.source, "seed");
-    assert.equal(hasil.companies.length, 662);
+    assert.equal(hasil.companies.length, 685);
     assert.equal(rec.list.length, 0);
   });
 
@@ -516,7 +516,7 @@ describe("BE-09: timeout res.json() — body yang stall tidak menggantung", () =
     const hasil = await getCompaniesWithSource();
     const elapsed = Date.now() - t0;
     assert.equal(hasil.source, "seed");
-    assert.equal(hasil.companies.length, 662);
+    assert.equal(hasil.companies.length, 685);
     /* Marker gagal dibaca: refill tidak dicoba sama sekali. */
     assert.equal(rec.list.length, 0);
     /* Timeout body 5 detik: tanpa perbaikan ini panggilan tidak
@@ -535,7 +535,7 @@ describe("BE-09: timeout res.json() — body yang stall tidak menggantung", () =
     const hasil = await getCompaniesWithSource();
     const elapsed = Date.now() - t0;
     assert.equal(hasil.source, "seed");
-    assert.equal(hasil.companies.length, 662);
+    assert.equal(hasil.companies.length, 685);
     assert.equal(rec.list.length, 1);
     assert.equal(rec.patch.length, 0);
     assert.ok(elapsed >= 4000, `elapsed ${elapsed} ms`);
