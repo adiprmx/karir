@@ -12,3 +12,8 @@ node_modules/
 # Cadangan Firestore lokal (web/scripts/backup-firestore.mjs):
 # berisi data yang terhubung ke pengguna, tidak boleh di-commit.
 web/backups/
+# Artefak pengujian P-01: laporan cakupan node:test (NODE_V8_COVERAGE),
+# hasil Playwright (trace/screenshot/video), dan laporan HTML Playwright.
+web/coverage/
+web/test-results/
+web/playwright-report/

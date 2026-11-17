@@ -46,3 +46,11 @@ jobs:
       - name: Check consistency vs live site
         if: github.ref == 'refs/heads/main'
         run: python3 scripts/check-consistency.py --live
+      # Cek jumlah seed vs live (P-01, mendukung BE2-03): satu panggilan
+      # /api/stats, murah kuota. Mode laporan — hanya mencetak selisih,
+      # tidak menggagalkan CI. Ambang penegakan (--max-drift) ditetapkan
+      # di P-02 sesudah drift ditutup; sampai saat itu, selisih yang
+      # sudah diketahui tidak boleh membuat CI merah.
+      - name: Check seed count vs live count (report mode)
+        if: github.ref == 'refs/heads/main'
+        run: python3 scripts/check-seed-live.py

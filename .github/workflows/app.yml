@@ -1,4 +1,5 @@
-# CI aplikasi web Karir: tes unit + lint + build Next.js + tes asap.
+# CI aplikasi web Karir: tes unit + cakupan + lint + build Next.js +
+# anggaran bundle + tes asap + tes E2E (Playwright).
 # Langkah build memakai nilai NEXT_PUBLIC_FIREBASE_* dummy, bukan secret.
 # Alasannya: halaman /admin mengimpor lib/firebase.js, dan initializeApp
 # jalan saat modul dimuat; tanpa apiKey, build gagal dengan
@@ -19,11 +20,27 @@
 # namanya) — cakupan yang tidak dimiliki smoke-check.mjs, yang hanya
 # memeriksa API dan status halaman.
 # Server dimatikan lagi di akhir langkah.
+# Langkah E2E menjalankan suite Playwright (web/e2e/) melawan server
+# produksi dari hasil build di atas (port 3000, Playwright yang
+# menjalankannya lewat webServer di playwright.config.mjs). Auth,
+# Firestore klien, dan push di-mock di dalam tes (lihat e2e/helpers/),
+# jadi tidak ada akun atau langganan yang dibuat di mana pun.
+# Langkah VAPID membuat kunci VAPID sekali pakai untuk build ini saja
+# (web/scripts/ci-vapid-public-key.mjs): hanya kunci PUBLIK yang
+# ditulis ke GITHUB_ENV; kunci privat tidak pernah dicetak.
+# Langkah Coverage menjalankan suite yang sama dengan pelaporan
+# cakupan dan ambang (lihat test:coverage di web/package.json);
+# laporan mentah V8 diunggah sebagai artifact.
+# Langkah Bundle budget memeriksa hasil build terhadap anggaran
+# (web/scripts/check-bundle-budget.mjs) dan gagal bila terlewati.
 name: App
 
 on:
   push:
-    branches: [main]
+    # Branch fase2/** ikut menjalankan CI penuh: paket-paket Fase 2
+    # dikerjakan di branch fase2/p-NN dan harus terbukti hijau
+    # SEBELUM push ke main, bukan sesudahnya.
+    branches: [main, "fase2/**"]
   pull_request:
     branches: [main]
 
@@ -46,9 +63,22 @@ jobs:
       - name: Test
         working-directory: web
         run: npm test
+      - name: Coverage
+        working-directory: web
+        run: npm run test:coverage
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-v8
+          path: web/coverage
+          retention-days: 30
       - name: Lint
         working-directory: web
         run: npm run lint
+      - name: VAPID key (CI-only, public only)
+        working-directory: web
+        run: node scripts/ci-vapid-public-key.mjs
       - name: Build
         working-directory: web
         env:
@@ -58,7 +88,11 @@ jobs:
           NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: karir-9d53a.firebasestorage.app
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
           NEXT_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000000000"
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ env.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
         run: npm run build
+      - name: Bundle budget
+        working-directory: web
+        run: npm run check:bundle
       - name: Smoke
         working-directory: web
         env:
@@ -132,3 +166,30 @@ jobs:
             tail -20 /tmp/next-smoke.log || true
           fi
           exit $STATUS
+      - name: Install Playwright browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: E2E
+        working-directory: web
+        env:
+          # Nilai dummy yang sama dengan langkah Smoke: server yang
+          # dijalankan Playwright (webServer) butuh nilai-nilai ini
+          # supaya /api/token dan batas laju tidak fail-closed.
+          API_TOKEN_SECRET: ci-dummy-bukan-rahasia
+          ANALYTICS_SALT: ci-dummy-bukan-rahasia
+          NEXT_PUBLIC_FIREBASE_API_KEY: AIzaDummyDummyDummyDummyDummyDummy12
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: karir-9d53a.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: karir-9d53a
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: karir-9d53a.firebasestorage.app
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          NEXT_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000000000"
+        run: npm run test:e2e
+      - name: Upload E2E artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            web/test-results
+            web/playwright-report
+          retention-days: 30
