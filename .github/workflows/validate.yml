@@ -4,22 +4,30 @@ on:
   push:
     paths:
       - "data/daftar-link-karir.csv"
+      - "data/holdlist-status.txt"
       - "web/data/companies.json"
       - "README.md"
+      - "assets/status-bar.svg"
       - "scripts/validate.py"
       - "scripts/test_validate.py"
       - "scripts/check-consistency.py"
       - "scripts/check-seed-live.py"
+      - "scripts/regenerate_readme.py"
+      - "scripts/test_regenerate_readme.py"
       - ".github/workflows/validate.yml"
   pull_request:
     paths:
       - "data/daftar-link-karir.csv"
+      - "data/holdlist-status.txt"
       - "web/data/companies.json"
       - "README.md"
+      - "assets/status-bar.svg"
       - "scripts/validate.py"
       - "scripts/test_validate.py"
       - "scripts/check-consistency.py"
       - "scripts/check-seed-live.py"
+      - "scripts/regenerate_readme.py"
+      - "scripts/test_regenerate_readme.py"
       - ".github/workflows/validate.yml"
 
 jobs:
@@ -33,12 +41,13 @@ jobs:
       - name: Validate CSV
         run: python3 scripts/validate.py
       # Test atas validatornya sendiri (QA-14): CSV contoh sah/cacat
-      # di scripts/test_validate.py. pytest dipasang dulu karena
-      # image ubuntu-latest tidak membawanya secara bawaan.
-      - name: Test validator (pytest)
+      # di scripts/test_validate.py; plus test regenerasi README
+      # (P-02, K-08). pytest dipasang dulu karena image ubuntu-latest
+      # tidak membawanya secara bawaan.
+      - name: Test validator + regenerasi (pytest)
         run: |
           pip install pytest
-          python3 -m pytest scripts/test_validate.py -q
+          python3 -m pytest scripts/test_validate.py scripts/test_regenerate_readme.py -q
       # Cek ini mencakup DOK-01 (angka README vs CSV) dalam mode
       # non-live; README.md ada di paths pemicu di atas supaya cek
       # jalan tiap push yang mengubah README.
