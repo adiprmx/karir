@@ -44,13 +44,16 @@ const {
 const FS_BASE =
   "projects/proyek-uji/databases/(default)/documents";
 /* Mode query per koleksi: "ok" | "fail". */
-const modes = { analytics_events: "ok", rate_limits: "ok", alerts: "ok", changes: "ok" };
+const modes = { analytics_events: "ok", rate_limits: "ok", alerts: "ok", changes: "ok", reports: "ok", audit_logs: "ok", "cron-runs": "ok" };
 /* Dokumen lama tiruan per koleksi (nama Firestore). */
 const oldDocs = {
   analytics_events: [],
   rate_limits: [`${FS_BASE}/rate_limits/kunci-a`, `${FS_BASE}/rate_limits/kunci-b`],
   alerts: [],
   changes: [`${FS_BASE}/changes/entri-1`],
+  reports: [`${FS_BASE}/reports/laporan-1`],
+  audit_logs: [],
+  "cron-runs": [`${FS_BASE}/cron-runs/2026-08-10`],
 };
 /* Tulis batchWrite yang ditangkap mock. */
 const deletedNames = [];
@@ -152,14 +155,17 @@ function cleanupRequest({ auth = true } = {}) {
 
 /* --- Kebijakan retensi --- */
 describe("RETENTION_POLICIES (FIN-08)", () => {
-  it("tiga koleksi dengan retensi + batas + tipe field yang benar", () => {
+  it("enam koleksi dengan retensi + batas + tipe field yang benar", () => {
     const byCollection = Object.fromEntries(
       RETENTION_POLICIES.map((p) => [p.collection, p]),
     );
     assert.deepEqual(Object.keys(byCollection).sort(), [
       "alerts",
+      "audit_logs",
       "changes",
+      "cron-runs",
       "rate_limits",
+      "reports",
     ]);
     assert.deepEqual(byCollection.rate_limits, {
       collection: "rate_limits",
@@ -182,6 +188,33 @@ describe("RETENTION_POLICIES (FIN-08)", () => {
       retentionDays: 180,
       maxDelete: 100,
     });
+    /* P-03: nilai interim ditetapkan koordinator 18 Nov 2026,
+     * menunggu konfirmasi pemilik sebelum P-09. Field penanda umur
+     * mengikuti penulis tiap koleksi (reports: `dibuat` di
+     * app/perusahaan/[no]/actions.js; audit_logs: `at` di
+     * writeAudit app/admin/page.js; cron-runs: `startedAt` di
+     * buildCronRunRecord/buildCleanupRunRecord lib/notify.js). */
+    assert.deepEqual(byCollection.reports, {
+      collection: "reports",
+      field: "dibuat",
+      valueType: "stringValue",
+      retentionDays: 180,
+      maxDelete: 100,
+    });
+    assert.deepEqual(byCollection.audit_logs, {
+      collection: "audit_logs",
+      field: "at",
+      valueType: "stringValue",
+      retentionDays: 365,
+      maxDelete: 100,
+    });
+    assert.deepEqual(byCollection["cron-runs"], {
+      collection: "cron-runs",
+      field: "startedAt",
+      valueType: "stringValue",
+      retentionDays: 90,
+      maxDelete: 100,
+    });
   });
 
   it("total maks hapus per run jauh di bawah batas 20.000/hari", () => {
@@ -190,8 +223,8 @@ describe("RETENTION_POLICIES (FIN-08)", () => {
       (sum, p) => sum + p.maxDelete,
       0,
     );
-    assert.equal(retentionMax, 400);
-    assert.equal(analyticsMax + retentionMax, 600);
+    assert.equal(retentionMax, 700);
+    assert.equal(analyticsMax + retentionMax, 900);
     assert.ok(analyticsMax + retentionMax < 20000);
   });
 
@@ -403,7 +436,7 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     }
   });
 
-  it("200: analitik + retensi tiga koleksi, hapus hanya dokumen lama", async () => {
+  it("200: analitik + retensi enam koleksi, hapus hanya dokumen lama", async () => {
     const res = await getCleanup(cleanupRequest());
     assert.equal(res.status, 200);
     const body = await res.json();
@@ -414,10 +447,15 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     assert.equal(body.retention.rate_limits.hasMore, false);
     assert.equal(body.retention.alerts.deleted, 0);
     assert.equal(body.retention.changes.deleted, 1);
+    assert.equal(body.retention.reports.deleted, 1);
+    assert.equal(body.retention.audit_logs.deleted, 0);
+    assert.equal(body.retention["cron-runs"].deleted, 1);
     assert.deepEqual(deletedNames, [
       `${FS_BASE}/rate_limits/kunci-a`,
       `${FS_BASE}/rate_limits/kunci-b`,
       `${FS_BASE}/changes/entri-1`,
+      `${FS_BASE}/reports/laporan-1`,
+      `${FS_BASE}/cron-runs/2026-08-10`,
     ]);
   });
 
@@ -443,11 +481,14 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     assert.equal(fields.date.stringValue, today);
     assert.equal(fields.job.stringValue, "cleanup");
     assert.equal(fields.status.stringValue, "ok");
-    assert.equal(fields.deleted.integerValue, "3");
+    assert.equal(fields.deleted.integerValue, "5");
     assert.equal(fields.analyticsDeleted.integerValue, "0");
     assert.equal(fields.rateLimitsDeleted.integerValue, "2");
     assert.equal(fields.alertsDeleted.integerValue, "0");
     assert.equal(fields.changesDeleted.integerValue, "1");
+    assert.equal(fields.reportsDeleted.integerValue, "1");
+    assert.equal(fields.auditLogsDeleted.integerValue, "0");
+    assert.equal(fields.cronRunsDeleted.integerValue, "1");
     assert.equal(fields.error.stringValue, "");
   });
 

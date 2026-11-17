@@ -69,6 +69,14 @@ describe("parseArgs", () => {
     assert.deepEqual(options.collections, ["companies", "meta", "items"]);
   });
 
+  it("menerima koleksi P-03 cron-runs dan push_subscriptions", () => {
+    const options = parseArgs([
+      "--collections",
+      "cron-runs,push_subscriptions",
+    ]);
+    assert.deepEqual(options.collections, ["cron-runs", "push_subscriptions"]);
+  });
+
   it("menghilangkan duplikat koleksi", () => {
     const options = parseArgs(["--collections", "companies,companies"]);
     assert.deepEqual(options.collections, ["companies"]);
@@ -242,6 +250,44 @@ describe("run", () => {
     assert.equal(manifest.collections["user_trackers/items"].documents, 1);
   });
 
+  it("end-to-end: menulis berkas koleksi P-03 + manifest", async () => {
+    const out = await mkdtemp(join(tmpdir(), "karir-backup-p03-"));
+    const fetchImpl = async (url) => {
+      if (url.includes("/cron-runs")) {
+        return response({ body: { documents: [doc("cron-runs", "2026-11-18")] } });
+      }
+      if (url.includes("/push_subscriptions")) {
+        return response({
+          body: { documents: [doc("push_subscriptions", "a".repeat(64))] },
+        });
+      }
+      return response({ body: {} });
+    };
+    const code = await run(
+      ["--out", out, "--collections", "cron-runs,push_subscriptions"],
+      {
+        env: {
+          FIRESTORE_ACCESS_TOKEN: "token-uji",
+          FIRESTORE_BASE: BASE,
+        },
+        fetchImpl,
+      },
+    );
+    assert.equal(code, 0);
+    const files = (await readdir(out)).sort();
+    assert.deepEqual(files, [
+      "cron-runs.json",
+      "manifest.json",
+      "push_subscriptions.json",
+    ]);
+    const manifest = JSON.parse(
+      await readFile(join(out, "manifest.json"), "utf8"),
+    );
+    assert.equal(manifest.totalDocuments, 2);
+    assert.equal(manifest.collections["cron-runs"].documents, 1);
+    assert.equal(manifest.collections.push_subscriptions.documents, 1);
+  });
+
   it("argumen tidak valid keluar 2", async () => {
     const code = await run(["--tidak-ada"], {
       env: {},
@@ -263,9 +309,13 @@ describe("daftar koleksi", () => {
       "rate_limits",
       "user_profiles",
       "analytics_events",
+      /* P-03 (D2): dua koleksi yang sebelumnya tidak tercakup. */
+      "cron-runs",
+      "push_subscriptions",
     ]) {
       assert.ok(COLLECTIONS.includes(name), `${name} harus dicadangkan`);
     }
+    assert.equal(COLLECTIONS.length, 11);
     assert.equal(ITEMS_GROUP, "items");
   });
 });

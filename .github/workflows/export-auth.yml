@@ -1,0 +1,120 @@
+# Ekspor bulanan akun Firebase Auth Karir (P-03, D6).
+#
+# Mengekspor daftar pengguna proyek karir-9d53a (UID, email, claim
+# admin, tanggal dibuat — TANPA hash kata sandi) lewat
+# web/scripts/export-auth.mjs, lalu MENGENKRIPSI hasilnya dengan gpg
+# simetris (AES-256) sebelum diunggah sebagai artifact workflow.
+# Berkas JSON teks-biasa TIDAK PERNAH diunggah: hanya berkas .gpg
+# yang menjadi artifact (retensi 90 hari — batas maksimal artifact
+# GitHub Free; salinan terenkripsi 12 bulan disimpan pemilik di
+# lokasi kedua, di luar GitHub).
+#
+# KEPUTUSAN ENKRIPSI (P-03): gpg simetris, bukan age — gpg sudah
+# terpasang di runner ubuntu-latest (tanpa unduhan tambahan) dan
+# model passphrase-nya cocok dengan satu pemilik yang menyimpan
+# passphrase di pengelola kata sandi. Passphrase TIDAK PERNAH
+# ditulis di repo, laporan, atau log workflow.
+#
+# KREDENSIAL: dua secret di Settings > Secrets and variables >
+# Actions repo ini:
+#   FIREBASE_SERVICE_ACCOUNT — string JSON service account (sama
+#     dengan backup.yml). Service account butuh peran baca Firebase
+#     Auth; bila belum punya, run gagal 403 dengan pesan yang jelas
+#     dan peran ditambahkan pemilik lewat Firebase Console.
+#   AUTH_EXPORT_PASSPHRASE — passphrase enkripsi gpg. WAJIB dipasang
+#     SEBELUM run pertama; bila belum ada, run GAGAL dengan pesan
+#     yang jelas (bukan mengunggah hasil tanpa enkripsi).
+# Bila salah satu secret belum dipasang, run gagal eksplisit.
+#
+# Jadwal: tiap tanggal 1 pukul 20:30 UTC (03:30 WIB tanggal 2),
+# plus jalan manual lewat workflow_dispatch (mis. ekspor pertama
+# atau sesudah penambahan peran Auth).
+name: Ekspor Auth bulanan
+
+on:
+  schedule:
+    # 20:30 UTC tanggal 1 = 03:30 WIB tanggal 2, tiap bulan.
+    - cron: "30 20 1 * *"
+  workflow_dispatch:
+
+# Satu run ekspor dalam satu waktu; run yang tumpang tindih
+# mengantre (bukan dibatalkan) supaya tidak ada bulan yang terlewat.
+concurrency:
+  group: export-auth
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # Node 24.x: sama dengan engines di web/package.json dan
+          # .nvmrc — konsisten dengan workflow app.yml.
+          node-version: "24.x"
+      - name: Ekspor daftar pengguna Auth
+        working-directory: web
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/export-auth.mjs --out auth-exports/run
+      - name: Ringkasan ekspor (tanpa email pengguna)
+        run: |
+          python3 - <<'PY'
+          """Tulis ringkasan ekspor ke GITHUB_STEP_SUMMARY.
+
+          Hanya hitungan (total + admin) yang ditulis — TIDAK ADA
+          email atau UID pengguna di ringkasan maupun log.
+          """
+          import glob
+          import json
+          import os
+
+          files = sorted(glob.glob("web/auth-exports/run/auth-export-*.json"))
+          if not files:
+              raise SystemExit("berkas ekspor tidak ditemukan")
+          with open(files[0], encoding="utf-8") as f:
+              payload = json.load(f)
+          lines = [
+              "## Ekspor Firebase Auth",
+              "",
+              f"- Proyek: `{payload['project']}`",
+              f"- Waktu: `{payload['exportedAt']}`",
+              f"- Total pengguna: **{payload['totalUsers']}**",
+              f"- Pengguna admin: **{payload['adminUsers']}**",
+              "",
+              "Berkas dienkripsi (gpg AES-256) sebelum diunggah sebagai artifact.",
+          ]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write("\n".join(lines) + "\n")
+          PY
+      - name: Enkripsi hasil ekspor (gpg simetris)
+        env:
+          AUTH_EXPORT_PASSPHRASE: ${{ secrets.AUTH_EXPORT_PASSPHRASE }}
+        run: |
+          if [ -z "$AUTH_EXPORT_PASSPHRASE" ]; then
+            echo "Ekspor gagal: secret AUTH_EXPORT_PASSPHRASE belum dipasang." >&2
+            echo "Pasang di Settings > Secrets and variables > Actions repo ini," >&2
+            echo "lalu jalankan ulang workflow ini secara manual." >&2
+            exit 1
+          fi
+          JSON_FILE=$(ls web/auth-exports/run/auth-export-*.json | head -n 1)
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$AUTH_EXPORT_PASSPHRASE" \
+            --symmetric --cipher-algo AES256 \
+            --output "web/auth-exports/run/$(basename "$JSON_FILE").gpg" \
+            "$JSON_FILE"
+          # Hapus teks-biasa segera sesudah enkripsi (shred menimpa
+          # isi sebelum menghapus; runner bersifat sekali-pakai).
+          shred -u "$JSON_FILE"
+      - name: Unggah ekspor terenkripsi sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-export-encrypted
+          path: web/auth-exports/run/*.gpg
+          retention-days: 90
+          if-no-files-found: error

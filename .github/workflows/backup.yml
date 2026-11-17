@@ -2,7 +2,8 @@
 #
 # Mengekspor semua koleksi Firestore (companies, alerts, meta,
 # rate_limits, audit_logs, reports, changes, user_profiles,
-# analytics_events, plus subkoleksi pelacak user_trackers/{uid}/items)
+# analytics_events, cron-runs, push_subscriptions, plus subkoleksi
+# pelacak user_trackers/{uid}/items)
 # ke berkas JSON lewat web/scripts/backup-firestore.mjs, lalu
 # mengunggahnya sebagai artifact workflow (retensi 90 hari).
 # Cadangan TIDAK di-commit ke repo: isinya mencakup data yang
@@ -65,28 +66,61 @@ jobs:
       - name: Ringkasan cadangan
         run: |
           python3 - <<'PY'
-          """Tulis ringkasan cadangan ke GITHUB_STEP_SUMMARY."""
+          """Tulis ringkasan cadangan ke GITHUB_STEP_SUMMARY.
+
+          Termasuk pengukuran ukuran artifact terhadap batas storage
+          GitHub Free 500 MB (D5, P-03): bila ukuran cadangan melewati
+          70% batas (350 MB), ringkasan menampilkan peringatan dan
+          langkah mengeluarkan peringatan workflow — tandanya retensi
+          artifact perlu diturunkan atau kompresi diterapkan sebelum
+          cadangan mulai gagal karena kuota storage habis.
+          """
           import glob
           import json
           import os
+
+          BATAS_MB = 500
+          AMBANG_PERINGATAN = 0.70
 
           manifests = sorted(glob.glob("web/backups/*/manifest.json"))
           if not manifests:
               raise SystemExit("manifest.json tidak ditemukan")
           with open(manifests[0], encoding="utf-8") as f:
               manifest = json.load(f)
+          backup_dir = os.path.dirname(manifests[0])
+          total_bytes = 0
+          for root, _dirs, files in os.walk(backup_dir):
+              for name in files:
+                  total_bytes += os.path.getsize(os.path.join(root, name))
+          total_mb = total_bytes / (1024 * 1024)
+          persen = (total_bytes / (BATAS_MB * 1024 * 1024)) * 100
           lines = [
               "## Cadangan Firestore",
               "",
               f"- Proyek: `{manifest['project']}`",
               f"- Waktu: `{manifest['createdAt']}`",
               f"- Total dokumen: **{manifest['totalDocuments']}**",
+              f"- Ukuran artifact: **{total_mb:.2f} MB** dari batas "
+              f"{BATAS_MB} MB ({persen:.1f}%)",
               "",
               "| Koleksi | Dokumen |",
               "| --- | --- |",
           ]
           for name, info in sorted(manifest["collections"].items()):
               lines.append(f"| `{name}` | {info['documents']} |")
+          if persen >= AMBANG_PERINGATAN * 100:
+              lines += [
+                  "",
+                  "> **Peringatan:** ukuran cadangan melewati 70% batas "
+                  "storage artifact 500 MB — turunkan retensi artifact "
+                  "atau terapkan kompresi (lihat rencana-data-backup "
+                  "D5).",
+              ]
+              print(
+                  f"::warning::Ukuran cadangan {total_mb:.2f} MB "
+                  f"({persen:.1f}% dari batas 500 MB) — melewati ambang "
+                  "70%; pertimbangkan menurunkan retensi atau kompresi."
+              )
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
               f.write("\n".join(lines) + "\n")
           PY
