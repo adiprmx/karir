@@ -3,11 +3,38 @@
  * HEAD dulu (ringan); kalau server menolak HEAD (405/501), lanjut GET.
  * Timeout lewat AbortController, maksimal 5 redirect. Tanpa dependensi
  * baru. Kembalikan {ok, status, finalUrl}; status null bila URL tidak
- * bisa dihubungi sama sekali (timeout, DNS, koneksi putus).
+ * bisa dihubungi sama sekali (timeout, DNS, koneksi putus) ATAU bila
+ * penjaga SSRF menolak target sebelum fetch — kedua kasus itu TIDAK
+ * BISA dibedakan dari hasil ini, dan pemanggil (cron recheck) wajib
+ * memperlakukan keduanya sebagai "tidak diketahui", bukan sebagai
+ * portal mati (BE2-01, P-04).
+ *
+ * Kredensial di URL (user:pass@host) dihapus sebelum fetch (BE2-26):
+ * tidak pernah dikirim ke server dan tidak pernah muncul di finalUrl
+ * yang dikembalikan. Badan respons GET fallback dibatalkan sesudah
+ * status dibaca (BE2-26) supaya soket tidak tertahan.
  *
  * Modul ini juga menyusun antrean cek cron (buildCheckQueue, BE-05):
  * perusahaan yang ada lowongan didahulukan tiap run, portal mati
  * bergilir dengan sisa anggaran.
+ *
+ * Keputusan recheck (decideRecheckAction, P-04/K-11) juga tinggal di
+ * sini sebagai fungsi murni supaya bisa diuji tanpa Firestore:
+ * - portal tidak bisa dihubungi (status null) -> "tidak diketahui",
+ *   status TIDAK diubah (bukti O-01: 26 dari 28 flip 16-17 Nov salah
+ *   karena satu kegagalan jangkau sesaat dianggap portal mati);
+ * - portal menjawab 403/diblokir -> TIDAK PERNAH di-flip (K-11):
+ *   server hidup, cek otomatisnya yang diblokir;
+ * - hanya 404/410 (sesudah retry 1x) dan 5xx (two-strike 2 run
+ *   berturut-turut) yang boleh membalik status portal yang ada
+ *   lowongannya menjadi "Portal tidak bisa dibuka".
+ * Cek ini HANYA menguji portal bisa dibuka (status HTTP), BUKAN isi
+ * lowongannya — portal yang memuat lowongan asinkron (mis. Gojek:
+ * "0 open jobs" saat pertama, "10 open jobs" sesudah reload, O-01)
+ * tidak bisa salah dinilai oleh cek ini, karena isi tidak pernah
+ * dibaca. Bila suatu hari isi ikut dinilai, konten yang tidak dapat
+ * ditentukan wajib diperlakukan sebagai "tidak diketahui", bukan
+ * dasar flip.
  *
  * Penjaga SSRF: hanya skema http/https yang diizinkan; sebelum SETIAP
  * fetch — termasuk tiap hop redirect, di jalur HEAD maupun jalur
@@ -193,6 +220,39 @@ async function isTargetAllowed(target, lookupImpl, deadlineMs) {
   return true;
 }
 
+/* Hapus kredensial dari URL (BE2-26): userinfo (user:pass@) tidak
+ * pernah dikirim ke server dan tidak pernah muncul di finalUrl.
+ * Tanpa kredensial, URL dikembalikan apa adanya supaya normalisasi
+ * (mis. penambahan garis miring akhir) tidak mengubah perilaku lama.
+ * URL yang tidak bisa di-parse dikembalikan apa adanya — penjaga
+ * SSRF akan menolaknya (fail-closed). */
+function stripCredentials(raw) {
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return raw;
+  }
+  if (!parsed.username && !parsed.password) return raw;
+  parsed.username = "";
+  parsed.password = "";
+  return parsed.toString();
+}
+
+/* Batalkan badan respons yang tidak dibaca isinya (BE2-26):
+ * respons GET fallback hanya dipakai statusnya, jadi badannya
+ * dibatalkan supaya soket tidak tertahan menunggu konsumsi.
+ * Best-effort total: mock respons tanpa body dan pembatalan yang
+ * gagal tidak boleh mengganggu hasil cek. */
+function cancelBody(res) {
+  try {
+    const done = res?.body?.cancel?.();
+    if (done && typeof done.catch === "function") done.catch(() => {});
+  } catch {
+    /* Abaikan: pembatalan badan tidak pernah memengaruhi hasil. */
+  }
+}
+
 export async function checkUrl(url, options = {}) {
   const timeoutMs =
     typeof options.timeoutMs === "number" ? options.timeoutMs : 8000;
@@ -201,10 +261,12 @@ export async function checkUrl(url, options = {}) {
   const deadline = Date.now() + timeoutMs;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const fail = { ok: false, status: null, finalUrl: url };
+  /* finalUrl selalu versi tanpa kredensial (BE2-26). */
+  const cleanUrl = stripCredentials(url);
+  const fail = { ok: false, status: null, finalUrl: cleanUrl };
   const headers = { "User-Agent": USER_AGENT };
   try {
-    let current = url;
+    let current = cleanUrl;
     if (!(await isTargetAllowed(current, lookupImpl, deadline))) {
       return fail;
     }
@@ -221,7 +283,9 @@ export async function checkUrl(url, options = {}) {
       res.headers.get("location") &&
       hops < MAX_REDIRECTS
     ) {
-      const next = new URL(res.headers.get("location"), current).toString();
+      const next = stripCredentials(
+        new URL(res.headers.get("location"), current).toString(),
+      );
       if (!(await isTargetAllowed(next, lookupImpl, deadline))) {
         return fail;
       }
@@ -238,7 +302,9 @@ export async function checkUrl(url, options = {}) {
       /* Fallback GET memakai redirect manual juga, supaya tiap hop
        * tetap melewati penjaga SSRF. GET dimulai dari URL yang
        * menolak HEAD (bukan URL awal) agar tidak mengulang hop
-       * redirect yang sudah dilewati HEAD. */
+       * redirect yang sudah dilewati HEAD. Badan tiap respons GET
+       * dibatalkan sesudah status dibaca (BE2-26): isinya tidak
+       * pernah dipakai, hanya statusnya. */
       res = await fetchImpl(current, {
         method: "GET",
         redirect: "manual",
@@ -252,7 +318,10 @@ export async function checkUrl(url, options = {}) {
         res.headers.get("location") &&
         getHops < MAX_REDIRECTS
       ) {
-        const next = new URL(res.headers.get("location"), current).toString();
+        cancelBody(res);
+        const next = stripCredentials(
+          new URL(res.headers.get("location"), current).toString(),
+        );
         if (!(await isTargetAllowed(next, lookupImpl, deadline))) {
           return fail;
         }
@@ -265,6 +334,7 @@ export async function checkUrl(url, options = {}) {
         });
         getHops++;
       }
+      cancelBody(res);
     }
     return {
       ok: res.status < 400,
@@ -276,6 +346,92 @@ export async function checkUrl(url, options = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/* Cek satu URL dengan retry 1x bila hasil pertama gagal (P-04,
+ * kriteria 2): kegagalan sesaat (timeout, DNS, koneksi putus,
+ * respons error sekali) tidak boleh langsung menjadi dasar
+ * keputusan. Keputusan pemanggil memakai hasil AKHIR: bila retry
+ * berhasil, portal dianggap hidup; bila retry gagal juga (atau
+ * gagal jangkau sesudah respons error pertama), hasil retry-lah
+ * yang menentukan. Retry memanggil checkUrl yang sama, jadi tiap
+ * percobaan tetap melewati penjaga SSRF penuh — retry tidak
+ * memperlebar permukaan SSRF. Kembalikan {result, retried}. */
+export async function checkUrlWithRetry(url, options = {}) {
+  const first = await checkUrl(url, options);
+  if (first.ok) return { result: first, retried: false };
+  const second = await checkUrl(url, options);
+  return { result: second, retried: true };
+}
+
+/* Status "Tidak dapat diverifikasi": tujuan flip saat portal yang
+ * tadinya mati kini hidup kembali (lowongannya belum dicek ulang
+ * manusia, jadi tidak boleh langsung kembali jadi ada lowongan). */
+export const CHECK_QUEUE_UNVERIFIED_STATUS = "Tidak dapat diverifikasi";
+
+/* Tentukan tindakan recheck dari status lama perusahaan dan hasil
+ * cek AKHIR (sesudah retry, lihat checkUrlWithRetry). Fungsi murni
+ * supaya tiap cabang bisa diuji tanpa Firestore (P-04/K-11).
+ *
+ * Kembalikan { outcome, newStatus }:
+ * - outcome "alive": portal hidup (ok). newStatus =
+ *   "Tidak dapat diverifikasi" bila status lama portal mati,
+ *   selain itu null (status tetap, tanggal cek diperbarui).
+ * - outcome "unreachable": status null — portal tidak bisa
+ *   dihubungi ATAU penjaga SSRF menolak target; keduanya "tidak
+ *   diketahui". newStatus null: status TIDAK diubah, tanggal cek
+ *   TIDAK diperbarui, pencacah gagal_cek perusahaan naik 1.
+ * - outcome "blocked": server menjawab tetapi menolak cek
+ *   otomatis (403 dan 4xx lain di luar 404/410, mis. 401/429).
+ *   Server HIDUP — status TIDAK PERNAH diubah (K-11). newStatus
+ *   null; tanggal cek diperbarui (ceknya selesai, hasilnya
+ *   "diblokir") dan portal masuk antrean tinjau manual.
+ * - outcome "dead": 404/410 sesudah retry — tautan benar-benar
+ *   tidak ada. newStatus = "Portal tidak bisa dibuka" bila status
+ *   lama ada lowongan, selain itu null (sudah mati, tetap mati).
+ * - outcome "server-error": 5xx sesudah retry. newStatus =
+ *   "Portal tidak bisa dibuka" HANYA bila portal yang sama juga
+ *   5xx di run kemarin (struckYesterday — two-strike 2 run, K-11)
+ *   dan status lama ada lowongan; selain itu null (strike pertama
+ *   dicatat, portal tidak di-flip).
+ *
+ * Cabang default gagal tertutup: respons error yang tidak masuk
+ * kategori di atas diperlakukan sebagai "blocked" (server merespons,
+ * jangan flip), bukan sebagai portal mati. */
+export function decideRecheckAction(oldStatus, result, options = {}) {
+  const openStatuses =
+    options.openStatuses || CHECK_QUEUE_OPEN_STATUSES;
+  const deadStatus = options.deadStatus || CHECK_QUEUE_DEAD_STATUS;
+  const unverifiedStatus =
+    options.unverifiedStatus || CHECK_QUEUE_UNVERIFIED_STATUS;
+  const struckYesterday = options.struckYesterday === true;
+  const isOpen = openStatuses.includes(oldStatus);
+
+  if (result && result.ok) {
+    return {
+      outcome: "alive",
+      newStatus: oldStatus === deadStatus ? unverifiedStatus : null,
+    };
+  }
+  const status = result ? result.status : null;
+  if (status === null || status === undefined) {
+    return { outcome: "unreachable", newStatus: null };
+  }
+  if (status === 404 || status === 410) {
+    return {
+      outcome: "dead",
+      newStatus: isOpen ? deadStatus : null,
+    };
+  }
+  if (status >= 500 && status < 600) {
+    return {
+      outcome: "server-error",
+      newStatus: struckYesterday && isOpen ? deadStatus : null,
+    };
+  }
+  /* 403 dan 4xx lain (401, 429, ...) + apa pun yang tidak dikenal:
+   * server merespons, jadi portal tidak mati — jangan flip. */
+  return { outcome: "blocked", newStatus: null };
 }
 
 /* Susun antrean cek cron (BE-05). Antrean jauh lebih besar daripada

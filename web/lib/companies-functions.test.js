@@ -112,11 +112,36 @@ function pasangMock(rec, mode = {}) {
       return { ok: false, status: 404, json: async () => ({}) };
     }
     rec.list.push(u);
-    return { ok: true, status: 200, json: async () => ({ documents: DAFTAR }) };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ documents: mode.documents ?? DAFTAR }),
+    };
   };
 }
 
 describe("getTargets (QA-07)", () => {
+  it("field gagal_cek (K-10, P-04) dipetakan bila ada, absen bila tidak ada", async () => {
+    const denganGagalCek = doc(
+      1,
+      "PT Alfa",
+      "Ada lowongan",
+      HARI_INI,
+      "Retail",
+    );
+    denganGagalCek.fields.gagal_cek = { integerValue: "3" };
+    const rec = rekamanBaru();
+    pasangMock(rec, {
+      documents: [denganGagalCek, DAFTAR[1]],
+    });
+    revalidateCompanies();
+    const semua = await getCompanies();
+    assert.equal(semua.length, 2);
+    assert.equal(semua[0].gagal_cek, 3);
+    /* Dokumen tanpa field gagal_cek: kunci tidak ada. */
+    assert.equal("gagal_cek" in semua[1], false);
+  });
+
   it("hanya yang ada lowongan, terurut nama A-Z", async () => {
     const rec = rekamanBaru();
     pasangMock(rec);

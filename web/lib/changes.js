@@ -85,6 +85,13 @@ function docToChange(d) {
     to: s("to"),
     checkedAt: s("checkedAt"),
     createdAt: s("createdAt"),
+    /* Asal perubahan (K-10, P-04): "recheck" bila ditulis cron cek
+     * ulang harian, "admin" bila ditulis manusia lewat panel admin.
+     * Menentukan jalur pulih otomatis (D5). Hanya dipetakan bila
+     * field-nya ada — entri lama sebelum P-04 tidak membawanya. */
+    ...(f.sumber && f.sumber.stringValue != null
+      ? { sumber: f.sumber.stringValue }
+      : {}),
   };
 }
 

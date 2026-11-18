@@ -146,6 +146,26 @@ describe("getChanges: pemetaan, urutan, dan batas", () => {
     assert.equal(rec.panggilan.length, 1);
     assert.equal(pertama, kedua);
   });
+
+  it("(a) field sumber (K-10, P-04) dipetakan bila ada, absen bila tidak ada", async () => {
+    const denganSumber = changeDoc(
+      "b1",
+      "PT Recheck",
+      "Ada lowongan",
+      "Portal tidak bisa dibuka",
+      "2026-11-18T01:00:00.000Z",
+    );
+    denganSumber.fields.sumber = { stringValue: "recheck" };
+    const rec = { panggilan: [] };
+    pasangMock(rec, modeOk({ documents: [denganSumber, DOKUMEN[0]] }));
+    revalidateChanges();
+    const list = await getChanges(10);
+    assert.equal(list.length, 2);
+    assert.equal(list[0].id, "b1");
+    assert.equal(list[0].sumber, "recheck");
+    /* Entri lama tanpa field sumber: kunci tidak ada (bukan ""). */
+    assert.equal("sumber" in list[1], false);
+  });
 });
 
 describe("getChanges: fail-open saat Firestore bermasalah", () => {

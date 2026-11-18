@@ -23,14 +23,39 @@
  *    56,8 detik, alert + snapshot dilewati utuh). Fase alert sendiri
  *    dibatasi anggaran 15 detik dan menulis alert paralel batch 5,
  *    supaya tidak memakan jatah loop cek (NOTIF-15).
- * 5. Tiap portal dicek paralel batch 8 lewat lib/check.js. Cek ini hanya
- *    menguji portal bisa dibuka atau tidak, BUKAN isi lowongannya. Karena
- *    itu pemetaan statusnya hati-hati:
- *    - ada lowongan + portal mati -> "Portal tidak bisa dibuka" + catat perubahan
- *    - ada lowongan + portal hidup -> tanggal cek diperbarui, tanpa perubahan
+ * 5. Tiap portal dicek paralel batch 16 lewat lib/check.js
+ *    (checkUrlWithRetry: retry 1x bila hasil pertama gagal), timeout
+ *    cek 5 detik per percobaan. Batch naik dari 8 dan timeout turun
+ *    dari 8 detik di P-04 karena antrean rutin terpotong: run
+ *    18 Nov 2026 01:36 WIB hanya checked=48 dari queueTotal=317
+ *    dengan openSkipped=185. Cek ini hanya menguji portal bisa
+ *    dibuka atau tidak, BUKAN isi lowongannya. Karena itu pemetaan
+ *    statusnya hati-hati (P-04/BE2-01, K-11 — lihat
+ *    decideRecheckAction di lib/check.js):
+ *    - portal tidak bisa dihubungi (status null, sesudah retry) ->
+ *      "tidak diketahui": status TIDAK diubah, tanggal cek TIDAK
+ *      diperbarui, dihitung skipped + unreachable, pencacah
+ *      gagal_cek perusahaan naik 1. Bukti O-01: 26 dari 28 flip
+ *      16-17 Nov 2026 salah karena satu kegagalan jangkau sesaat
+ *      dianggap portal mati — pola itu tidak boleh terulang.
+ *    - portal menjawab 403/diblokir -> status TIDAK PERNAH diubah
+ *      (K-11): server hidup, cek otomatisnya yang diblokir.
+ *      Dihitung skipped + blocked, nomornya masuk blockedNos
+ *      (antrean tinjau manual) di heartbeat; tanggal cek tetap
+ *      diperbarui karena ceknya selesai.
+ *    - portal menjawab 404/410 sesudah retry -> benar-benar tidak
+ *      ada: ada lowongan -> "Portal tidak bisa dibuka" + catat
+ *      perubahan (sumber "recheck").
+ *    - portal menjawab 5xx sesudah retry -> strike pertama hanya
+ *      dicatat (skipped + serverError); baru bila portal yang sama
+ *      juga 5xx di run kemarin (two-strike, dibaca dari dokumen
+ *      cron-runs kemarin) status boleh flip.
+ *    - ada lowongan + portal hidup -> tanggal cek diperbarui, tanpa
+ *      perubahan; gagal_cek direset ke 0 bila sebelumnya > 0.
  *    - portal yang tadinya mati + sekarang hidup -> "Tidak dapat
- *      diverifikasi" + catat perubahan (lowongannya sendiri belum dicek
- *      ulang manusia, jadi tidak boleh langsung kembali jadi ada lowongan)
+ *      diverifikasi" + catat perubahan (lowongannya sendiri belum
+ *      dicek ulang manusia, jadi tidak boleh langsung kembali jadi
+ *      ada lowongan).
  *    Antrean disusun buildCheckQueue (lib/check.js, BE-05) dalam tiga
  *    tier: (1) mendesak — ada lowongan + batas lamar 0-7 hari lagi,
  *    dicek pertama tiap run; (2) terbuka — ada lowongan lainnya,
@@ -45,21 +70,29 @@
  *    bisa dicek lewat URL) dan tidak menyumbat antrean.
  *
  * Balasan: {checked, changed, updated, skipped, openSkipped,
- * truncated, alerts, alertsFailed, telegram, telegramMarked,
- * push, pushSent, pushFailed, pushPruned, pushTruncated,
- * alertPhaseTruncated, snapshotKnown, snapshotWritten, queue,
- * markerBumped, heartbeatWritten}. alerts = alert baru yang dibuat
- * di run ini; telegram = "sent" | "failed" | "skipped-no-token" |
- * "none"; telegramMarked = alert yang berhasil ditandai terkirim
- * sesudah kirim langsung (NOTIF-01); push = "sent" | "failed" |
- * "skipped-no-vapid" | "none" (digest web push, T10 — "none" bila
- * tidak ada alert baru); pushSent/pushFailed/pushPruned =
- * hasil kirim per langganan; pushTruncated = true bila kirim
- * push kehabisan anggaran 10 detik; openSkipped = perusahaan tier
- * mendesak/terbuka yang tidak sempat dicek karena terpotong;
- * queue = {urgent, open, dead, total}; markerBumped = true bila
- * marker kesegaran dinaikkan di run ini; heartbeatWritten = true
- * bila dokumen cron-runs tercatat (OPS-01).
+ * unreachable, blocked, serverError, unreachableNos, blockedNos,
+ * serverErrorNos, truncated, alerts, alertsFailed, telegram,
+ * telegramMarked, push, pushSent, pushFailed, pushPruned,
+ * pushTruncated, alertPhaseTruncated, snapshotKnown,
+ * snapshotWritten, queue, markerBumped, heartbeatWritten}.
+ * alerts = alert baru yang dibuat di run ini; telegram = "sent" |
+ * "failed" | "skipped-no-token" | "none"; telegramMarked = alert
+ * yang berhasil ditandai terkirim sesudah kirim langsung
+ * (NOTIF-01); push = "sent" | "failed" | "skipped-no-vapid" |
+ * "none" (digest web push, T10 — "none" bila tidak ada alert baru);
+ * pushSent/pushFailed/pushPruned = hasil kirim per langganan;
+ * pushTruncated = true bila kirim push kehabisan anggaran 10 detik;
+ * openSkipped = perusahaan tier mendesak/terbuka yang tidak sempat
+ * dicek karena terpotong; checked = portal dengan hasil cek
+ * DEFINITIF (hidup/diblokir/404/5xx) — portal yang tidak bisa
+ * dihubungi TIDAK dihitung checked, melainkan skipped + unreachable;
+ * unreachable/blocked/serverError = hitungan hasil cek "tidak
+ * diketahui"/diblokir/5xx-strike-pertama (P-04); unreachableNos/
+ * blockedNos/serverErrorNos = nomor perusahaannya (blockedNos
+ * adalah antrean tinjau manual, serverErrorNos dipakai run besok
+ * untuk two-strike 5xx); queue = {urgent, open, dead, total};
+ * markerBumped = true bila marker kesegaran dinaikkan di run ini;
+ * heartbeatWritten = true bila dokumen cron-runs tercatat (OPS-01).
  *
  * Heartbeat (OPS-01): di akhir run, ringkasan ditulis ke dokumen
  * cron-runs/{tanggal-WIB} (buildCronRunRecord, lib/notify.js).
@@ -119,7 +152,11 @@ import {
   getAccessToken,
 } from "@/lib/firestore-server";
 import { sendPushDigest } from "@/lib/push";
-import { buildCheckQueue, checkUrl } from "@/lib/check";
+import {
+  buildCheckQueue,
+  checkUrlWithRetry,
+  decideRecheckAction,
+} from "@/lib/check";
 import {
   OPEN_STATUS,
   DEFAULT_CHAT_ID,
@@ -138,16 +175,27 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const DEADLINE_MS = 50_000;
-const BATCH = 8;
+/* Paralelisme batch cek + timeout per percobaan cek (P-04,
+ * kriteria 4): batch 8 -> 16, timeout 8 -> 5 detik, karena antrean
+ * rutin terpotong (baseline run 18 Nov 2026 01:36 WIB:
+ * checked=48, openSkipped=185, queueTotal=317). Timeout lebih
+ * pendek bisa menambah portal "tidak diketahui" di hari jaringan
+ * lambat — tetapi sejak P-04, tidak diketahui TIDAK PERNAH
+ * membalik status, jadi risikonya hanya cek tertunda, bukan data
+ * rusak. Target observasi pasca-merge: openSkipped = 0 pada tiga
+ * run berturut-turut; bila tidak tercapai, P-05 (GitHub Actions,
+ * durasi job 6 jam) yang menyelesaikannya. */
+const BATCH = 16;
+const CHECK_TIMEOUT_MS = 5_000;
 /* Anggaran fase alert, dihitung sejak fase itu mulai (bukan sejak
  * run mulai, karena muat data + tukar token bisa lambat sendiri).
  * Alert ditulis paralel per batch kecil supaya fase ini tidak
  * memakan jatah loop cek (NOTIF-15). */
 const ALERT_BUDGET_MS = 15_000;
 const ALERT_BATCH = 5;
-const OPEN_STATUSES = ["Ada lowongan"];
-const DEAD_STATUS = "Portal tidak bisa dibuka";
-const UNVERIFIED_STATUS = "Tidak dapat diverifikasi";
+/* Taksonomi 4 status dipakai lewat decideRecheckAction di
+ * lib/check.js (P-04) — tidak ada konstanta status lokal di sini
+ * supaya hanya ada satu sumber kebenaran pemetaan status. */
 /* Snapshot daftar perusahaan yang ada lowongannya run sebelumnya
  * (dokumen meta/targets) dan koleksi alerts. Snapshot dipakai untuk
  * mendeteksi "lowongan baru": cron hanya menguji portal bisa dibuka
@@ -159,6 +207,15 @@ const UNVERIFIED_STATUS = "Tidak dapat diverifikasi";
 
 function todayWib() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+}
+
+/* Tanggal WIB kemarin ("YYYY-MM-DD") — id dokumen cron-runs run
+ * sebelumnya, dibaca untuk two-strike 5xx (K-11, P-04). */
+function yesterdayWib() {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString(
+    "en-CA",
+    { timeZone: "Asia/Jakarta" },
+  );
 }
 
 /* Buat satu dokumen alert dengan id deterministik. Kembalikan "created"
@@ -370,6 +427,28 @@ export async function GET(request) {
   }
   const fsBase = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents`;
 
+  /* Two-strike 5xx (K-11, P-04): nomor perusahaan yang 5xx di run
+   * kemarin, dibaca dari dokumen cron-runs kemarin (1 baca/run).
+   * Bila dokumen tidak ada atau baca gagal, dianggap tidak ada
+   * strike — gagal tertutup: 5xx hari ini hanya dicatat, tidak
+   * membalik status. */
+  let struckYesterday = new Set();
+  try {
+    const prevRun = await firestoreGet(
+      `${fsBase}/cron-runs/${yesterdayWib()}`,
+      token,
+    );
+    const values =
+      prevRun?.fields?.serverErrorNos?.arrayValue?.values || [];
+    struckYesterday = new Set(
+      values
+        .map((v) => Number(v.integerValue))
+        .filter((n) => Number.isInteger(n)),
+    );
+  } catch {
+    struckYesterday = new Set();
+  }
+
   /* Snapshot perusahaan yang ada lowongannya run sebelumnya. Bila
    * dokumen belum ada (run pertama dengan fitur ini), snapshot ditulis
    * tanpa alert supaya perusahaan yang sudah lama ada lowongan tidak
@@ -397,6 +476,17 @@ export async function GET(request) {
     updated: 0,
     skipped: 0,
     openSkipped: 0,
+    /* Hasil cek "tidak diketahui" (P-04): unreachable = tidak bisa
+     * dihubungi, blocked = server menolak cek otomatis, serverError
+     * = 5xx strike pertama. Daftar nomornya masuk heartbeat (tanpa
+     * URL/pesan error) — blockedNos untuk tinjau manual,
+     * serverErrorNos untuk two-strike run besok. */
+    unreachable: 0,
+    blocked: 0,
+    serverError: 0,
+    unreachableNos: [],
+    blockedNos: [],
+    serverErrorNos: [],
     truncated: false,
     alerts: 0,
     alertsFailed: 0,
@@ -623,7 +713,11 @@ export async function GET(request) {
     const checks = await Promise.all(
       batch.map(async ({ company: c }) => {
         if (!c.link_karir) return { company: c, result: null };
-        const result = await checkUrl(c.link_karir);
+        /* Retry 1x untuk hasil gagal (P-04, kriteria 2) sebelum
+         * keputusan apa pun diambil — lihat checkUrlWithRetry. */
+        const { result } = await checkUrlWithRetry(c.link_karir, {
+          timeoutMs: CHECK_TIMEOUT_MS,
+        });
         return { company: c, result };
       }),
     );
@@ -647,27 +741,79 @@ export async function GET(request) {
         summary.skipped += 1;
         continue;
       }
-      summary.checked += 1;
       const oldStatus = company.status;
-      let newStatus = null;
-      if (!result.ok && OPEN_STATUSES.includes(oldStatus)) {
-        newStatus = DEAD_STATUS;
-      } else if (result.ok && oldStatus === DEAD_STATUS) {
-        newStatus = UNVERIFIED_STATUS;
-      }
+      /* Keputusan dari hasil AKHIR (sesudah retry) — lihat
+       * decideRecheckAction di lib/check.js (P-04/K-11). */
+      const { outcome, newStatus: decided } = decideRecheckAction(
+        oldStatus,
+        result,
+        { struckYesterday: struckYesterday.has(company.no) },
+      );
       /* Status baru harus salah satu dari 4 nilai yang diakui. */
-      if (newStatus && !STATUS_ORDER.includes(newStatus)) newStatus = null;
+      const newStatus =
+        decided && STATUS_ORDER.includes(decided) ? decided : null;
       if (newStatus) statusAfter.set(company.no, newStatus);
+      const gagalCek = Number(company.gagal_cek) || 0;
 
-      const patchUrl =
-        `${fsBase}/companies/${company.no}` +
-        `?updateMask.fieldPaths=status&updateMask.fieldPaths=tanggal_cek`;
-      const patchBody = {
-        fields: {
-          status: { stringValue: newStatus || oldStatus },
-          tanggal_cek: { stringValue: today },
-        },
+      if (outcome === "unreachable") {
+        /* Tidak diketahui (BE2-01): status dan tanggal cek TIDAK
+         * disentuh — tanggal cek yang tertua membuat portal tetap
+         * di depan antrean supaya dicek lagi besok. Hanya gagal_cek
+         * naik 1 (K-10). Tidak dihitung checked: ceknya tidak
+         * menghasilkan kepastian apa pun. Tulis gagal_cek
+         * best-effort — gagal menulisnya tidak menambah skipped
+         * (portal ini sudah dihitung skipped sekali di atas). */
+        summary.skipped += 1;
+        summary.unreachable += 1;
+        summary.unreachableNos.push(company.no);
+        writes.push(
+          firestoreFetch(
+            `${fsBase}/companies/${company.no}` +
+              `?updateMask.fieldPaths=gagal_cek`,
+            token,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                fields: {
+                  gagal_cek: { integerValue: String(gagalCek + 1) },
+                },
+              }),
+            },
+          ).catch(() => {}),
+        );
+        continue;
+      }
+
+      /* Hasil definitif (hidup/diblokir/404/5xx): portal terhitung
+       * checked. Portal diblokir dan 5xx strike pertama dilewati
+       * (status tidak berubah) dengan pencacah masing-masing. */
+      summary.checked += 1;
+      if (outcome === "blocked") {
+        summary.skipped += 1;
+        summary.blocked += 1;
+        summary.blockedNos.push(company.no);
+      } else if (outcome === "server-error" && !newStatus) {
+        summary.skipped += 1;
+        summary.serverError += 1;
+        summary.serverErrorNos.push(company.no);
+      }
+
+      /* PATCH status + tanggal cek (+ reset gagal_cek ke 0 bila
+       * sempat > 0 — cek definitif memutus rantai kegagalan):
+       * satu tulis per portal, sama seperti sebelum P-04. */
+      const mask = ["status", "tanggal_cek"];
+      const fields = {
+        status: { stringValue: newStatus || oldStatus },
+        tanggal_cek: { stringValue: today },
       };
+      if (gagalCek > 0) {
+        mask.push("gagal_cek");
+        fields.gagal_cek = { integerValue: "0" };
+      }
+      const patchUrl =
+        `${fsBase}/companies/${company.no}?` +
+        mask.map((f) => `updateMask.fieldPaths=${f}`).join("&");
+      const patchBody = { fields };
       if (newStatus) {
         const changeBody = {
           fields: {
@@ -677,6 +823,9 @@ export async function GET(request) {
             to: { stringValue: newStatus },
             checkedAt: { stringValue: today },
             createdAt: { stringValue: new Date().toISOString() },
+            /* Asal flip (K-10): "recheck" membedakannya dari flip
+             * manusia ("admin") dan menentukan jalur pulih (D5). */
+            sumber: { stringValue: "recheck" },
           },
         };
         writes.push(

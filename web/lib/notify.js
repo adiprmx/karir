@@ -436,6 +436,40 @@ export function buildCronRunRecord(summary, { date, startedAt, finishedAt }) {
     updated: { integerValue: String(s.updated || 0) },
     skipped: { integerValue: String(s.skipped || 0) },
     openSkipped: { integerValue: String(s.openSkipped || 0) },
+    /* Pencacah hasil cek "tidak diketahui" (P-04/BE2-01, K-11):
+     * unreachable = portal tidak bisa dihubungi (status null,
+     * status tidak diubah); blocked = server menjawab tetapi
+     * menolak cek otomatis (403/4xx lain, tidak pernah di-flip);
+     * serverError = respons 5xx strike pertama (belum di-flip).
+     * Daftar nomornya hanya berisi nomor perusahaan — data yang
+     * sudah publik di katalog — tanpa URL, pesan error, atau IP,
+     * supaya heartbeat yang dapat dibaca tidak membocorkan
+     * informasi internal. serverErrorNos dibaca run besok untuk
+     * two-strike 5xx; blockedNos adalah antrean tinjau manual. */
+    unreachable: { integerValue: String(s.unreachable || 0) },
+    blocked: { integerValue: String(s.blocked || 0) },
+    serverError: { integerValue: String(s.serverError || 0) },
+    unreachableNos: {
+      arrayValue: {
+        values: (s.unreachableNos || []).map((no) => ({
+          integerValue: String(no),
+        })),
+      },
+    },
+    blockedNos: {
+      arrayValue: {
+        values: (s.blockedNos || []).map((no) => ({
+          integerValue: String(no),
+        })),
+      },
+    },
+    serverErrorNos: {
+      arrayValue: {
+        values: (s.serverErrorNos || []).map((no) => ({
+          integerValue: String(no),
+        })),
+      },
+    },
     alerts: { integerValue: String(s.alerts || 0) },
     alertsFailed: { integerValue: String(s.alertsFailed || 0) },
     telegram: { stringValue: s.telegram || "none" },

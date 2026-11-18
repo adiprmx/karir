@@ -3,61 +3,31 @@
  * (app/api/cron/recheck/route.js, T10) tanpa mengubah perilaku —
  * dipakai route recheck, route subscribe push
  * (app/api/push/subscribe/route.js), dan pengirim digest push
- * (lib/push.js). lib/analytics-server.js punya salinannya sendiri
- * dan sengaja tidak disentuh (di luar cakupan T10).
+ * (lib/push.js). Penukaran token service account tinggal di
+ * lib/service-account-token.js (BE2-24, P-04): satu implementasi
+ * + satu cache yang dipakai bersama lib/analytics-server.js;
+ * getAccessToken di sini hanya pembungkus yang melempar saat
+ * penukaran gagal (kontrak lama yang dipakai route cron).
  *
  * Semua panggilan bertimeout 10 detik, termasuk membaca body
  * (jsonWithTimeout, BE-09): return langsung mematikan timer
  * AbortController di finally sebelum body dibaca, jadi tanpa
  * timeout body panggilan bisa menggantung selamanya saat body
  * stall. */
-import { createSign } from "node:crypto";
 import { jsonWithTimeout } from "./companies.js";
+import { getServiceAccountAccessToken } from "./service-account-token.js";
 
 const FETCH_TIMEOUT_MS = 10_000;
 
-function base64url(input) {
-  return Buffer.from(input).toString("base64url");
-}
-
-/* Tukar service account menjadi access token Firestore. */
-export async function getAccessToken(sa) {
-  const now = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64url(
-    JSON.stringify({
-      iss: sa.client_email,
-      scope: "https://www.googleapis.com/auth/datastore",
-      aud: "https://oauth2.googleapis.com/token",
-      exp: now + 3600,
-      iat: now,
-    }),
-  );
-  const signer = createSign("RSA-SHA256");
-  signer.update(`${header}.${payload}`);
-  const signature = signer.sign(sa.private_key, "base64url");
-  const jwt = `${header}.${payload}.${signature}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      signal: controller.signal,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion: jwt,
-      }).toString(),
-    });
-    if (!res.ok) {
-      throw new Error(`Token tukar gagal: HTTP ${res.status}`);
-    }
-    const body = await res.json();
-    if (!body.access_token) throw new Error("Token tidak ada di balasan.");
-    return body.access_token;
-  } finally {
-    clearTimeout(timer);
-  }
+/* Tukar service account menjadi access token Firestore. Melempar
+ * bila penukaran gagal (kontrak lama: route cron menjawab 503).
+ * Token dipakai ulang dari cache bersama bila masih berlaku
+ * (lihat lib/service-account-token.js). `fetchImpl` hanya untuk
+ * test; produksi memakai fetch global. */
+export async function getAccessToken(sa, { fetchImpl = fetch } = {}) {
+  const token = await getServiceAccountAccessToken({ sa, fetchImpl });
+  if (!token) throw new Error("Token tukar gagal.");
+  return token;
 }
 
 /* Panggil REST Firestore (tulis atau baca daftar). Melempar bila
