@@ -10,35 +10,29 @@
 # satu per satu sesuai putusan verifikasi (HIDUP -> dipulihkan di
 # Firestore; MATI -> write-back ke CSV; DIBLOKIR -> tinjau mingguan).
 #
-# Isi awal 18 Nov 2026: 27 portal arah A dari verifikasi O-01 yang
-# flip recheck-nya terbukti SALAH (22 HIDUP + 4 DIBLOKIR + 1 tautan
-# usang no. 62). EMC Healthcare (382) TIDAK ada di sini: putusannya
-# MATI fungsional, status live "Portal tidak bisa dibuka" BENAR dan
-# CSV mengikutinya lewat write-back.
-18 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-20 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-23 | O-01 DIBLOKIR 403: portal aktif, tinjau mingguan | 2026-11-18
-35 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-37 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-39 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-51 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-62 | O-01 MATI-tautan-usang: tautan diperbarui, pulihkan di Firestore | 2026-11-18
-72 | O-01 DIBLOKIR 403: portal aktif, tinjau mingguan | 2026-11-18
-79 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-94 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-101 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-121 | O-01 DIBLOKIR 403: portal aktif, tinjau mingguan | 2026-11-18
-129 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-151 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-157 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-158 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-160 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-168 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-235 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-244 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-281 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-374 | O-01 DIBLOKIR 403: portal aktif, tinjau mingguan | 2026-11-18
-466 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-497 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-528 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
-579 | O-01 HIDUP: flip recheck salah, pulihkan di Firestore | 2026-11-18
+# 18 Nov 2026 (D3): 23 nomor HIDUP O-01 DIKELUARKAN — sudah dipulihkan
+# ke "Ada lowongan" di Firestore (restore27, marker rev 8). Tersisa 4
+# DIBLOKIR O-01 (tinjau mingguan) + 15 flip baru recheck 18 Nov yang
+# BELUM terverifikasi §B6.2 (verifikasi berjalan; jangan write-back
+# status mereka sebelum putusan). EMC Healthcare (382) TIDAK ada di
+# sini: putusannya MATI fungsional, status live "Portal tidak bisa
+# dibuka" BENAR dan CSV mengikutinya lewat write-back.
+23 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
+72 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
+121 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
+374 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
+398 | Flip 18 Nov belum terverifikasi §B6.2: Glints | 2026-11-18
+414 | Flip 18 Nov belum terverifikasi §B6.2: Ciputra Development | 2026-11-18
+418 | Flip 18 Nov belum terverifikasi §B6.2: RS Premier Bintaro | 2026-11-18
+439 | Flip 18 Nov belum terverifikasi §B6.2: Japfa Comfeed Indonesia | 2026-11-18
+440 | Flip 18 Nov belum terverifikasi §B6.2: Siantar Top | 2026-11-18
+444 | Flip 18 Nov belum terverifikasi §B6.2: Greenfields Indonesia | 2026-11-18
+445 | Flip 18 Nov belum terverifikasi §B6.2: Ultra Jaya | 2026-11-18
+470 | Flip 18 Nov belum terverifikasi §B6.2: InJourney Hospitality | 2026-11-18
+476 | Flip 18 Nov belum terverifikasi §B6.2: MyRepublic Indonesia | 2026-11-18
+486 | Flip 18 Nov belum terverifikasi §B6.2: Lotte Grosir | 2026-11-18
+502 | Flip 18 Nov belum terverifikasi §B6.2: PT Harita Nickel | 2026-11-18
+504 | Flip 18 Nov belum terverifikasi §B6.2: PT Golden Energy Mines Tbk | 2026-11-18
+511 | Flip 18 Nov belum terverifikasi §B6.2: PT Ricobana Abadi | 2026-11-18
+531 | Flip 18 Nov belum terverifikasi §B6.2: PT Dharma Satya Nusantara | 2026-11-18
+532 | Flip 18 Nov belum terverifikasi §B6.2: PT Austindo Nusantara Jaya | 2026-11-18
