@@ -238,4 +238,40 @@ describe("recordIncidentEvent", () => {
       incidentsSink({ code: "KODE_A", message: "a" }),
     );
   });
+
+  it("incidentsSink mengabaikan event level info (P-07) — tidak ada tulis Firestore", async () => {
+    const fetchAsli = globalThis.fetch;
+    const calls = [];
+    globalThis.fetch = async (url, options) => {
+      calls.push({ url: String(url), options });
+      return mockResponse({ ok: true, status: 200 });
+    };
+    const projectIdLama = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const apiKeyLama = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = PROJECT;
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY = API_KEY;
+    try {
+      incidentsSink({
+        code: "PUSH_DIGEST_PAGE",
+        level: "info",
+        component: "push",
+        message: "Digest push: halaman 1 — 500 langganan dibaca.",
+      });
+      /* Sink fire-and-forget: beri kesempatan jalan. */
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.equal(calls.length, 0);
+    } finally {
+      globalThis.fetch = fetchAsli;
+      if (projectIdLama === undefined) {
+        delete process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      } else {
+        process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = projectIdLama;
+      }
+      if (apiKeyLama === undefined) {
+        delete process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+      } else {
+        process.env.NEXT_PUBLIC_FIREBASE_API_KEY = apiKeyLama;
+      }
+    }
+  });
 });

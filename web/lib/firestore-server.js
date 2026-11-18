@@ -59,6 +59,37 @@ export async function firestoreFetch(url, token, options = {}) {
   }
 }
 
+/* Seperti firestoreFetch, tetapi TIDAK melempar untuk status
+ * non-2xx: mengembalikan { status, ok, body } supaya pemanggil
+ * bisa membedakan 200/404/409/412 sendiri (P-07/K4: pembuatan
+ * dokumen atomik POST ?documentId — 409 berarti sudah ada — dan
+ * compare-and-swap PATCH dengan prasyarat updateTime — 412
+ * berarti kalah balapan). Melempar hanya bila jaringan/timeout
+ * gagal total. Body yang bukan JSON dianggap {}. */
+export async function firestoreFetchStatus(url, token, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+    /* Lihat catatan di firestoreFetch: res.json() tanpa timeout
+     * bisa menggantung selamanya karena timer sudah dimatikan. */
+    const body = await jsonWithTimeout(res, FETCH_TIMEOUT_MS).catch(
+      () => ({}),
+    );
+    return { status: res.status, ok: res.ok, body: body || {} };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* Baca satu dokumen Firestore. Kembalikan null bila dokumen belum ada
  * (HTTP 404); lempar untuk kegagalan lain. */
 export async function firestoreGet(url, token) {

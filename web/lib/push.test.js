@@ -8,21 +8,34 @@
  * payload digest, dan pengiriman digest dengan web-push di-mock —
  * tidak ada push sungguhan dan tidak ada Firestore live. Kunci
  * VAPID uji dibuat lewat generateVAPIDKeys (kunci asli yang
- * dibuat di tempat, bukan kunci produksi). */
+ * dibuat di tempat, bukan kunci produksi). P-07 menambah:
+ * paginasi daftar langganan (600 langganan simulasi), status
+ * jujur nol langganan ("none"), klasifikasi + pembersihan dokumen
+ * malformed (mock), dan sidik epoch kunci VAPID. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { generateVAPIDKeys, WebPushError } from "web-push";
 import {
+  OBS_CODES,
+  registerObservabilitySink,
+  resetObservabilityForTests,
+} from "./observability.js";
+import {
   classifyPushError,
   classifyPushStatus,
+  classifySubscriptionDoc,
+  classifySubscriptionFields,
+  cleanupMalformedSubscriptions,
   formatPushPayload,
+  listSubscriptions,
   parseSubscriptionDoc,
   sendPushDigest,
   subscriptionDocId,
   subscriptionFields,
   validateEndpoint,
   validateSubscription,
+  vapidKeyHash,
 } from "./push.js";
 
 /* --- Langganan tiruan yang bentuknya benar --- */
@@ -380,6 +393,8 @@ describe("parseSubscriptionDoc (T10)", () => {
       endpoint: "https://example.com/push",
       p256dh: keys.p256dh,
       auth: keys.auth,
+      /* P-07/K5: dokumen lama tanpa field vapidKeyHash -> "". */
+      vapidKeyHash: "",
     });
   });
 
@@ -454,13 +469,17 @@ describe("sendPushDigest (T10)", () => {
     assert.equal(result.pushSent, 0);
   });
 
-  it("tidak ada langganan: sent dengan hitungan nol", async () => {
+  it("tidak ada langganan: none dengan hitungan nol (P-07/P3)", async () => {
+    /* Dulu: "sent" saat nol langganan — menyesatkan (tidak ada
+     * satu pun yang menerima digest). P-07: "none". */
     const result = await sendPushDigest({
       ...base,
       listImpl: async () => ({ subscriptions: [], hasMore: false }),
     });
-    assert.equal(result.push, "sent");
+    assert.equal(result.push, "none");
     assert.equal(result.pushSent, 0);
+    assert.equal(result.pushTotal, 0);
+    assert.equal(result.pushPages, 1);
   });
 
   it("semua kirim sukses: sent + hitungan benar + payload digest terkirim", async () => {
@@ -751,7 +770,34 @@ describe("sendPushDigest (T10)", () => {
     assert.equal(result.pushPruned, 0);
   });
 
-  it("langganan melebihi satu halaman: tetap kirim halaman pertama", async () => {
+  it("langganan melebihi satu halaman: SEMUA halaman dikirim (P-07/K1)", async () => {
+    /* Dulu (P1): hanya halaman pertama yang dikirimi digest.
+     * P-07: paginasi berjalan sampai habis. */
+    const pages = {
+      "": {
+        subscriptions: [subDoc("a")],
+        hasMore: true,
+        nextPageToken: "halaman-2",
+      },
+      "halaman-2": {
+        subscriptions: [subDoc("b")],
+        hasMore: false,
+        nextPageToken: "",
+      },
+    };
+    const result = await sendPushDigest({
+      ...base,
+      listPageImpl: async (pageToken) => pages[pageToken],
+      sendImpl: async () => ({ statusCode: 201 }),
+    });
+    assert.equal(result.push, "sent");
+    assert.equal(result.pushSent, 2);
+    assert.equal(result.pushTotal, 2);
+    assert.equal(result.pushPages, 2);
+    assert.equal(result.pushHasMore, false);
+  });
+
+  it("listImpl lawas tanpa token halaman: halaman berikut dilaporkan jujur (P-07/K1)", async () => {
     const result = await sendPushDigest({
       ...base,
       listImpl: async () => ({
@@ -762,5 +808,677 @@ describe("sendPushDigest (T10)", () => {
     });
     assert.equal(result.push, "sent");
     assert.equal(result.pushSent, 1);
+    assert.equal(result.pushHasMore, true);
+    assert.equal(result.pushPages, 1);
+  });
+
+  it("600 langganan simulasi: seluruh 600 menerima digest, 2 halaman, log per kelompok (P-07/K1)", async () => {
+    /* Kriteria paket P-07 no. 1: tes dengan 600 langganan simulasi
+     * membuktikan seluruh 600 menerima digest. Halaman 1 = 500
+     * (PUSH_PAGE_SIZE produksi), halaman 2 = 100. */
+    const pages = {
+      "": {
+        subscriptions: Array.from({ length: 500 }, (_, i) =>
+          subDoc(`hal1-${i}`),
+        ),
+        hasMore: true,
+        nextPageToken: "halaman-2",
+      },
+      "halaman-2": {
+        subscriptions: Array.from({ length: 100 }, (_, i) =>
+          subDoc(`hal2-${i}`),
+        ),
+        hasMore: false,
+        nextPageToken: "",
+      },
+    };
+    /* Bukti log per kelompok: kejadian observabilitas per
+     * halaman, ditangkap lewat sink (bukan console.log — aturan
+     * lint melarang console.log di kode produksi). */
+    resetObservabilityForTests();
+    const events = [];
+    registerObservabilitySink((event) => {
+      events.push(event);
+    });
+    let sent = 0;
+    try {
+      const result = await sendPushDigest({
+        ...base,
+        budgetMs: 60_000,
+        listPageImpl: async (pageToken) => pages[pageToken],
+        sendImpl: async () => {
+          sent += 1;
+          return { statusCode: 201 };
+        },
+      });
+      assert.equal(result.push, "sent");
+      assert.equal(result.pushSent, 600);
+      assert.equal(sent, 600);
+      assert.equal(result.pushTotal, 600);
+      assert.equal(result.pushPages, 2);
+      assert.equal(result.pushHasMore, false);
+      assert.equal(result.pushFailed, 0);
+      const pageEvents = events.filter(
+        (event) => event.code === OBS_CODES.PUSH_DIGEST_PAGE,
+      );
+      assert.equal(pageEvents.length, 2);
+      assert.equal(pageEvents[0].level, "info");
+      assert.match(
+        pageEvents[0].message,
+        /halaman 1 — 500 langganan dibaca/,
+      );
+      assert.match(
+        pageEvents[1].message,
+        /halaman 2 — 100 langganan dibaca/,
+      );
+      assert.equal(pageEvents[0].meta.page, 1);
+      assert.equal(pageEvents[0].meta.read, 500);
+      assert.equal(pageEvents[1].meta.cumulative, 600);
+      /* Tidak ada endpoint di log. */
+      assert.equal(
+        events.some((event) => event.message.includes("example.com/push")),
+        false,
+      );
+    } finally {
+      resetObservabilityForTests();
+    }
+  });
+
+  it("dokumen malformed dihitung per halaman, terakumulasi (P-07/K1)", async () => {
+    const pages = {
+      "": {
+        subscriptions: [null, subDoc("baik-1")],
+        hasMore: true,
+        nextPageToken: "halaman-2",
+      },
+      "halaman-2": {
+        subscriptions: [null, null, subDoc("baik-2")],
+        hasMore: false,
+        nextPageToken: "",
+      },
+    };
+    const result = await sendPushDigest({
+      ...base,
+      listPageImpl: async (pageToken) => pages[pageToken],
+      sendImpl: async () => ({ statusCode: 201 }),
+    });
+    assert.equal(result.push, "sent");
+    assert.equal(result.pushSent, 2);
+    assert.equal(result.pushMalformed, 3);
+    assert.equal(result.pushFailed, 3);
+    assert.equal(result.pushTotal, 5);
+    assert.equal(result.pushPages, 2);
+  });
+
+  it("anggaran habis di tengah paginasi: terpotong + halaman berikut dilaporkan (P-07/K1)", async () => {
+    /* Deterministik lewat hapus prune yang lambat (pola yang sama
+     * dengan tes "anggaran habis di tengah daftar"): halaman 1
+     * berisi satu langganan 410 yang hapusnya memakan 200 ms
+     * (anggaran 100 ms) — sesudah halaman 1, cek anggaran di
+     * awal putaran berikut terpicu sebelum halaman 2 dibaca. */
+    const pages = {
+      "": {
+        subscriptions: [subDoc("kedaluwarsa")],
+        hasMore: true,
+        nextPageToken: "halaman-2",
+      },
+      "halaman-2": {
+        subscriptions: [subDoc("b")],
+        hasMore: false,
+        nextPageToken: "",
+      },
+    };
+    const result = await sendPushDigest({
+      ...base,
+      budgetMs: 100,
+      listPageImpl: async (pageToken) => pages[pageToken],
+      sendImpl: async () => {
+        throw new WebPushError("gone", 410, {}, "", "https://x");
+      },
+      deleteImpl: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      },
+    });
+    assert.equal(result.push, "sent");
+    assert.equal(result.pushPruned, 1);
+    assert.equal(result.pushTruncated, true);
+    assert.equal(result.pushHasMore, true);
+    assert.equal(result.pushPages, 1);
+  });
+
+  it("daftar halaman kedua gagal: failed dengan hitungan parsial (P-07/K1)", async () => {
+    const pages = {
+      "": {
+        subscriptions: [subDoc("a")],
+        hasMore: true,
+        nextPageToken: "halaman-2",
+      },
+    };
+    const result = await sendPushDigest({
+      ...base,
+      listPageImpl: async (pageToken) => {
+        if (pageToken === "halaman-2") {
+          throw new Error("Firestore baca gagal: HTTP 429");
+        }
+        return pages[pageToken];
+      },
+      sendImpl: async () => ({ statusCode: 201 }),
+    });
+    assert.equal(result.push, "failed");
+    assert.equal(result.pushSent, 1);
+    assert.equal(result.pushTotal, 1);
+    assert.equal(result.pushHasMore, true);
+    assert.equal(result.pushPages, 1);
+  });
+
+  it("401 menandai pushConfigError (P-07/K5)", async () => {
+    const result = await sendPushDigest({
+      ...base,
+      concurrency: 1,
+      listImpl: async () => ({
+        subscriptions: [subDoc("satu")],
+        hasMore: false,
+      }),
+      sendImpl: async () => {
+        throw new WebPushError("unauthorized", 401, {}, "", "https://x");
+      },
+    });
+    assert.equal(result.push, "failed");
+    assert.equal(result.pushConfigError, true);
+  });
+
+  it("kunci VAPID tidak benar menandai pushConfigError (P-07/K5)", async () => {
+    let listed = false;
+    const result = await sendPushDigest({
+      ...base,
+      vapidPublicKey: "bukan-kunci",
+      vapidPrivateKey: "bukan-kunci",
+      listImpl: async () => {
+        listed = true;
+        return { subscriptions: [subDoc("a")], hasMore: false };
+      },
+      sendImpl: async () => ({ statusCode: 201 }),
+    });
+    assert.equal(result.push, "failed");
+    assert.equal(result.pushConfigError, true);
+    /* Gagal cepat: daftar tidak dibaca bila kunci tidak benar. */
+    assert.equal(listed, false);
+    assert.equal(result.pushTotal, 0);
+  });
+
+  it("sidik kunci VAPID: langganan lama vs tanpa sidik dihitung terpisah (P-07/K5)", async () => {
+    const currentHash = vapidKeyHash(VAPID.publicKey);
+    const result = await sendPushDigest({
+      ...base,
+      listImpl: async () => ({
+        subscriptions: [
+          { ...subDoc("kini"), vapidKeyHash: currentHash },
+          { ...subDoc("lama"), vapidKeyHash: "sidiklamaxyz" },
+          subDoc("tanpa-sidik"),
+        ],
+        hasMore: false,
+      }),
+      sendImpl: async () => ({ statusCode: 201 }),
+    });
+    assert.equal(result.push, "sent");
+    assert.equal(result.pushSent, 3);
+    assert.equal(result.pushStaleKey, 1);
+    assert.equal(result.pushUnknownKey, 1);
+  });
+});
+
+describe("vapidKeyHash + subscriptionFields (P-07/K5)", () => {
+  it("vapidKeyHash: 12 karakter hex, deterministik, kosong bila kunci kosong", () => {
+    const hash = vapidKeyHash(VAPID.publicKey);
+    assert.equal(hash.length, 12);
+    assert.match(hash, /^[0-9a-f]{12}$/);
+    assert.equal(hash, vapidKeyHash(VAPID.publicKey));
+    assert.notEqual(hash, vapidKeyHash(generateVAPIDKeys().publicKey));
+    assert.equal(vapidKeyHash(""), "");
+    assert.equal(vapidKeyHash(null), "");
+  });
+
+  it("subscriptionFields menulis vapidKeyHash bila kunci publik diisi", () => {
+    const fields = subscriptionFields({
+      uid: "uid-uji",
+      subscription: validSubscription(),
+      userAgent: "UA Uji",
+      nowIso: "2026-11-18T00:00:00.000Z",
+      vapidPublicKey: VAPID.publicKey,
+    });
+    assert.equal(
+      fields.vapidKeyHash.stringValue,
+      vapidKeyHash(VAPID.publicKey),
+    );
+  });
+
+  it("subscriptionFields tanpa kunci publik: field vapidKeyHash tidak ditulis", () => {
+    const fields = subscriptionFields({
+      uid: "uid-uji",
+      subscription: validSubscription(),
+      userAgent: "UA Uji",
+      nowIso: "2026-11-18T00:00:00.000Z",
+    });
+    assert.equal("vapidKeyHash" in fields, false);
+  });
+
+  it("parseSubscriptionDoc meneruskan vapidKeyHash; dokumen lama -> string kosong", () => {
+    const withHash = parseSubscriptionDoc({
+      name: "x/push_subscriptions/abc",
+      fields: {
+        endpoint: { stringValue: "https://example.com/push/1" },
+        p256dh: { stringValue: validKeys().p256dh },
+        auth: { stringValue: validKeys().auth },
+        vapidKeyHash: { stringValue: "sidiklamaxyz" },
+      },
+    });
+    assert.equal(withHash.vapidKeyHash, "sidiklamaxyz");
+    const legacy = parseSubscriptionDoc({
+      name: "x/push_subscriptions/def",
+      fields: {
+        endpoint: { stringValue: "https://example.com/push/2" },
+        p256dh: { stringValue: validKeys().p256dh },
+        auth: { stringValue: validKeys().auth },
+      },
+    });
+    assert.equal(legacy.vapidKeyHash, "");
+  });
+});
+
+describe("listSubscriptions dengan pageToken (P-07/K1)", () => {
+  it("halaman pertama mengembalikan nextPageToken; halaman kedua menghabiskannya", async () => {
+    const fetchAsli = globalThis.fetch;
+    const urls = [];
+    globalThis.fetch = async (url) => {
+      urls.push(String(url));
+      const u = String(url);
+      const page1 = !u.includes("pageToken=");
+      return {
+        ok: true,
+        status: 200,
+        json: async () =>
+          page1
+            ? {
+                documents: [
+                  {
+                    name: "x/push_subscriptions/satu",
+                    fields: {
+                      endpoint: {
+                        stringValue: "https://example.com/push/1",
+                      },
+                      p256dh: { stringValue: validKeys().p256dh },
+                      auth: { stringValue: validKeys().auth },
+                    },
+                  },
+                ],
+                nextPageToken: "token-halaman-2",
+              }
+            : { documents: [] },
+      };
+    };
+    try {
+      const first = await listSubscriptions(
+        "https://firestore.googleapis.com/v1/projects/uji/databases/(default)/documents",
+        "token-uji",
+      );
+      assert.equal(first.subscriptions.length, 1);
+      assert.equal(first.hasMore, true);
+      assert.equal(first.nextPageToken, "token-halaman-2");
+      const second = await listSubscriptions(
+        "https://firestore.googleapis.com/v1/projects/uji/databases/(default)/documents",
+        "token-uji",
+        first.nextPageToken,
+      );
+      assert.equal(second.subscriptions.length, 0);
+      assert.equal(second.hasMore, false);
+      assert.equal(second.nextPageToken, "");
+      assert.equal(urls.length, 2);
+      assert.match(urls[1], /pageToken=token-halaman-2/);
+    } finally {
+      globalThis.fetch = fetchAsli;
+    }
+  });
+});
+
+describe("classifySubscriptionFields / classifySubscriptionDoc (P-07/K3)", () => {
+  it("field lengkap dan benar -> valid", () => {
+    assert.deepEqual(
+      classifySubscriptionFields({
+        endpoint: "https://example.com/push/1",
+        p256dh: validKeys().p256dh,
+        auth: validKeys().auth,
+      }),
+      { valid: true, reason: "" },
+    );
+  });
+
+  it("alasan endpoint: hilang / http / terlalu panjang", () => {
+    assert.equal(
+      classifySubscriptionFields({
+        endpoint: undefined,
+        p256dh: validKeys().p256dh,
+        auth: validKeys().auth,
+      }).reason,
+      "endpoint",
+    );
+    assert.equal(
+      classifySubscriptionFields({
+        endpoint: "http://example.com/push",
+        p256dh: validKeys().p256dh,
+        auth: validKeys().auth,
+      }).reason,
+      "endpoint",
+    );
+  });
+
+  it("alasan p256dh: bukan 65 byte / byte pertama bukan 0x04", () => {
+    assert.equal(
+      classifySubscriptionFields({
+        endpoint: "https://example.com/push/1",
+        p256dh: Buffer.alloc(32).toString("base64url"),
+        auth: validKeys().auth,
+      }).reason,
+      "p256dh",
+    );
+    assert.equal(
+      classifySubscriptionFields({
+        endpoint: "https://example.com/push/1",
+        p256dh: Buffer.alloc(65, 0x02).toString("base64url"),
+        auth: validKeys().auth,
+      }).reason,
+      "p256dh",
+    );
+  });
+
+  it("alasan auth: bukan 16 byte", () => {
+    assert.equal(
+      classifySubscriptionFields({
+        endpoint: "https://example.com/push/1",
+        p256dh: validKeys().p256dh,
+        auth: Buffer.alloc(8).toString("base64url"),
+      }).reason,
+      "auth",
+    );
+  });
+
+  function docRest(id, fields) {
+    return {
+      name:
+        `projects/uji/databases/(default)/documents/push_subscriptions/${id}`,
+      fields,
+    };
+  }
+
+  function fieldsBaik(overrides = {}) {
+    return {
+      uid: { stringValue: "uid-uji" },
+      endpoint: { stringValue: "https://example.com/push/1" },
+      p256dh: { stringValue: validKeys().p256dh },
+      auth: { stringValue: validKeys().auth },
+      ...overrides,
+    };
+  }
+
+  it("dokumen lengkap -> valid, dengan id + nama resource", () => {
+    const out = classifySubscriptionDoc(docRest("doc-1", fieldsBaik()));
+    assert.equal(out.valid, true);
+    assert.equal(out.id, "doc-1");
+    assert.ok(out.name.endsWith("/push_subscriptions/doc-1"));
+  });
+
+  it("dokumen tanpa endpoint -> malformed alasan endpoint", () => {
+    const fields = fieldsBaik();
+    delete fields.endpoint;
+    const out = classifySubscriptionDoc(docRest("doc-2", fields));
+    assert.equal(out.valid, false);
+    assert.equal(out.reason, "endpoint");
+  });
+
+  it("dokumen tanpa UID TIDAK malformed (masih bisa menerima digest, bisa diklaim ulang)", () => {
+    const fields = fieldsBaik();
+    delete fields.uid;
+    const out = classifySubscriptionDoc(docRest("doc-3", fields));
+    assert.equal(out.valid, true);
+  });
+
+  it("ID dokumen bukan SHA-256 endpoint TIDAK malformed (pengiriman memakai endpoint, bukan ID)", () => {
+    const out = classifySubscriptionDoc(
+      docRest("id-sembarang-bukan-sha256", fieldsBaik()),
+    );
+    assert.equal(out.valid, true);
+  });
+
+  it("dokumen tanpa field sama sekali -> malformed alasan endpoint", () => {
+    const out = classifySubscriptionDoc(docRest("doc-4", {}));
+    assert.equal(out.valid, false);
+    assert.equal(out.reason, "endpoint");
+  });
+
+  it("dokumen null/bukan objek -> malformed alasan endpoint", () => {
+    assert.equal(classifySubscriptionDoc(null).valid, false);
+    assert.equal(classifySubscriptionDoc(null).reason, "endpoint");
+  });
+});
+
+describe("cleanupMalformedSubscriptions (P-07/K3)", () => {
+  const FS_BASE =
+    "https://firestore.googleapis.com/v1/projects/uji/databases/(default)/documents";
+
+  function docRest(id, fields) {
+    return {
+      name: `${FS_BASE}/push_subscriptions/${id}`,
+      fields,
+    };
+  }
+
+  function fieldsBaik(endpoint = "https://example.com/push/baik") {
+    return {
+      uid: { stringValue: "uid-uji" },
+      endpoint: { stringValue: endpoint },
+      p256dh: { stringValue: validKeys().p256dh },
+      auth: { stringValue: validKeys().auth },
+    };
+  }
+
+  it("dokumen malformed dihapus per kelompok; yang baik dan yatim dipertahankan", async () => {
+    const deletedNames = [];
+    const pages = {
+      "": {
+        documents: [
+          docRest("baik-1", fieldsBaik()),
+          docRest("buruk-endpoint", {
+            ...fieldsBaik(),
+            endpoint: { stringValue: "http://example.com/push" },
+          }),
+          docRest(
+            "yatim",
+            (() => {
+              const f = fieldsBaik("https://example.com/push/yatim");
+              delete f.uid;
+              return f;
+            })(),
+          ),
+        ],
+        hasMore: true,
+        nextPageToken: "halaman-2",
+      },
+      "halaman-2": {
+        documents: [
+          docRest("buruk-p256dh", {
+            ...fieldsBaik("https://example.com/push/2"),
+            p256dh: { stringValue: Buffer.alloc(32).toString("base64url") },
+          }),
+          docRest("buruk-auth", {
+            ...fieldsBaik("https://example.com/push/3"),
+            auth: { stringValue: Buffer.alloc(8).toString("base64url") },
+          }),
+        ],
+        hasMore: false,
+        nextPageToken: "",
+      },
+    };
+    const result = await cleanupMalformedSubscriptions({
+      fsBase: FS_BASE,
+      token: "token-uji",
+      listPageImpl: async (pageToken) => pages[pageToken],
+      batchDeleteImpl: async (names) => {
+        deletedNames.push(...names);
+      },
+    });
+    assert.equal(result.examined, 5);
+    assert.equal(result.malformed, 3);
+    assert.equal(result.cleaned, 3);
+    assert.equal(result.failed, 0);
+    assert.equal(result.hasMore, false);
+    assert.equal(result.listFailed, false);
+    assert.deepEqual(result.reasons, { endpoint: 1, p256dh: 1, auth: 1 });
+    assert.equal(deletedNames.length, 3);
+    assert.equal(
+      deletedNames.some((n) => n.endsWith("/baik-1")),
+      false,
+    );
+    assert.equal(
+      deletedNames.some((n) => n.endsWith("/yatim")),
+      false,
+    );
+  });
+
+  it("dryRun: klasifikasi jalan, hapus TIDAK jalan", async () => {
+    let deletes = 0;
+    const result = await cleanupMalformedSubscriptions({
+      fsBase: FS_BASE,
+      token: "token-uji",
+      dryRun: true,
+      listPageImpl: async () => ({
+        documents: [
+          docRest("buruk", {
+            ...fieldsBaik(),
+            endpoint: { stringValue: "http://example.com/push" },
+          }),
+        ],
+        hasMore: false,
+        nextPageToken: "",
+      }),
+      batchDeleteImpl: async () => {
+        deletes += 1;
+      },
+    });
+    assert.equal(result.malformed, 1);
+    assert.equal(result.cleaned, 0);
+    assert.equal(deletes, 0);
+    assert.equal(result.dryRun, true);
+  });
+
+  it("batas hapus: malformed di luar batas dicatat tapi tidak dihapus run ini, hasMore true", async () => {
+    const deletedNames = [];
+    const docs = Array.from({ length: 5 }, (_, i) =>
+      docRest(`buruk-${i}`, {
+        ...fieldsBaik(`https://example.com/push/${i}`),
+        endpoint: { stringValue: "http://example.com/push" },
+      }),
+    );
+    const result = await cleanupMalformedSubscriptions({
+      fsBase: FS_BASE,
+      token: "token-uji",
+      maxDelete: 2,
+      listPageImpl: async () => ({
+        documents: docs,
+        hasMore: false,
+        nextPageToken: "",
+      }),
+      batchDeleteImpl: async (names) => {
+        deletedNames.push(...names);
+      },
+    });
+    assert.equal(result.examined, 5);
+    assert.equal(result.malformed, 5);
+    assert.equal(result.cleaned, 2);
+    assert.equal(result.hasMore, true);
+    assert.equal(deletedNames.length, 2);
+  });
+
+  it("batas periksa: dokumen di luar batas tidak diperiksa, hasMore true", async () => {
+    const docs = Array.from({ length: 5 }, (_, i) =>
+      docRest(`baik-${i}`, fieldsBaik(`https://example.com/push/${i}`)),
+    );
+    const result = await cleanupMalformedSubscriptions({
+      fsBase: FS_BASE,
+      token: "token-uji",
+      maxExamine: 3,
+      listPageImpl: async () => ({
+        documents: docs,
+        hasMore: false,
+        nextPageToken: "",
+      }),
+    });
+    assert.equal(result.examined, 3);
+    assert.equal(result.hasMore, true);
+  });
+
+  it("daftar gagal: listFailed true, tanpa crash, tanpa hapus", async () => {
+    let deletes = 0;
+    const result = await cleanupMalformedSubscriptions({
+      fsBase: FS_BASE,
+      token: "token-uji",
+      listPageImpl: async () => {
+        throw new Error("Firestore baca gagal: HTTP 429");
+      },
+      batchDeleteImpl: async () => {
+        deletes += 1;
+      },
+    });
+    assert.equal(result.listFailed, true);
+    assert.equal(result.examined, 0);
+    assert.equal(result.cleaned, 0);
+    assert.equal(deletes, 0);
+  });
+
+  it("hapus kelompok gagal: seluruh kelompok dihitung gagal, run berikut mencoba lagi", async () => {
+    const result = await cleanupMalformedSubscriptions({
+      fsBase: FS_BASE,
+      token: "token-uji",
+      listPageImpl: async () => ({
+        documents: [
+          docRest("buruk-1", {
+            ...fieldsBaik(),
+            endpoint: { stringValue: "http://example.com/push" },
+          }),
+          docRest("buruk-2", {
+            ...fieldsBaik("https://example.com/push/2"),
+            endpoint: { stringValue: "http://example.com/push" },
+          }),
+        ],
+        hasMore: false,
+        nextPageToken: "",
+      }),
+      batchDeleteImpl: async () => {
+        throw new Error("Firestore hapus gagal: HTTP 500");
+      },
+    });
+    assert.equal(result.malformed, 2);
+    assert.equal(result.cleaned, 0);
+    assert.equal(result.failed, 2);
+  });
+
+  it("anggaran habis di tengah paginasi: truncated + hasMore, tanpa crash", async () => {
+    const result = await cleanupMalformedSubscriptions({
+      fsBase: FS_BASE,
+      token: "token-uji",
+      budgetMs: 10,
+      listPageImpl: async (pageToken) => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        if (pageToken === "") {
+          return {
+            documents: [docRest("baik-1", fieldsBaik())],
+            hasMore: true,
+            nextPageToken: "halaman-2",
+          };
+        }
+        return { documents: [], hasMore: false, nextPageToken: "" };
+      },
+    });
+    assert.equal(result.examined, 1);
+    assert.equal(result.truncated, true);
+    assert.equal(result.hasMore, true);
   });
 });

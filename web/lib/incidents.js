@@ -165,5 +165,9 @@ export async function recordIncidentEvent(
  * kejadian secara fire-and-forget — pemanggil tidak menunggu dan
  * tidak pernah melihat kegagalannya. */
 export function incidentsSink(event) {
+  /* P-07: kejadian level "info" (mis. progres per halaman
+   * digest) adalah kabar rutin, bukan insiden — tidak pernah
+   * membuat dokumen incidents. */
+  if (event && event.level === "info") return;
   recordIncidentEvent(event).catch(() => {});
 }

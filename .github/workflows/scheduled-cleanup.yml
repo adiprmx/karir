@@ -21,6 +21,13 @@
 # schedule HANYA jalan di default branch (main); di branch fitur
 # workflow ini inert.
 #
+# P-07: endpoint cleanup kini juga menjalankan fase pembersihan
+# langganan push malformed (retention.push_subscriptions) yang
+# DIPAGARI flag env PUSH_MALFORMED_CLEANUP_ENABLED=1. Tanpa flag,
+# fase dilewati dan workflow tidak berubah perilakunya. Loop ini
+# membaca `retention` secara generik (deleted/hasMore), jadi fase
+# push ikut ter-loop otomatis sesudah flag aktif.
+#
 # KREDENSIAL: secret CRON_SECRET (Settings > Secrets and variables >
 # Actions repo ini). Bila belum dipasang, run GAGAL dengan pesan
 # jelas.

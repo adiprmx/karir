@@ -117,7 +117,9 @@ antrean.
 alerts, alertsFailed, telegram, telegramMarked,
 alertPhaseTruncated, snapshotKnown, snapshotWritten, queue,
 markerBumped, heartbeatWritten, trigger, pushedMarked,
-pushedFailed}`
+pushedFailed, push, pushSent, pushFailed, pushPruned,
+pushTruncated, pushTotal, pushHasMore, pushMalformed,
+pushConfigError, pushPages, pushStaleKey, pushUnknownKey}`
 
 - `openSkipped` — perusahaan tier mendesak/terbuka yang tidak
   sempat dicek karena terpotong. Ini sinyal utama pemantauan:
@@ -133,6 +135,21 @@ pushedFailed}`
   gagal ditandai `pushed` sesudah digest push terkirim penuh.
   Bila digest terpotong/gagal, penanda tidak ditulis dan endpoint
   digest 01:30 WIB mencoba lagi.
+- `push` (P-07) — `sent` | `failed` | `none` | `skipped-no-vapid`.
+  `none` berarti tidak ada alert yang belum pushed ATAU nol
+  langganan — keduanya hasil normal, bukan kegagalan. Sejak
+  P-07, nol langganan TIDAK PERNAH dicatat `sent`.
+- Konteks push (P-06 + P-07): `pushTotal` (langganan dibaca),
+  `pushSent` / `pushFailed` / `pushPruned` (terkirim / gagal /
+  dihapus karena 404/410), `pushHasMore` + `pushTruncated`
+  (run terpotong — alert tidak ditandai pushed), `pushMalformed`
+  (dokumen dilewati karena bentuknya tidak bisa dikirim),
+  `pushPages` (halaman langganan yang dibaca — paginasi 500 per
+  halaman, tanpa batas total langganan), `pushConfigError`
+  (kunci VAPID tidak berpasangan / ditolak 401-403 — langganan
+  TIDAK dihapus), `pushStaleKey` (langganan berkunci lama
+  sesudah rotasi) / `pushUnknownKey` (langganan lama tanpa
+  sidik kunci).
 
 ## Endpoint digest mandiri (P-05)
 
@@ -144,7 +161,9 @@ penuh, tidak ada yang ditemukan dan endpoint menjawab tanpa
 mengirim. Heartbeat-nya sendiri: `cron-runs/digest-{tanggal-WIB}`.
 Run gagal (kueri gagal / push gagal / tanpa VAPID) menjawab 500
 + kunci idempotency `failed` supaya pemicu cadangan (QStash
-01:35) bisa mengambil alih.
+01:35) bisa mengambil alih. Sejak P-07, alert yang ada tapi nol
+langganan menjawab 200 `push: "none"` dan alert ditandai pushed
+— tidak ada yang perlu dikirimi ulang.
 
 ## Satu sumber kebenaran status terkirim (NOTIF-01)
 
@@ -181,6 +200,17 @@ pertama yang tersanitasi, maks 300 karakter), `lastPhase` +
 `serverError` + `*Nos`) dan P-05 (`trigger`, `pushedMarked`,
 `pushedFailed`) tidak berubah.
 
+Sejak P-07, heartbeat recheck + digest menambah
+`pushConfigError`, `pushPages`, `pushStaleKey`,
+`pushUnknownKey`; heartbeat cleanup menambah
+`pushCleanupExamined`, `pushCleanupMalformed`,
+`pushCleanupCleaned`, `pushCleanupFailed`,
+`pushCleanupHasMore`, `pushCleanupSkipped` +
+`pushCleanupSkipReason` (fase pembersihan langganan malformed
+dipagari flag `PUSH_MALFORMED_CLEANUP_ENABLED` — tanpa flag,
+fase dilewati dan `pushCleanupSkipped: true`; lihat
+`docs/runbook-rotasi-vapid.md` bagian K3).
+
 Watcher memeriksa heartbeat tiap pagi (01:30 WIB). Sejak P-05,
 toleransi keterlambatan memakai masa tenggang 15 menit sesudah
 jadwal (01:00 → 01:15): watcher yang tiba sebelum akhir tenggang
@@ -202,6 +232,8 @@ Vercel Cron yang molor 35–55 menit (C1).
 | `status: "skipped"` (P-06) | Kirim alarm "cron dilewati" dengan `skipReason` + `error`, sekali per hari (penanda `cron-skipped-{tanggal}`) |
 | `telegram: "failed"` / `"skipped-no-token"` (P-06) | Kirim alarm Telegram gagal / tanpa token, sekali per hari |
 | Sinyal push bermasalah (P-06): `push` gagal, tanpa VAPID, terpotong, atau `pushFailed` tinggi | Kirim alarm push sesuai jenisnya, sekali per hari |
+| `pushConfigError: true` (P-07) — kunci VAPID tidak berpasangan / ditolak 401-403 | Kirim alarm "konfigurasi push bermasalah" sekali per hari; langganan tidak dihapus, periksa pasangan kunci (runbook rotasi) |
+| `pushCleanupFailed > 0` di heartbeat cleanup (P-07) | Kirim alarm "pembersihan langganan push gagal sebagian", sekali per hari |
 | `alertsTruncated` / fase alert terpotong (P-06) | Kirim alarm "fase alert terpotong", sekali per hari |
 | Snapshot target gagal ditulis (P-06) | Kirim alarm "snapshot gagal", sekali per hari |
 | Kuota ≥ ambang tetapi tidak ada alert kuota (P-06) | Kirim alarm "alert kuota hilang", sekali per hari |

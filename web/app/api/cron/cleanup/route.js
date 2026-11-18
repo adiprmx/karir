@@ -2,19 +2,23 @@
  * dokumen lama dari tujuh koleksi Firestore — event analitik mentah
  * lebih tua dari 90 hari (maks 200/run, lewat cleanupOldEvents di
  * lib/analytics-server.js) ditambah enam koleksi di bawah (lewat
- * cleanupCollection di berkas ini). Dijalankan terjadwal tiap
- * Senin 02:00 WIB oleh workflow GitHub Actions (utama,
- * .github/workflows/scheduled-cleanup.yml), dengan jadwal QStash
- * sebagai pemicu cadangan dan Vercel Cron selama masa transisi
- * (lihat docs/monitoring-cron.md). Endpoint menerima GET dan POST
- * (POST untuk QStash).
+ * cleanupCollection di berkas ini) — ditambah pembersihan dokumen
+ * langganan push malformed (P-07/K3, P4: kriteria hapus dicatat
+ * di lib/push.js classifySubscriptionDoc; fase ini DIBATASI FLAG
+ * env PUSH_MALFORMED_CLEANUP_ENABLED=1 dan baru dinyalakan
+ * sesudah cadangan push_subscriptions Fase B terverifikasi).
+ * Dijalankan terjadwal tiap Senin 02:00 WIB oleh workflow GitHub
+ * Actions (utama, .github/workflows/scheduled-cleanup.yml),
+ * dengan jadwal QStash sebagai pemicu cadangan dan Vercel Cron
+ * selama masa transisi (lihat docs/monitoring-cron.md). Endpoint
+ * menerima GET dan POST (POST untuk QStash).
  *
  * Anggaran hapus per run: 200 (analitik) + 200 + 100 + 100 + 100
- * + 100 + 100 + 100 (incidents, P-06) = maks 1.000 hapus per run,
- * seminggu sekali — jauh di
- * bawah batas hapus Firestore 20.000/hari. Tiap koleksi dihapus
- * dalam satu panggilan batchWrite (maks 500 tulis/panggilan; tiap
- * koleksi <= 200). Bila masih ada sisa (hasMore), workflow
+ * + 100 + 100 + 100 (incidents, P-06) + 100 (langganan push
+ * malformed, P-07) = maks 1.100 hapus per run, seminggu sekali —
+ * jauh di bawah batas hapus Firestore 20.000/hari. Tiap koleksi
+ * dihapus dalam satu panggilan batchWrite (maks 500 tulis/panggilan;
+ * tiap koleksi <= 200). Bila masih ada sisa (hasMore), workflow
  * Actions memanggil endpoint lagi (loop sampai tidak ada sisa) —
  * tiap panggilan adalah invokasi fungsi baru dengan anggaran 60
  * detiknya sendiri, jadi skenario penuh ~110 detik tidak lagi
@@ -54,6 +58,7 @@ import {
   todayJakarta,
 } from "@/lib/analytics-server";
 import { buildCleanupRunRecord } from "@/lib/notify";
+import { cleanupMalformedSubscriptions } from "@/lib/push";
 import { recordReads, flushReadMeters } from "@/lib/read-meter";
 
 /* Batas durasi fungsi di Vercel (paket Hobby: maks 60 detik),
@@ -515,6 +520,69 @@ async function runCleanup(request) {
       });
       phaseMs[policy.collection] = Date.now() - collectionStart;
     }
+    /* 6b. Pembersihan dokumen langganan push malformed (P-07/K3,
+     * P4) — kriteria hapus dicatat di lib/push.js
+     * classifySubscriptionDoc. DIBATASI FLAG: fase ini hanya jalan
+     * bila env PUSH_MALFORMED_CLEANUP_ENABLED=1 — flag baru
+     * dinyalakan sesudah cadangan push_subscriptions Fase B (P-03)
+     * terverifikasi, karena penghapusan tanpa cadangan tidak dapat
+     * dipulihkan (lihat docs/runbook-rotasi-vapid.md bagian
+     * pembersihan). Bila flag mati, fase dilewati dan dicatat di
+     * heartbeat sebagai skipped (bukan gagal). Hasilnya masuk
+     * retention push_subscriptions supaya workflow loop
+     * (scheduled-cleanup.yml) memanggil lagi bila masih ada sisa —
+     * bentuknya sama dengan koleksi retensi lain ({ deleted,
+     * hasMore } + hitungan pembersihan). Fase ini jalan TERAKHIR
+     * supaya fase retensi selesai dulu bila fungsi terpotong
+     * Vercel di tengah jalan; iterasi workflow berikut
+     * mengulanginya. Kegagalan daftar/hapus menggagalkan run
+     * (pola yang sama dengan koleksi retensi) supaya kegagalan
+     * terlihat, bukan tertelan diam — hasil parsial ikut di
+     * heartbeat dan balasan 500. */
+    const pushCleanupStart = Date.now();
+    if (process.env.PUSH_MALFORMED_CLEANUP_ENABLED === "1") {
+      const pushCleanup = await cleanupMalformedSubscriptions({
+        fsBase,
+        token,
+        budgetMs: 30_000,
+      });
+      retention.push_subscriptions = {
+        deleted: pushCleanup.cleaned,
+        hasMore: pushCleanup.hasMore,
+        examined: pushCleanup.examined,
+        malformed: pushCleanup.malformed,
+        cleaned: pushCleanup.cleaned,
+        failed: pushCleanup.failed,
+        truncated: pushCleanup.truncated,
+        listFailed: pushCleanup.listFailed,
+        reasons: pushCleanup.reasons,
+      };
+      /* Pengukur baca (P-06/K7): tiap dokumen yang diperiksa
+       * dihitung 1 baca. */
+      recordReads("cron-cleanup", pushCleanup.examined);
+      if (pushCleanup.listFailed) {
+        throw new Error(
+          "Daftar langganan push gagal dibaca saat pembersihan malformed.",
+        );
+      }
+      if (pushCleanup.failed > 0) {
+        throw new Error(
+          `Hapus ${pushCleanup.failed} dokumen langganan malformed gagal.`,
+        );
+      }
+    } else {
+      retention.push_subscriptions = {
+        deleted: 0,
+        hasMore: false,
+        examined: 0,
+        malformed: 0,
+        cleaned: 0,
+        failed: 0,
+        skipped: true,
+        skipReason: "flag-mati",
+      };
+    }
+    phaseMs.push_subscriptions = Date.now() - pushCleanupStart;
     /* 7. Heartbeat (S8/C-02): catat ringkasan run ini ke
      * cron-runs/cleanup-{tanggal} supaya watcher bisa mendeteksi
      * run yang hilang atau gagal. Best-effort: gagal menulis

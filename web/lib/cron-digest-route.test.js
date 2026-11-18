@@ -127,7 +127,8 @@ function pushSubscriptionDoc() {
 }
 
 /* Mode tiruan: alertsQuery "ok" (dua alert belum pushed) |
- * "semua-pushed" | "kosong" | "fail"; pushList "ok" | "failed";
+ * "semua-pushed" | "kosong" | "fail"; pushList "ok" | "failed" |
+ * "kosong" (nol langganan — P-07/P3);
  * lock "ok" | "conflict" (create 409, GET mengembalikan lockDoc). */
 const modes = {
   alertsQuery: "ok",
@@ -228,6 +229,13 @@ globalThis.fetch = async (url, options = {}) => {
     recorded.pushListCalls += 1;
     if (modes.pushList === "failed") {
       return mockResponse({ ok: false, status: 500 });
+    }
+    if (modes.pushList === "kosong") {
+      return mockResponse({
+        ok: true,
+        status: 200,
+        body: { documents: [] },
+      });
     }
     return mockResponse({
       ok: true,
@@ -330,6 +338,12 @@ describe("run digest", () => {
     assert.equal(body.pushTotal, 1);
     assert.equal(body.pushHasMore, false);
     assert.equal(body.pushMalformed, 0);
+    /* P-07: konteks push baru — dokumen tiruan tanpa sidik kunci
+     * dihitung pushUnknownKey. */
+    assert.equal(body.pushConfigError, false);
+    assert.equal(body.pushPages, 1);
+    assert.equal(body.pushStaleKey, 0);
+    assert.equal(body.pushUnknownKey, 1);
     assert.equal(body.pushedMarked, 2);
     assert.equal(body.pushedFailed, 0);
     assert.equal(body.trigger, "cron-secret");
@@ -391,6 +405,31 @@ describe("run digest", () => {
     assert.equal(body.alertsFound, 0);
     assert.equal(body.alertsTotal, 0);
     assert.equal(body.push, "none");
+  });
+
+  it("alert ada tapi nol langganan: push none (bukan sent), run 200, alert ditandai pushed (P-07/P3)", async () => {
+    pasangVapidUji();
+    modes.pushList = "kosong";
+    const res = await getDigest(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.status, "ok");
+    assert.equal(body.alertsFound, 2);
+    assert.equal(body.push, "none");
+    assert.equal(body.pushSent, 0);
+    assert.equal(body.pushTotal, 0);
+    assert.equal(body.pushPages, 1);
+    /* Tidak ada yang perlu dikirimi ulang: alert ditandai pushed
+     * supaya run berikut tidak memprosesnya lagi. */
+    assert.equal(body.pushedMarked, 2);
+    assert.equal(body.pushedFailed, 0);
+    assert.equal(webpushStub.sendCalls.length, 0);
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/digest-${todayWib()}`),
+    );
+    assert.ok(heartbeat, "tidak ada PATCH heartbeat digest");
+    assert.equal(heartbeat.body.fields.push.stringValue, "none");
+    assert.equal(heartbeat.body.fields.pushTotal.integerValue, "0");
   });
 
   it("duplikat (job sedang berjalan): 200 duplicate, tidak ada kirim", async () => {

@@ -680,6 +680,12 @@ async function runRecheck(request) {
     pushTotal: 0,
     pushHasMore: false,
     pushMalformed: 0,
+    /* Konteks digest push (P-07): error konfigurasi VAPID, jumlah
+     * halaman daftar, langganan epoch kunci lama/tanpa sidik. */
+    pushConfigError: false,
+    pushPages: 0,
+    pushStaleKey: 0,
+    pushUnknownKey: 0,
     /* Penanda pushed (P-05) + pemicu run — lihat buildCronRunRecord. */
     pushedMarked: 0,
     pushedFailed: 0,
@@ -1068,15 +1074,21 @@ async function runRecheck(request) {
       summary.pushTotal = pushResult.pushTotal;
       summary.pushHasMore = pushResult.pushHasMore;
       summary.pushMalformed = pushResult.pushMalformed;
+      summary.pushConfigError = pushResult.pushConfigError;
+      summary.pushPages = pushResult.pushPages;
+      summary.pushStaleKey = pushResult.pushStaleKey;
+      summary.pushUnknownKey = pushResult.pushUnknownKey;
       /* Penanda pushed (P-05): bila digest terkirim penuh (tidak
        * terpotong anggaran), tandai alert sudah masuk digest supaya
        * endpoint digest mandiri 01:30 WIB tidak mengirim ulang.
        * Bila terpotong/gagal, penanda TIDAK ditulis — endpoint
-       * digest akan mencoba lagi. Best-effort: gagal menandai
+       * digest akan mencoba lagi. "none" ikut ditandai: nol
+       * langganan berarti tidak ada yang perlu dikirimi ulang
+       * (P-07/P3). Best-effort: gagal menandai
        * tidak menggagalkan run (risiko terburuk: digest ganda
        * dengan tag yang sama, yang ditimpa di perangkat). */
       if (
-        pushResult.push === "sent" &&
+        (pushResult.push === "sent" || pushResult.push === "none") &&
         !pushResult.pushTruncated &&
         freshAlerts.length > 0
       ) {

@@ -12,7 +12,9 @@
  * lewat loader test (lib/push-client-test-loader.mjs). Tidak ada
  * jaringan, tidak ada push sungguhan, tidak ada service worker
  * asli. Kunci VAPID uji dibuat lewat generateVAPIDKeys (kunci
- * asli yang dibuat di tempat, bukan kunci produksi). */
+ * asli yang dibuat di tempat, bukan kunci produksi). P-07/K5
+ * menambah: deteksi kunci VAPID basi (getPushStatus "stale-key")
+ * dan subscribe ulang (resubscribePush). */
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -20,19 +22,28 @@ import { generateVAPIDKeys } from "web-push";
 import { auth } from "../lib/push-client-firebase-stub.mjs";
 
 const VAPID = generateVAPIDKeys();
+const VAPID_LAMA = generateVAPIDKeys();
 process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = VAPID.publicKey;
 
 /* Loader `@/lib/firebase` -> stub harus terdaftar SEBELUM
  * push-client.js diimpor, karena itu impornya dinamis di bawah. */
 register("../lib/push-client-test-loader.mjs", import.meta.url);
 
-const { subscribePush } = await import("./push-client.js");
+const {
+  getPushStatus,
+  resubscribePush,
+  subscribePush,
+  unsubscribePush,
+  VAPID_KEY_STORAGE_KEY,
+} = await import("./push-client.js");
 
 const ENDPOINT = "https://fcm.googleapis.com/fcm/send/langganan-uji";
 const ID_TOKEN = "token-id-uji";
 
 /* --- Browser tiruan (di-install ulang tiap test) --- */
 let fakeSubscription;
+let fakeRegistration;
+let fakeStorage;
 let fetchCalls;
 let fetchBehavior;
 
@@ -49,12 +60,24 @@ function installBrowserGlobals() {
       return true;
     },
   };
+  fakeRegistration = null;
+  fakeStorage = {};
   fetchCalls = [];
   fetchBehavior = "ok";
   globalThis.window = {
     atob: (s) => Buffer.from(s, "base64").toString("binary"),
     PushManager: function PushManager() {},
     Notification: function Notification() {},
+    localStorage: {
+      getItem: (key) =>
+        key in fakeStorage ? fakeStorage[key] : null,
+      setItem: (key, value) => {
+        fakeStorage[key] = String(value);
+      },
+      removeItem: (key) => {
+        delete fakeStorage[key];
+      },
+    },
   };
   Object.defineProperty(globalThis, "navigator", {
     value: {
@@ -66,7 +89,7 @@ function installBrowserGlobals() {
             getSubscription: async () => fakeSubscription,
           },
         }),
-        getRegistration: async () => null,
+        getRegistration: async () => fakeRegistration,
       },
     },
     configurable: true,
@@ -145,6 +168,94 @@ describe("subscribePush: rollback langganan browser (T10)", () => {
     const result = await subscribePush();
     assert.deepEqual(result, { ok: false, code: "belum-masuk" });
     assert.equal(fakeSubscription.unsubscribed, true);
+    assert.equal(fetchCalls.length, 0);
+  });
+});
+
+describe("deteksi kunci VAPID basi + subscribe ulang (P-07/K5)", () => {
+  function pasangRegistrasiAktif() {
+    fakeRegistration = {
+      pushManager: {
+        getSubscription: async () => fakeSubscription,
+      },
+    };
+  }
+
+  it("getPushStatus: langganan aktif + kunci tersimpan sama -> active", async () => {
+    pasangRegistrasiAktif();
+    fakeStorage[VAPID_KEY_STORAGE_KEY] = VAPID.publicKey;
+    assert.equal(await getPushStatus(), "active");
+  });
+
+  it("getPushStatus: langganan aktif tanpa kunci tersimpan (lama) -> active, bukan basi", async () => {
+    pasangRegistrasiAktif();
+    assert.equal(await getPushStatus(), "active");
+  });
+
+  it("getPushStatus: kunci tersimpan berbeda dengan kunci saat ini -> stale-key", async () => {
+    pasangRegistrasiAktif();
+    fakeStorage[VAPID_KEY_STORAGE_KEY] = VAPID_LAMA.publicKey;
+    assert.equal(await getPushStatus(), "stale-key");
+  });
+
+  it("getPushStatus: tanpa langganan -> inactive walau kunci tersimpan basi", async () => {
+    fakeRegistration = {
+      pushManager: { getSubscription: async () => null },
+    };
+    fakeStorage[VAPID_KEY_STORAGE_KEY] = VAPID_LAMA.publicKey;
+    assert.equal(await getPushStatus(), "inactive");
+  });
+
+  it("subscribePush sukses menyimpan kunci yang dipakai", async () => {
+    auth.currentUser = signedInUser(async () => ID_TOKEN);
+    const result = await subscribePush();
+    assert.deepEqual(result, { ok: true, code: "ok" });
+    assert.equal(fakeStorage[VAPID_KEY_STORAGE_KEY], VAPID.publicKey);
+  });
+
+  it("subscribePush gagal (server menolak) TIDAK menyimpan kunci", async () => {
+    auth.currentUser = signedInUser(async () => ID_TOKEN);
+    fetchBehavior = "server-error";
+    const result = await subscribePush();
+    assert.deepEqual(result, { ok: false, code: "gagal" });
+    assert.equal(VAPID_KEY_STORAGE_KEY in fakeStorage, false);
+  });
+
+  it("unsubscribePush membersihkan kunci tersimpan", async () => {
+    pasangRegistrasiAktif();
+    fakeStorage[VAPID_KEY_STORAGE_KEY] = VAPID.publicKey;
+    auth.currentUser = signedInUser(async () => ID_TOKEN);
+    const result = await unsubscribePush();
+    assert.deepEqual(result, { ok: true, code: "ok" });
+    assert.equal(fakeSubscription.unsubscribed, true);
+    assert.equal(VAPID_KEY_STORAGE_KEY in fakeStorage, false);
+  });
+
+  it("resubscribePush: batalkan langganan lama lalu subscribe baru + kunci baru tersimpan", async () => {
+    pasangRegistrasiAktif();
+    fakeStorage[VAPID_KEY_STORAGE_KEY] = VAPID_LAMA.publicKey;
+    auth.currentUser = signedInUser(async () => ID_TOKEN);
+    const result = await resubscribePush();
+    assert.deepEqual(result, { ok: true, code: "ok" });
+    /* Langganan browser lama dibatalkan. */
+    assert.equal(fakeSubscription.unsubscribed, true);
+    /* Dua panggilan server: DELETE dokumen lama, POST dokumen baru. */
+    assert.equal(fetchCalls.length, 2);
+    assert.equal(fetchCalls[0].options.method, "DELETE");
+    assert.equal(fetchCalls[1].options.method, "POST");
+    /* Kunci baru tersimpan — status berikutnya active. */
+    assert.equal(fakeStorage[VAPID_KEY_STORAGE_KEY], VAPID.publicKey);
+    assert.equal(await getPushStatus(), "active");
+  });
+
+  it("resubscribePush: batalkan lama gagal -> gagal, tidak subscribe baru", async () => {
+    pasangRegistrasiAktif();
+    fakeSubscription.unsubscribe = async () => {
+      throw new Error("unsubscribe gagal");
+    };
+    auth.currentUser = signedInUser(async () => ID_TOKEN);
+    const result = await resubscribePush();
+    assert.deepEqual(result, { ok: false, code: "gagal" });
     assert.equal(fetchCalls.length, 0);
   });
 });
