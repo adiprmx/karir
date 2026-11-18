@@ -240,19 +240,12 @@ describe("log kegagalan + jatuh ke seed (BE2-02)", () => {
     assert.equal(ev[0].meta.companyNo, 1);
   });
 
-  it("muat seed lewat alias gagal di luar Next -> SEED_LOAD_FAILED sekali", async () => {
-    /* seedCache modul sudah terisi oleh tes sebelumnya, jadi tes ini
-     * memakai instans modul segar (query string berbeda = instans
-     * ESM berbeda) agar loadSeed benar-benar jalan lagi — dipaksa
-     * jatuh ke seed lewat marker 429. */
-    pasangMock({ markerStatus: 429 });
-    const segar = await import("./companies.js?segar-seed=1");
-    await segar.getCompanies();
-    const ev = kodeYangDicatat(OBS_CODES.SEED_LOAD_FAILED);
-    /* Di luar Next (tes Node), impor alias @ selalu gagal sekali. */
-    assert.equal(ev.length, 1);
-    assert.equal(ev[0].meta.reason, "alias-import-failed");
-  });
+  /* Tes SEED_LOAD_FAILED (muat seed lewat alias gagal) tinggal di
+   * lib/companies-seed-load.test.js — file terpisah supaya instans
+   * modulnya segar (seedCache kosong). Impor query string
+   * ("./companies.js?segar=1") DILARANG: terbukti 18 Nov 2026
+   * merusak penggabungan coverage Node (companies.js 98,48% ->
+   * 46,25% lines di CI). */
 });
 
 describe("pengukur baca + cuplikan kesehatan", () => {

@@ -312,6 +312,88 @@ describe("run", () => {
     });
   });
 
+  it("heartbeat 404/500 + watcher gagal dicatat di file", async () => {
+    await withTempDir(async (dir) => {
+      const fetchImpl = async (url) => {
+        const u = String(url);
+        if (u.endsWith("/api/health")) return response({ body: HEALTH_OK });
+        if (u.endsWith(":runQuery")) return response({ body: [] });
+        if (u.includes("/cron-runs/recheck-")) {
+          return response({ ok: false, status: 404, body: {} });
+        }
+        if (u.includes("/cron-runs/digest-")) {
+          return response({ ok: false, status: 500, body: {} });
+        }
+        if (u.includes("/meta/watcher")) {
+          return response({
+            body: {
+              name: `${BASE}/meta/watcher`,
+              fields: {
+                lastRunAt: { stringValue: "2026-11-18T18:30:00.000Z" },
+                lastRunOk: { booleanValue: false },
+                alarmsSent: { integerValue: "1" },
+              },
+            },
+          });
+        }
+        throw new Error(`URL tidak terduga: ${u}`);
+      };
+      const code = await run(["--date", "2026-11-18", "--out-dir", dir], {
+        env: envWithToken,
+        fetchImpl,
+        now: NOW,
+      });
+      assert.equal(code, 0);
+      const md = await readFile(path.join(dir, "2026-11-18.md"), "utf8");
+      assert.match(md, /\| cron-runs\/recheck-2026-11-18 \| tidak-ada \|/);
+      assert.match(md, /\| cron-runs\/digest-2026-11-18 \| gagal-baca \|/);
+      assert.match(md, /\| meta\/watcher \| gagal \|/);
+      assert.match(md, /alarm terkirim 1/);
+    });
+  });
+
+  it("baca insiden gagal: kegagalan dicatat di file, tetap keluar 0", async () => {
+    await withTempDir(async (dir) => {
+      const fetchImpl = async (url) => {
+        const u = String(url);
+        if (u.endsWith("/api/health")) return response({ body: HEALTH_OK });
+        if (u.endsWith(":runQuery")) {
+          return response({ ok: false, status: 429, body: {} });
+        }
+        return response({ ok: false, status: 404, body: {} });
+      };
+      const code = await run(["--date", "2026-11-18", "--out-dir", dir], {
+        env: envWithToken,
+        fetchImpl,
+        now: NOW,
+      });
+      assert.equal(code, 0);
+      const md = await readFile(path.join(dir, "2026-11-18.md"), "utf8");
+      assert.match(md, /Gagal dibaca:.*HTTP 429/);
+    });
+  });
+
+  it("fetch insiden melempar: kegagalan dicatat, tetap keluar 0", async () => {
+    await withTempDir(async (dir) => {
+      const fetchImpl = async (url) => {
+        const u = String(url);
+        if (u.endsWith("/api/health")) return response({ body: HEALTH_OK });
+        if (u.endsWith(":runQuery")) {
+          throw new Error("jaringan putus");
+        }
+        return response({ ok: false, status: 404, body: {} });
+      };
+      const code = await run(["--date", "2026-11-18", "--out-dir", dir], {
+        env: envWithToken,
+        fetchImpl,
+        now: NOW,
+      });
+      assert.equal(code, 0);
+      const md = await readFile(path.join(dir, "2026-11-18.md"), "utf8");
+      assert.match(md, /Gagal dibaca:.*jaringan putus/);
+    });
+  });
+
   it("argumen tidak valid keluar 2", async () => {
     const code = await run(["--date", "salah"], {
       env: envWithToken,

@@ -294,6 +294,49 @@ describe("POST /api/client-error (P-06/K3)", () => {
     assert.equal(ev[0].message.length, 500);
   });
 
+  it("body JSON array/null -> 400 'Body harus objek JSON'", async () => {
+    for (const raw of ["[1,2]", "null", "\"teks\"", "123"]) {
+      const res = await postClientError(
+        fakePost("/api/client-error", IP.client, raw),
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(await res.json(), {
+        error: "Body harus objek JSON.",
+      });
+    }
+    assert.equal(kejadian.length, 0);
+  });
+
+  it("request.text() gagal -> 400 'Body tidak bisa dibaca'", async () => {
+    const req = fakePost("/api/client-error", IP.client, "{}");
+    req.text = async () => {
+      throw new Error("baca gagal");
+    };
+    const res = await postClientError(req);
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), {
+      error: "Body tidak bisa dibaca.",
+    });
+    assert.equal(kejadian.length, 0);
+  });
+
+  it("tanpa ANALYTICS_SALT: batas laju dilewati, laporan tetap 200", async () => {
+    const garam = process.env.ANALYTICS_SALT;
+    delete process.env.ANALYTICS_SALT;
+    try {
+      const res = await postClientError(
+        fakePost(
+          "/api/client-error",
+          IP.client,
+          JSON.stringify({ message: "tanpa garam" }),
+        ),
+      );
+      assert.equal(res.status, 200);
+    } finally {
+      process.env.ANALYTICS_SALT = garam;
+    }
+  });
+
   it("batas laju: 10 lolos, ke-11 ditolak 429", async () => {
     let terakhir;
     for (let i = 0; i < 11; i += 1) {
@@ -321,5 +364,8 @@ describe("urlPathOnly", () => {
     assert.equal(urlPathOnly(""), "");
     assert.equal(urlPathOnly(null), "");
     assert.equal(urlPathOnly(123), "");
+  });
+  it("URL yang tidak bisa diparse -> string kosong", () => {
+    assert.equal(urlPathOnly("https://[::1"), "");
   });
 });

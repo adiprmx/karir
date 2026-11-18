@@ -11,8 +11,14 @@
  *
  * onRequestError (pola resmi Next.js 16 + @sentry/nextjs v11):
  * menangkap error request server yang lolos dari handler rute dan
- * meneruskannya ke Sentry. Tanpa DSN, re-ekspor ini tetap aman —
- * Sentry.captureRequestError no-op bila SDK tidak diinisialisasi. */
+ * meneruskannya ke Sentry. Bentuknya BUKAN re-ekspor nama
+ * (`export { onRequestError } from "@sentry/nextjs"` — nama itu
+ * tidak diekspor paket dan mematahkan build Turbopack, terbukti
+ * deployment Vercel 18 Nov 2026), melainkan penugasan dari
+ * Sentry.captureRequestError. Tanpa DSN, penugasan ini tetap aman —
+ * captureRequestError no-op bila SDK tidak diinisialisasi. */
+import * as Sentry from "@sentry/nextjs";
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config.js");
@@ -26,4 +32,4 @@ export async function register() {
   }
 }
 
-export { onRequestError } from "@sentry/nextjs";
+export const onRequestError = Sentry.captureRequestError;
