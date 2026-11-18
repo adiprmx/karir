@@ -4,9 +4,11 @@ Dijalankan dengan: python3 web/scripts/notify-watch.test.py
 Watcher diimpor langsung dari /home/hatch/workspace/.claude-v280/
 notify_watch.py — tanpa jaringan, tanpa Firestore live, tanpa token
 asli: call_curl/send_telegram/marker_exists diganti tiruan di tiap
-test yang menyentuh transport. main() TIDAK dites (butuh token +
-jaringan). check_cron_run selalu dipanggil dengan dry_run=True,
-supaya tidak ada time.sleep(180) dan tidak ada kirim Telegram.
+test yang menyentuh transport. main() TIDAK dites end-to-end (butuh
+token + jaringan); jalinan main() -> heartbeat dites dengan tiruan.
+check_cron_run selalu dipanggil dengan dry_run=True dan now_wib
+eksplisit (01:30 WIB), supaya tidak ada time.sleep masa tenggang,
+tidak ada kirim Telegram, dan tidak flaky tergantung jam jalan tes.
 Bila berkas watcher tidak ada (mis. di CI), seluruh test dilewati.
 """
 import importlib.util
@@ -16,6 +18,7 @@ import sys
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from unittest import mock
 
 WATCHER_PATH = "/home/hatch/workspace/.claude-v280/notify_watch.py"
 
@@ -278,7 +281,10 @@ class TestNotifyWatch(unittest.TestCase):
         self.w.send_telegram = lambda teks: terkirim.append(teks) or True
         out = io.StringIO()
         with redirect_stdout(out):
-            hasil = self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True)
+            hasil = self.w.check_cron_run(
+                "2026-11-15", "2026-11-14", dry_run=True,
+                now_wib=datetime(2026, 11, 15, 1, 30),
+            )
         self.assertTrue(hasil)
         self.assertEqual(terkirim, [])  # dry-run tidak mengirim
         self.assertIn("Cron recheck Karir belum tercatat berjalan", out.getvalue())
@@ -291,7 +297,12 @@ class TestNotifyWatch(unittest.TestCase):
         })
         terkirim = []
         self.w.send_telegram = lambda teks: terkirim.append(teks) or True
-        self.assertTrue(self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True))
+        self.assertTrue(
+            self.w.check_cron_run(
+                "2026-11-15", "2026-11-14", dry_run=True,
+                now_wib=datetime(2026, 11, 15, 1, 30),
+            )
+        )
         self.assertEqual(terkirim, [])
 
     def test_check_cron_run_terpotong_dua_hari_dry_run_alarm(self):
@@ -306,7 +317,10 @@ class TestNotifyWatch(unittest.TestCase):
         self.w.marker_exists = lambda mid: False
         out = io.StringIO()
         with redirect_stdout(out):
-            hasil = self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True)
+            hasil = self.w.check_cron_run(
+                "2026-11-15", "2026-11-14", dry_run=True,
+                now_wib=datetime(2026, 11, 15, 1, 30),
+            )
         self.assertTrue(hasil)
         self.assertIn("2 hari berturut-turut", out.getvalue())
 
@@ -323,7 +337,10 @@ class TestNotifyWatch(unittest.TestCase):
         self.w.send_telegram = lambda teks: terkirim.append(teks) or True
         out = io.StringIO()
         with redirect_stdout(out):
-            hasil = self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True)
+            hasil = self.w.check_cron_run(
+                "2026-11-15", "2026-11-14", dry_run=True,
+                now_wib=datetime(2026, 11, 15, 1, 30),
+            )
         self.assertTrue(hasil)
         self.assertEqual(terkirim, [])
         self.assertIn("belum alarm", out.getvalue())
@@ -333,14 +350,24 @@ class TestNotifyWatch(unittest.TestCase):
         self.w.marker_exists = lambda mid: True
         terkirim = []
         self.w.send_telegram = lambda teks: terkirim.append(teks) or True
-        self.assertTrue(self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True))
+        self.assertTrue(
+            self.w.check_cron_run(
+                "2026-11-15", "2026-11-14", dry_run=True,
+                now_wib=datetime(2026, 11, 15, 1, 30),
+            )
+        )
         self.assertEqual(terkirim, [])
 
     def test_check_cron_run_baca_gagal_dilewati_tanpa_alarm_palsu(self):
         self.pasang_call_curl({"/cron-runs/2026-11-15": ("429", {})})
         terkirim = []
         self.w.send_telegram = lambda teks: terkirim.append(teks) or True
-        self.assertTrue(self.w.check_cron_run("2026-11-15", "2026-11-14", dry_run=True))
+        self.assertTrue(
+            self.w.check_cron_run(
+                "2026-11-15", "2026-11-14", dry_run=True,
+                now_wib=datetime(2026, 11, 15, 1, 30),
+            )
+        )
         self.assertEqual(terkirim, [])
 
     # --- heartbeat cleanup mingguan (S8/C-02) ---
@@ -500,14 +527,25 @@ class TestNotifyWatch(unittest.TestCase):
             "display_title": title,
         }
 
-    def test_workflows_dipantau_mencakup_backup_dengan_jendela_8_hari(self):
+    def test_workflows_dipantau_mencakup_scheduler_dan_monitor(self):
+        """P-05: keempat workflow scheduler + monitor ikut dipantau;
+        cleanup mingguan berjendela 8 hari seperti backup."""
         self.assertEqual(
             self.w.WORKFLOWS_DIPANTAU,
-            ("write-back.yml", "validate.yml", "backup.yml"),
+            (
+                "write-back.yml",
+                "validate.yml",
+                "backup.yml",
+                "scheduled-recheck.yml",
+                "scheduled-cleanup.yml",
+                "scheduled-digest.yml",
+                "watcher-monitor.yml",
+            ),
         )
         self.assertEqual(self.w.WORKFLOW_JENDELA_JAM, 24)
         self.assertEqual(
-            self.w.WORKFLOW_JENDELA_JAM_KHUSUS, {"backup.yml": 8 * 24}
+            self.w.WORKFLOW_JENDELA_JAM_KHUSUS,
+            {"backup.yml": 8 * 24, "scheduled-cleanup.yml": 8 * 24},
         )
 
     def test_check_workflow_runs_gagal_backup_dry_run_alarm(self):
@@ -647,6 +685,204 @@ class TestNotifyWatch(unittest.TestCase):
         self.assertEqual(len(terkirim), 1)
         self.assertIn("backup.yml run 118", terkirim[0])
         self.assertEqual(penanda, [("wf-fail-backup-118", "wf-fail-backup")])
+
+    # --- masa tenggang + heartbeat watcher (P-05, C1/C5) ---
+
+    def test_konstanta_tenggang_p05(self):
+        self.assertEqual(self.w.RECHECK_RUN_HOUR, 1)
+        self.assertEqual(self.w.RECHECK_RUN_MINUTE, 0)
+        self.assertEqual(self.w.RECHECK_GRACE_MINUTES, 15)
+        self.assertEqual(self.w.CLEANUP_GRACE_MINUTES, 15)
+        self.assertFalse(hasattr(self.w, "HEARTBEAT_RECHECK_DELAY"))
+
+    def test_detik_menuju_akhir_tenggang(self):
+        jadwal = datetime(2026, 11, 15, 1, 0)
+        # Sebelum jadwal: tenggang penuh + sisa sampai jadwal.
+        self.assertEqual(
+            self.w.detik_menuju_akhir_tenggang(
+                datetime(2026, 11, 15, 0, 50), jadwal, 15
+            ),
+            25 * 60,
+        )
+        # Dalam tenggang: sisa sampai 01:15.
+        self.assertEqual(
+            self.w.detik_menuju_akhir_tenggang(
+                datetime(2026, 11, 15, 1, 10), jadwal, 15
+            ),
+            5 * 60,
+        )
+        # Sesudah tenggang: negatif.
+        self.assertLess(
+            self.w.detik_menuju_akhir_tenggang(
+                datetime(2026, 11, 15, 1, 30), jadwal, 15
+            ),
+            0,
+        )
+        # Zona waktu diabaikan (nilai jam dinding yang dipakai).
+        self.assertEqual(
+            self.w.detik_menuju_akhir_tenggang(
+                datetime(2026, 11, 15, 1, 10, tzinfo=timezone.utc),
+                jadwal,
+                15,
+            ),
+            5 * 60,
+        )
+
+    def test_check_cron_run_sebelum_jadwal_dilewati_tanpa_alarm(self):
+        """Watcher 00:50, heartbeat belum ada — run belum
+        dijadwalkan, bukan kegagalan."""
+        self.pasang_call_curl({"/cron-runs/2026-11-15": ("404", {})})
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cron_run(
+                "2026-11-15", "2026-11-14", dry_run=True,
+                now_wib=datetime(2026, 11, 15, 0, 50),
+            )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("belum dijadwalkan", out.getvalue())
+        self.assertNotIn("belum tercatat berjalan", out.getvalue())
+
+    def test_check_cron_run_dalam_tenggang_dry_run_tanpa_alarm(self):
+        """Watcher 01:10, heartbeat belum ada — masih dalam masa
+        tenggang: dry-run mencetak penundaan, tanpa tidur/alarm."""
+        self.pasang_call_curl({"/cron-runs/2026-11-15": ("404", {})})
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cron_run(
+                "2026-11-15", "2026-11-14", dry_run=True,
+                now_wib=datetime(2026, 11, 15, 1, 10),
+            )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("masa tenggang", out.getvalue())
+        self.assertNotIn("belum tercatat berjalan", out.getvalue())
+
+    def test_check_cron_run_dalam_tenggang_tunggu_lalu_muncul(self):
+        """Non-dry-run dalam tenggang: tidur sampai akhir tenggang
+        (sleep ditiruan), cek ulang, heartbeat muncul — tanpa alarm."""
+        panggilan = {"n": 0}
+
+        def tiruan(method, url, body=None):
+            panggilan["n"] += 1
+            if panggilan["n"] == 1:
+                return "404", {}
+            return "200", {"fields": {"openSkipped": {"integerValue": "0"}}}
+
+        self.w.call_curl = tiruan
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        with mock.patch("time.sleep") as tidur:
+            out = io.StringIO()
+            with redirect_stdout(out):
+                hasil = self.w.check_cron_run(
+                    "2026-11-15", "2026-11-14", dry_run=False,
+                    now_wib=datetime(2026, 11, 15, 1, 10),
+                )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        tidur.assert_called_once()
+        self.assertAlmostEqual(tidur.call_args[0][0], 5 * 60)
+        self.assertIn("muncul di cek ulang", out.getvalue())
+
+    def test_check_cron_run_sesudah_tenggang_alarm_tanpa_tidur(self):
+        """Sesudah tenggang (01:30), heartbeat hilang: alarm
+        langsung, tanpa tidur apa pun."""
+        self.pasang_call_curl({"/cron-runs/2026-11-15": ("404", {})})
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        with mock.patch("time.sleep") as tidur:
+            out = io.StringIO()
+            with redirect_stdout(out):
+                hasil = self.w.check_cron_run(
+                    "2026-11-15", "2026-11-14", dry_run=True,
+                    now_wib=datetime(2026, 11, 15, 1, 30),
+                )
+        self.assertTrue(hasil)
+        tidur.assert_not_called()
+        self.assertIn("belum tercatat berjalan", out.getvalue())
+        self.assertIn("GitHub Actions", out.getvalue())
+
+    def test_check_cleanup_run_dalam_tenggang_dry_run_tanpa_alarm(self):
+        """Senin 02:10, heartbeat cleanup belum ada — masih dalam
+        masa tenggang: tanpa alarm."""
+        self.pasang_call_curl({"/cron-runs/cleanup-2026-11-23": ("404", {})})
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_cleanup_run(
+                datetime(2026, 11, 23, 2, 10), dry_run=True
+            )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("masa tenggang", out.getvalue())
+        self.assertNotIn("belum tercatat berjalan", out.getvalue())
+
+    def test_tulis_heartbeat_watcher_sukses(self):
+        panggilan = []
+
+        def tiruan(method, url, body=None):
+            panggilan.append((method, url, body))
+            return "200", {}
+
+        self.w.call_curl = tiruan
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertTrue(self.w.tulis_heartbeat_watcher(True))
+        self.assertEqual(len(panggilan), 1)
+        method, url, body = panggilan[0]
+        self.assertEqual(method, "PATCH")
+        self.assertIn("/meta/watcher", url)
+        self.assertIn("lastRunAt", url)
+        self.assertIn("lastRunOk", url)
+        self.assertIn("lastRunAt", body["fields"])
+        self.assertTrue(body["fields"]["lastRunOk"]["booleanValue"])
+        self.assertIn("heartbeat watcher ditulis", out.getvalue())
+
+    def test_tulis_heartbeat_watcher_gagal_tidak_melempar(self):
+        self.w.call_curl = lambda m, u, body=None: ("500", {})
+        self.assertFalse(self.w.tulis_heartbeat_watcher(False))
+
+    def test_tulis_heartbeat_watcher_token_hilang_tidak_melempar(self):
+        def tiruan(method, url, body=None):
+            raise OSError("token tidak ada")
+
+        self.w.call_curl = tiruan
+        self.assertFalse(self.w.tulis_heartbeat_watcher(True))
+
+    def test_main_menulis_heartbeat_kecuali_dry_run(self):
+        """main() menulis heartbeat sesudah pemeriksaan (bukan
+        dry-run), dengan lastRunOk mengikuti kode keluar."""
+        asli_jalankan = self.w.jalankan_pemeriksaan
+        asli_tulis = self.w.tulis_heartbeat_watcher
+        asli_argv = sys.argv
+        try:
+            self.w.jalankan_pemeriksaan = lambda dry_run: 0
+            ditulis = []
+            self.w.tulis_heartbeat_watcher = lambda ok: ditulis.append(ok)
+            sys.argv = ["notify_watch.py"]
+            self.assertEqual(self.w.main(), 0)
+            self.assertEqual(ditulis, [True])
+            # Kode gagal -> lastRunOk False.
+            self.w.jalankan_pemeriksaan = lambda dry_run: 1
+            ditulis.clear()
+            self.assertEqual(self.w.main(), 1)
+            self.assertEqual(ditulis, [False])
+            # Dry-run -> tidak menulis.
+            sys.argv = ["notify_watch.py", "--dry-run"]
+            ditulis.clear()
+            self.assertEqual(self.w.main(), 1)
+            self.assertEqual(ditulis, [])
+        finally:
+            self.w.jalankan_pemeriksaan = asli_jalankan
+            self.w.tulis_heartbeat_watcher = asli_tulis
+            sys.argv = asli_argv
 
 
 if __name__ == "__main__":

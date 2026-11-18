@@ -33,7 +33,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
-import { generateKeyPairSync } from "node:crypto";
+import { createHmac, generateKeyPairSync } from "node:crypto";
 /* Impor STATIS dari `web-push` di sini resolve ke library ASLI
  * (loader stub baru terdaftar di bawah, sesudah impor statis
  * di-link) — dipakai hanya untuk membuat pasangan kunci VAPID
@@ -70,7 +70,7 @@ register("./webpush-test-loader.mjs", import.meta.url);
  * produksi) — dipasang ke env hanya di dalam test push. */
 const VAPID = generateVAPIDKeys();
 
-const { GET: getRecheck } = await import(
+const { GET: getRecheck, POST: postRecheck } = await import(
   "../app/api/cron/recheck/route.js"
 );
 
@@ -167,7 +167,10 @@ function snapshotDoc(nos) {
  * status HTTP yang dijawab mock fetch (default 404 untuk URL yang
  * tidak dipetakan) — dipakai tes portal mati/diblokir/5xx (P-04).
  * `prevRun` adalah dokumen cron-runs kemarin (null = 404, tidak
- * ada strike) — dipakai tes two-strike 5xx (P-04). */
+ * ada strike) — dipakai tes two-strike 5xx (P-04).
+ * `lock` mengendalikan POST /cron-locks (P-05): "ok" = 200,
+ * "conflict" = 409 lalu GET mengembalikan `lockDoc`, "create-fail"
+ * = 500. `lockDoc` null = GET 404. */
 const modes = {
   marker: "ok",
   list: "ok",
@@ -179,6 +182,8 @@ const modes = {
   docs: null,
   portalStatus: {},
   prevRun: null,
+  lock: "ok",
+  lockDoc: null,
 };
 const recorded = {
   patch: [],
@@ -220,6 +225,8 @@ function resetModes() {
   modes.docs = null;
   modes.portalStatus = {};
   modes.prevRun = null;
+  modes.lock = "ok";
+  modes.lockDoc = null;
   recorded.patch.length = 0;
   recorded.post.length = 0;
   recorded.alertIds.length = 0;
@@ -249,6 +256,34 @@ globalThis.fetch = async (url, options = {}) => {
       ok: true,
       status: 200,
       body: { access_token: "token-akses-uji" },
+    });
+  }
+  /* Kunci idempotency (P-05): cabang ini HARUS sebelum cabang
+   * PATCH/POST generik di bawah supaya create 409 + baca kunci
+   * tidak ditelan balasan 200 generik. */
+  if (u.includes("/cron-locks")) {
+    if (method === "POST") {
+      if (modes.lock === "conflict") {
+        return mockResponse({ ok: false, status: 409 });
+      }
+      if (modes.lock === "create-fail") {
+        return mockResponse({ ok: false, status: 500 });
+      }
+      return mockResponse({
+        ok: true,
+        status: 200,
+        body: { updateTime: new Date().toISOString() },
+      });
+    }
+    if (method === "GET") {
+      if (!modes.lockDoc) return mockResponse({ ok: false, status: 404 });
+      return mockResponse({ ok: true, status: 200, body: modes.lockDoc });
+    }
+    recorded.patch.push({ url: u, body: JSON.parse(options.body || "{}") });
+    return mockResponse({
+      ok: true,
+      status: 200,
+      body: { updateTime: new Date().toISOString() },
     });
   }
   if (method === "POST" && u.includes("/alerts?documentId=")) {
@@ -351,6 +386,8 @@ beforeEach(() => {
    * daftar langganan. */
   delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   delete process.env.VAPID_PRIVATE_KEY;
+  delete process.env.QSTASH_CURRENT_SIGNING_KEY;
+  delete process.env.QSTASH_NEXT_SIGNING_KEY;
 });
 
 /* --- Gerbang keamanan (NOTIF-02, fail-closed) --- */
@@ -990,5 +1027,220 @@ describe("wiring digest web push (T10, RENDAH-5)", () => {
     assert.equal(recorded.pushListCalls.length, 0);
     assert.equal(webpushStub.sendCalls.length, 0);
     assert.equal(body.push, "skipped-no-vapid");
+  });
+});
+
+/* --- Idempotency + auth QStash + penanda pushed (P-05, C9) --- */
+describe("idempotency recheck (P-05, C9)", () => {
+  function lockDoc({ status, ageMs }) {
+    const stamp = new Date(Date.now() - ageMs).toISOString();
+    return {
+      name: "x/cron-locks/recheck-2026-11-18",
+      fields: {
+        job: { stringValue: "recheck" },
+        status: { stringValue: status },
+        startedAt: { stringValue: stamp },
+      },
+      updateTime: stamp,
+    };
+  }
+
+  it("duplikat (job sedang berjalan): 200 duplicate, tanpa efek samping", async () => {
+    modes.lock = "conflict";
+    modes.lockDoc = lockDoc({ status: "running", ageMs: 30_000 });
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.duplicate, true);
+    assert.equal(body.reason, "running");
+    assert.equal(body.job, "recheck");
+    /* Tidak ada alert dibuat, tidak ada portal dicek, tidak ada
+     * heartbeat ditulis — pemicu duplikat ditolak sebelum efek
+     * samping apa pun. */
+    assert.equal(recorded.alertIds.length, 0);
+    assert.equal(recorded.portalChecks.length, 0);
+    assert.equal(
+      recorded.patch.filter((p) => p.url.includes("/cron-runs/")).length,
+      0,
+    );
+  });
+
+  it("duplikat (sudah selesai hari ini): 200 duplicate reason done", async () => {
+    modes.lock = "conflict";
+    modes.lockDoc = lockDoc({ status: "done", ageMs: 60_000 });
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.duplicate, true);
+    assert.equal(body.reason, "done");
+    assert.equal(recorded.portalChecks.length, 0);
+  });
+
+  it("kunci basi (> TTL): takeover, run jalan normal", async () => {
+    modes.lock = "conflict";
+    modes.lockDoc = lockDoc({ status: "running", ageMs: 10 * 60_000 });
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.duplicate, undefined);
+    assert.equal(typeof body.checked, "number");
+    /* Run tereksekusi penuh sampai heartbeat ditulis. */
+    assert.ok(
+      recorded.patch.some((p) => p.url.includes("/cron-runs/")),
+    );
+  });
+
+  it("kunci gagal diambil (create 500): 503 fail-closed", async () => {
+    modes.lock = "create-fail";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 503);
+    assert.equal((await res.json()).error, "Kunci cron tidak bisa diambil.");
+    assert.equal(recorded.portalChecks.length, 0);
+  });
+
+  it("run sukses: kunci dilepas done + trigger tercatat di heartbeat", async () => {
+    const res = await getRecheck(
+      fakeRequest({
+        headers: {
+          "x-real-ip": IP,
+          authorization: `Bearer ${CRON}`,
+          "x-karir-trigger": "github-actions",
+        },
+      }),
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.trigger, "github-actions");
+    const release = recorded.patch.find(
+      (p) =>
+        p.url.includes("/cron-locks/") &&
+        p.body.fields.status?.stringValue === "done",
+    );
+    assert.ok(release, "kunci tidak dilepas done");
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.ok(heartbeat);
+    assert.equal(
+      heartbeat.body.fields.trigger.stringValue,
+      "github-actions",
+    );
+  });
+
+  it("data seed (Firestore tidak bisa dibaca): 503 + kunci failed", async () => {
+    modes.list = "429";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 503);
+    const release = recorded.patch.find(
+      (p) =>
+        p.url.includes("/cron-locks/") &&
+        p.body.fields.status?.stringValue === "failed",
+    );
+    assert.ok(release, "kunci tidak dilepas failed");
+  });
+});
+
+describe("auth QStash + POST di route recheck (P-05)", () => {
+  const QSTASH_KEY = "kunci-penandatangan-current-uji";
+
+  function jwtQstash() {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const header = Buffer.from(
+      JSON.stringify({ alg: "HS256", typ: "JWT" }),
+    ).toString("base64url");
+    /* Klaim body = hash SHA-256 string kosong (GET tanpa body). */
+    const payload = Buffer.from(
+      JSON.stringify({
+        iss: "Upstash",
+        sub: `${ORIGIN}/api/cron/recheck`,
+        exp: nowSec + 300,
+        nbf: nowSec - 10,
+        body: "47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU",
+      }),
+    ).toString("base64url");
+    const input = `${header}.${payload}`;
+    const sig = createHmac("sha256", QSTASH_KEY)
+      .update(input, "utf8")
+      .digest()
+      .toString("base64url");
+    return `${input}.${sig}`;
+  }
+
+  it("signature QStash valid: run jalan, trigger qstash", async () => {
+    process.env.QSTASH_CURRENT_SIGNING_KEY = QSTASH_KEY;
+    const res = await getRecheck(
+      fakeRequest({ headers: { "upstash-signature": jwtQstash() } }),
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.trigger, "qstash");
+    assert.equal(typeof body.checked, "number");
+  });
+
+  it("signature QStash palsu: 401", async () => {
+    process.env.QSTASH_CURRENT_SIGNING_KEY = QSTASH_KEY;
+    const res = await getRecheck(
+      fakeRequest({ headers: { "upstash-signature": "palsu.bukan.jwt" } }),
+    );
+    assert.equal(res.status, 401);
+  });
+
+  it("POST + Bearer: run jalan (jalur QStash POST)", async () => {
+    const req = cronRequest();
+    req.method = "POST";
+    req.text = async () => "";
+    const res = await postRecheck(req);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(typeof body.checked, "number");
+  });
+});
+
+describe("penanda pushed sesudah digest recheck (P-05)", () => {
+  function pasangVapidUji() {
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = VAPID.publicKey;
+    process.env.VAPID_PRIVATE_KEY = VAPID.privateKey;
+  }
+
+  it("digest terkirim penuh: alert ditandai pushed + hitungan di ringkasan", async () => {
+    pasangVapidUji();
+    modes.snapshot = "ok";
+    modes.snapshotNos = [];
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.push, "sent");
+    assert.equal(body.pushTruncated, false);
+    assert.equal(body.pushedMarked, 1);
+    assert.equal(body.pushedFailed, 0);
+    /* PATCH pushed ke alert new-target yang baru dibuat. */
+    const pushed = recorded.patch.filter(
+      (p) =>
+        p.url.includes("/alerts/") &&
+        p.body.fields.pushed?.booleanValue === true,
+    );
+    assert.equal(pushed.length, 1);
+    assert.ok(pushed[0].url.includes("new-target-1-"));
+    /* Heartbeat mencatat penanda. */
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.equal(heartbeat.body.fields.pushedMarked.integerValue, "1");
+  });
+
+  it("digest gagal: alert TIDAK ditandai (endpoint digest mencoba lagi)", async () => {
+    pasangVapidUji();
+    modes.snapshot = "ok";
+    modes.snapshotNos = [];
+    modes.pushList = "failed";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.push, "failed");
+    assert.equal(body.pushedMarked, 0);
+    const pushed = recorded.patch.filter((p) =>
+      p.url.includes("/alerts/"),
+    );
+    assert.equal(pushed.length, 0);
   });
 });

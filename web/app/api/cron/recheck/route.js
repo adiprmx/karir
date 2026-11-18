@@ -1,29 +1,44 @@
 /* GET /api/cron/recheck — cek ulang harian portal Karir.
- * Dijalankan Vercel Cron tiap hari 18:00 UTC (01:00 WIB), lihat vercel.json.
+ * Dijalankan terjadwal tiap hari 18:00 UTC (01:00 WIB) oleh
+ * workflow GitHub Actions (utama, .github/workflows/
+ * scheduled-recheck.yml), dengan jadwal QStash sebagai pemicu
+ * cadangan dan Vercel Cron selama masa transisi (lihat
+ * docs/monitoring-cron.md). Endpoint menerima GET (Vercel Cron,
+ * GitHub Actions) dan POST (QStash, bila jadwalnya memakai POST).
  *
  * Cara kerja:
- * 1. Keamanan: env CRON_SECRET wajib terisi dan request wajib membawa
- *    header Authorization: Bearer <CRON_SECRET> (Vercel Cron mengirimnya
- *    sendiri bila variabel itu dipasang). Bila CRON_SECRET kosong, rute
- *    menjawab 503 dan tidak pernah berjalan tanpa autentikasi.
- *    Perbandingan secret memakai timingSafeEqual.
- * 2. Tulis ke Firestore lewat REST API memakai access token dari service
+ * 1. Keamanan: env CRON_SECRET wajib terisi (tanpa itu, rute
+ *    menjawab 503 dan tidak pernah berjalan tanpa autentikasi).
+ *    Request lolos bila membawa header Authorization: Bearer
+ *    <CRON_SECRET> (perbandingan timing-safe) ATAU signature
+ *    QStash yang valid di header Upstash-Signature (JWT HS256,
+ *    lihat lib/qstash-verify.js). Keduanya diperiksa lib/cron-auth.js.
+ * 2. Pengaman jalan-ganda (P-05, C9): sesudah token service
+ *    account tersedia, handler mengambil kunci idempotency di
+ *    Firestore (koleksi cron-locks, id recheck-{tanggal-WIB})
+ *    SEBELUM memuat data — pemicu duplikat ditolak murah, tanpa
+ *    membaca 685 dokumen perusahaan. Pemicu kedua menjawab 200
+ *    { duplicate: true } (bukan error: QStash tidak perlu retry,
+ *    workflow Actions tidak gagal) dan penolakannya dicatat di
+ *    log. Kunci dilepas di akhir run (status done/failed); bila
+ *    run mati sebelum lepas, TTL 3 menit memulihkannya.
+ * 3. Tulis ke Firestore lewat REST API memakai access token dari service
  *    account (env FIREBASE_SERVICE_ACCOUNT, string JSON). Token dibuat
  *    dari JWT RS256 yang ditandatangani node:crypto, tanpa dependensi
  *    baru. Bila env itu tidak ada, rute menjawab 503 dan tidak gagal total.
- * 3. Anggaran waktu 50 detik (batas fungsi Vercel Hobby sekitar 60 detik,
+ * 4. Anggaran waktu 50 detik (batas fungsi Vercel Hobby sekitar 60 detik,
  *    dinyatakan eksplisit lewat maxDuration = 60). Bila waktu habis di
  *    tengah jalan, sisanya dicatat sebagai terpotong. Batas waktu juga
  *    dicek sebelum fase tulis tiap batch, supaya batch yang mulai
  *    dekat batas tidak memaksa tulis melewati batas fungsi (OPS-07).
- * 4. Fase alert jalan DULU, sebelum loop cek portal (lihat butir
+ * 5. Fase alert jalan DULU, sebelum loop cek portal (lihat butir
  *    Notifikasi di bawah). Alasannya: loop cek bisa menghabiskan
  *    seluruh anggaran, dan bila fase alert menunggu giliran sesudah
  *    loop, fase itu tidak pernah jalan (terbukti 9 Nov 2026: run
  *    56,8 detik, alert + snapshot dilewati utuh). Fase alert sendiri
  *    dibatasi anggaran 15 detik dan menulis alert paralel batch 5,
  *    supaya tidak memakan jatah loop cek (NOTIF-15).
- * 5. Tiap portal dicek paralel batch 16 lewat lib/check.js
+ * 6. Tiap portal dicek paralel batch 16 lewat lib/check.js
  *    (checkUrlWithRetry: retry 1x bila hasil pertama gagal), timeout
  *    cek 5 detik per percobaan. Batch naik dari 8 dan timeout turun
  *    dari 8 detik di P-04 karena antrean rutin terpotong: run
@@ -141,10 +156,19 @@
  *   best-effort total — gagal kirim tidak menggagalkan run.
  *   Langganan yang jawabannya 410/404 dihapus; 401/403 adalah
  *   alarm konfigurasi VAPID (bukan salah langganan); 429/5xx
- *   dicoba lagi besok. */
+ *   dicoba lagi besok. Bila digest terkirim penuh (tidak
+ *   terpotong anggaran), tiap alert baru ditandai pushed=true
+ *   (P-05) supaya endpoint digest mandiri 01:30 WIB tidak
+ *   mengirim ulang alert yang sama; bila terpotong, penanda
+ *   tidak ditulis dan endpoint digest mencoba lagi. */
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
-import { requireEnv } from "@/lib/require-env";
+import { randomUUID } from "node:crypto";
+import { authorizeCronRequest } from "@/lib/cron-auth";
+import {
+  acquireCronLock,
+  releaseCronLock,
+} from "@/lib/cron-idempotency";
+import { markAlertsPushed } from "@/lib/cron-digest";
 import { getCompaniesWithSource, STATUS_ORDER } from "@/lib/companies";
 import {
   firestoreFetch,
@@ -307,15 +331,6 @@ async function bumpMarker(fsBase, token, today) {
   }
 }
 
-/* Perbandingan string timing-safe: panjang beda langsung gagal, isi
- * dibandingkan tanpa bocor lewat waktu. */
-function secretsEqual(a, b) {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
 /* Balasan 503 generik untuk semua kegagalan konfigurasi cron
  * (SEC-05): satu pesan yang sama, tanpa menyebut variabel mana
  * yang hilang atau bagian service account mana yang bermasalah —
@@ -349,17 +364,31 @@ async function writeCronRunRecord(fsBase, token, date, fields) {
 }
 
 export async function GET(request) {
+  return runRecheck(request);
+}
+
+/* POST diterima untuk QStash (jadwal QStash dapat memakai POST):
+ * perilakunya identik dengan GET; body mentah dipakai verifikasi
+ * signature (klaim body JWT). */
+export async function POST(request) {
+  return runRecheck(request);
+}
+
+async function runRecheck(request) {
   /* 1. Keamanan cron: fail-closed. Tanpa CRON_SECRET, rute tidak
-   * pernah berjalan — menjawab 503, bukan mengizinkan tanpa auth. */
-  let secret;
-  try {
-    secret = requireEnv("CRON_SECRET");
-  } catch {
-    console.warn("Cron ditolak: CRON_SECRET belum dipasang.");
-    return cronUnavailable();
-  }
-  const auth = request.headers.get("authorization") || "";
-  if (!secretsEqual(auth, `Bearer ${secret}`)) {
+   * pernah berjalan — menjawab 503, bukan mengizinkan tanpa auth.
+   * Dua jalur lolos: Bearer CRON_SECRET atau signature QStash
+   * yang valid (lib/cron-auth.js). */
+  const rawBody =
+    request.method === "POST" && typeof request.text === "function"
+      ? await request.text()
+      : "";
+  const auth = authorizeCronRequest(request, { rawBody });
+  if (!auth.ok) {
+    if (auth.error === "unconfigured") {
+      console.warn("Cron ditolak: CRON_SECRET belum dipasang.");
+      return cronUnavailable();
+    }
     return NextResponse.json({ error: "Tidak diizinkan." }, { status: 401 });
   }
 
@@ -385,14 +414,77 @@ export async function GET(request) {
   const deadline = startedAt + DEADLINE_MS;
   const today = todayWib();
 
+  /* 3. Token service account — diambil LEBIH AWAL dari versi lama
+   * (P-05): kunci idempotency butuh token, dan kunci harus
+   * diambil sebelum muat data supaya pemicu duplikat ditolak
+   * murah tanpa membaca 685 dokumen perusahaan. */
+  let token;
+  try {
+    token = await getAccessToken(sa);
+  } catch {
+    return NextResponse.json(
+      { error: "Token service account gagal dibuat." },
+      { status: 503 },
+    );
+  }
+  const fsBase = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents`;
+
+  /* 4. Pengaman jalan-ganda (P-05, C9): satu eksekusi per hari
+   * untuk job recheck. Pemicu kedua menjawab 200 { duplicate:
+   * true } — bukan error — supaya QStash tidak retry sia-sia dan
+   * workflow Actions tidak gagal; penolakan dicatat di log
+   * sebagai bukti (kriteria P-05 no. 4). */
+  let lock;
+  try {
+    lock = await acquireCronLock({
+      fsBase,
+      token,
+      job: "recheck",
+      date: today,
+      runId: randomUUID(),
+      trigger: auth.trigger,
+    });
+  } catch (err) {
+    console.warn(
+      "Cron ditolak: kunci tidak bisa diambil:",
+      err && err.message ? err.message : err,
+    );
+    return NextResponse.json(
+      { error: "Kunci cron tidak bisa diambil." },
+      { status: 503 },
+    );
+  }
+  if (!lock.acquired) {
+    console.warn(
+      `Cron recheck duplikat ditolak (alasan: ${lock.reason}, ` +
+        `pemicu: ${auth.trigger}, tanggal: ${today}).`,
+    );
+    return NextResponse.json({
+      duplicate: true,
+      reason: lock.reason,
+      job: "recheck",
+      date: today,
+      trigger: auth.trigger,
+    });
+  }
+
   /* Cron adalah penulis: ia hanya boleh berjalan dari data LIVE.
    * Bila Firestore tidak bisa dibaca (source=seed), lewati run —
    * bertindak dari seed bisa membuat alert palsu dan tulis
-   * berdasarkan data basi. */
+   * berdasarkan data basi. Kunci dilepas dengan status failed
+   * supaya pemicu cadangan bisa mengambil alih di jadwalnya. */
   let companies;
   try {
     const loaded = await getCompaniesWithSource();
     if (loaded.source !== "live") {
+      await releaseCronLock({
+        fsBase,
+        token,
+        job: "recheck",
+        date: today,
+        status: "failed",
+        updateTime: lock.updateTime,
+      });
       return NextResponse.json(
         {
           error: "Data live tidak bisa dimuat, cron dilewati.",
@@ -403,6 +495,14 @@ export async function GET(request) {
     }
     companies = loaded.companies;
   } catch {
+    await releaseCronLock({
+      fsBase,
+      token,
+      job: "recheck",
+      date: today,
+      status: "failed",
+      updateTime: lock.updateTime,
+    });
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
       { status: 503 },
@@ -415,17 +515,6 @@ export async function GET(request) {
   const { queue, counts: queueCounts } = buildCheckQueue(companies, {
     todayIso: today,
   });
-
-  let token;
-  try {
-    token = await getAccessToken(sa);
-  } catch {
-    return NextResponse.json(
-      { error: "Token service account gagal dibuat." },
-      { status: 503 },
-    );
-  }
-  const fsBase = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents`;
 
   /* Two-strike 5xx (K-11, P-04): nomor perusahaan yang 5xx di run
    * kemarin, dibaca dari dokumen cron-runs kemarin (1 baca/run).
@@ -497,6 +586,10 @@ export async function GET(request) {
     pushFailed: 0,
     pushPruned: 0,
     pushTruncated: false,
+    /* Penanda pushed (P-05) + pemicu run — lihat buildCronRunRecord. */
+    pushedMarked: 0,
+    pushedFailed: 0,
+    trigger: auth.trigger,
     alertPhaseTruncated: false,
     snapshotKnown,
     snapshotWritten: false,
@@ -683,6 +776,26 @@ export async function GET(request) {
       summary.pushFailed = pushResult.pushFailed;
       summary.pushPruned = pushResult.pushPruned;
       summary.pushTruncated = pushResult.pushTruncated;
+      /* Penanda pushed (P-05): bila digest terkirim penuh (tidak
+       * terpotong anggaran), tandai alert sudah masuk digest supaya
+       * endpoint digest mandiri 01:30 WIB tidak mengirim ulang.
+       * Bila terpotong/gagal, penanda TIDAK ditulis — endpoint
+       * digest akan mencoba lagi. Best-effort: gagal menandai
+       * tidak menggagalkan run (risiko terburuk: digest ganda
+       * dengan tag yang sama, yang ditimpa di perangkat). */
+      if (
+        pushResult.push === "sent" &&
+        !pushResult.pushTruncated &&
+        freshAlerts.length > 0
+      ) {
+        const marked = await markAlertsPushed({
+          fsBase,
+          token,
+          alertIds: freshAlerts.map((a) => a.id),
+        });
+        summary.pushedMarked = marked.marked;
+        summary.pushedFailed = marked.failed;
+      }
     }
   } catch {
     /* Alert dan Telegram tidak boleh menggagalkan cron. */
@@ -896,6 +1009,17 @@ export async function GET(request) {
       "Heartbeat cron gagal ditulis: dokumen cron-runs tidak tercatat.",
     );
   }
+
+  /* Lepas kunci idempotency (P-05): run selesai, status done.
+   * Best-effort — releaseCronLock tidak pernah melempar. */
+  await releaseCronLock({
+    fsBase,
+    token,
+    job: "recheck",
+    date: today,
+    status: "done",
+    updateTime: lock.updateTime,
+  });
 
   return NextResponse.json(summary);
 }

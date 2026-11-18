@@ -23,6 +23,7 @@ import {
   markAlertsSent,
   buildCronRunRecord,
   buildCleanupRunRecord,
+  buildDigestRunRecord,
   TELEGRAM_MESSAGE_LIMIT,
   QUOTA_DAILY_LIMIT,
   QUOTA_ALERT_READS,
@@ -615,6 +616,29 @@ describe("buildCronRunRecord (OPS-01)", () => {
     assert.equal(record.pushFailed.integerValue, "0");
     assert.equal(record.pushPruned.integerValue, "0");
     assert.equal(record.pushTruncated.booleanValue, false);
+    /* Field P-05: trigger + penanda pushed, bawaan kosong/nol. */
+    assert.equal(record.trigger.stringValue, "");
+    assert.equal(record.pushedMarked.integerValue, "0");
+    assert.equal(record.pushedFailed.integerValue, "0");
+  });
+
+  it("trigger + penanda pushed tercatat (P-05)", () => {
+    const record = buildCronRunRecord(
+      {
+        truncated: false,
+        trigger: "qstash",
+        pushedMarked: 2,
+        pushedFailed: 1,
+      },
+      {
+        date: "2026-11-18",
+        startedAt: 1000,
+        finishedAt: 2000,
+      },
+    );
+    assert.equal(record.trigger.stringValue, "qstash");
+    assert.equal(record.pushedMarked.integerValue, "2");
+    assert.equal(record.pushedFailed.integerValue, "1");
   });
 });
 
@@ -693,5 +717,76 @@ describe("buildCleanupRunRecord (S8/C-02)", () => {
     assert.equal(record.deleted.integerValue, "0");
     assert.equal(record.durationMs.integerValue, "0");
     assert.equal(record.error.stringValue, "");
+  });
+
+  it("trigger pemicu tercatat (P-05)", () => {
+    const record = buildCleanupRunRecord(
+      { status: "ok", trigger: "github-actions" },
+      { date: "2026-11-16", startedAt: 1000, finishedAt: 2000 },
+    );
+    assert.equal(record.trigger.stringValue, "github-actions");
+  });
+});
+
+describe("buildDigestRunRecord (P-05)", () => {
+  it("bentuk field Firestore lengkap untuk run sukses", () => {
+    const record = buildDigestRunRecord(
+      {
+        status: "ok",
+        alertsFound: 2,
+        alertsTotal: 3,
+        hasMore: false,
+        push: "sent",
+        pushSent: 5,
+        pushFailed: 0,
+        pushPruned: 1,
+        pushTruncated: false,
+        pushedMarked: 2,
+        pushedFailed: 0,
+        trigger: "github-actions",
+      },
+      {
+        date: "2026-11-18",
+        startedAt: Date.parse("2026-11-17T18:30:00Z"),
+        finishedAt: Date.parse("2026-11-17T18:30:03Z"),
+      },
+    );
+    assert.equal(record.date.stringValue, "2026-11-18");
+    assert.equal(record.job.stringValue, "digest");
+    assert.equal(record.status.stringValue, "ok");
+    assert.equal(record.durationMs.integerValue, "3000");
+    assert.equal(record.alertsFound.integerValue, "2");
+    assert.equal(record.alertsTotal.integerValue, "3");
+    assert.equal(record.hasMore.booleanValue, false);
+    assert.equal(record.push.stringValue, "sent");
+    assert.equal(record.pushSent.integerValue, "5");
+    assert.equal(record.pushPruned.integerValue, "1");
+    assert.equal(record.pushTruncated.booleanValue, false);
+    assert.equal(record.pushedMarked.integerValue, "2");
+    assert.equal(record.pushedFailed.integerValue, "0");
+    assert.equal(record.trigger.stringValue, "github-actions");
+    assert.equal(record.error.stringValue, "");
+  });
+
+  it("run gagal: status failed + error tercatat", () => {
+    const record = buildDigestRunRecord(
+      { status: "failed", error: "Firestore gagal: HTTP 429." },
+      { date: "2026-11-18", startedAt: 1000, finishedAt: 1500 },
+    );
+    assert.equal(record.status.stringValue, "failed");
+    assert.equal(record.error.stringValue, "Firestore gagal: HTTP 429.");
+    assert.equal(record.alertsFound.integerValue, "0");
+    assert.equal(record.push.stringValue, "none");
+  });
+
+  it("tanpa ringkasan: status ok dan semua hitungan nol", () => {
+    const record = buildDigestRunRecord(null, {
+      date: "2026-11-18",
+      startedAt: 1000,
+      finishedAt: 1000,
+    });
+    assert.equal(record.status.stringValue, "ok");
+    assert.equal(record.job.stringValue, "digest");
+    assert.equal(record.durationMs.integerValue, "0");
   });
 });

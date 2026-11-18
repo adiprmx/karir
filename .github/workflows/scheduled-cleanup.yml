@@ -1,0 +1,192 @@
+# Cleanup terjadwal Karir (P-05, C7): GitHub Actions memanggil
+# endpoint /api/cron/cleanup (sudah ada) tiap Senin 02:00 WIB.
+#
+# Masalah yang dipecahkan: job cleanup penuh memakan ~110 detik,
+# melebihi maxDuration fungsi Vercel 60 detik — satu panggilan
+# tidak pernah selesai. Solusi: workflow ini ME-LOOP endpoint
+# sampai tidak ada sisa (hasMore false di semua koleksi). Tiap
+# panggilan adalah invokasi fungsi baru dengan anggaran 60 detiknya
+# sendiri; endpoint cleanup idempotent (allowRerun) dan tiap
+# panggilan menghapus satu batch lalu melaporkan hasMore.
+#
+# Respons duplikat (job sedang berjalan — mis. panggilan sebelumnya
+# terpotong Vercel dan kuncinya belum basi) ditangani dengan
+# menunggu 90 detik lalu mencoba lagi (kunci idempotency bertenaga
+# 3 menit, jadi run yang mati pasti bisa diambil alih). Gagal
+# transport/5xx dicoba ulang 3x. Batas keras: 12 iterasi, 10x
+# duplikat — sesudah itu run GAGAL supaya masalahnya diselidiki,
+# bukan berputar tanpa henti.
+#
+# Jadwal: 19:00 UTC hari Minggu = 02:00 WIB hari Senin. Pemicu
+# schedule HANYA jalan di default branch (main); di branch fitur
+# workflow ini inert.
+#
+# KREDENSIAL: secret CRON_SECRET (Settings > Secrets and variables >
+# Actions repo ini). Bila belum dipasang, run GAGAL dengan pesan
+# jelas.
+name: Cleanup Terjadwal
+
+on:
+  schedule:
+    # 19:00 UTC hari Minggu = 02:00 WIB hari Senin.
+    - cron: "0 19 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-cleanup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    # Skenario terburuk: 12 iterasi x ~60 dtk + 10x tunggu duplikat
+    # x 90 dtk + jeda antar iterasi — 45 menit memberi ruang
+    # longgar di bawah batas durasi job Actions (6 jam).
+    timeout-minutes: 45
+    env:
+      SITE_URL: https://karir-adiprmx.vercel.app
+    steps:
+      - name: Loop endpoint cleanup sampai tidak ada sisa
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          python3 - <<'PY'
+          """Loop endpoint cleanup sampai hasMore false di semua koleksi.
+
+          Aturan:
+          - duplikat (job sedang berjalan) -> tunggu 90 dtk, coba lagi
+            (maks 10x); kunci idempotency 3 menit memulihkan run mati.
+          - gagal transport / HTTP 5xx -> coba lagi (maks 3x).
+          - HTTP 401/403/503 -> gagal langsung (masalah konfigurasi,
+            mencoba lagi tidak membantu).
+          - sesudah 12 iterasi masih ada sisa -> gagal (investigasi).
+          """
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+          from datetime import datetime, timedelta, timezone
+
+          SITE_URL = os.environ["SITE_URL"]
+          CRON_SECRET = os.environ.get("CRON_SECRET", "")
+          if not CRON_SECRET:
+              print("::error::Secret CRON_SECRET belum dipasang di repo "
+                    "(Settings > Secrets and variables > Actions).")
+              sys.exit(1)
+          URL = f"{SITE_URL}/api/cron/cleanup"
+          ITERASI_MAKS = 12
+          DUPLIKAT_MAKS = 10
+          GAGAL_MAKS = 3
+          TUNGGU_DUPLIKAT = 90
+          TUNGGU_ITERASI = 10
+
+          def panggil():
+              """Satu panggilan endpoint. Mengembalikan (status, data);
+              status None = gagal transport."""
+              req = urllib.request.Request(URL, headers={
+                  "Authorization": f"Bearer {CRON_SECRET}",
+                  "X-Karir-Trigger": "github-actions",
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=90) as res:
+                      return res.status, json.loads(
+                          res.read().decode("utf-8"))
+              except urllib.error.HTTPError as e:
+                  try:
+                      body = json.loads(e.read().decode("utf-8"))
+                  except Exception:
+                      body = {}
+                  return e.code, body
+              except Exception as e:  # timeout / DNS / koneksi putus
+                  return None, {"_transport_error": str(e)}
+
+          def hitung_hapus(data):
+              total = 0
+              for bagian in (data.get("retention") or {}).values():
+                  if isinstance(bagian, dict):
+                      total += bagian.get("deleted") or 0
+              return total
+
+          def ada_sisa(data):
+              if (data.get("analytics") or {}).get("hasMore"):
+                  return True
+              for bagian in (data.get("retention") or {}).values():
+                  if isinstance(bagian, dict) and bagian.get("hasMore"):
+                      return True
+              return False
+
+          mulai = datetime.now(timezone.utc)
+          wib = mulai.astimezone(timezone(timedelta(hours=7)))
+          total_hapus = 0
+          iterasi = 0
+          duplikat = 0
+          gagal = 0
+          while iterasi < ITERASI_MAKS:
+              iterasi += 1
+              print(f"== Iterasi {iterasi}/{ITERASI_MAKS} ==", flush=True)
+              status, data = panggil()
+              if status is None:
+                  gagal += 1
+                  print(f"Transport gagal ({gagal}/{GAGAL_MAKS}): "
+                        f"{data.get('_transport_error')}")
+                  if gagal >= GAGAL_MAKS:
+                      print("::error::Endpoint cleanup tidak bisa "
+                            "dihubungi 3x berturut-turut.")
+                      sys.exit(1)
+                  time.sleep(TUNGGU_DUPLIKAT)
+                  continue
+              if status in (401, 403, 503):
+                  print(f"::error::Cleanup ditolak HTTP {status}: "
+                        f"{data.get('error', 'tanpa pesan')}")
+                  sys.exit(1)
+              if status != 200:
+                  gagal += 1
+                  print(f"HTTP {status} ({gagal}/{GAGAL_MAKS}): "
+                        f"{data.get('error', 'tanpa pesan')}")
+                  if gagal >= GAGAL_MAKS:
+                      print(f"::error::Endpoint cleanup gagal 3x "
+                            f"(HTTP {status} terakhir).")
+                      sys.exit(1)
+                  time.sleep(TUNGGU_DUPLIKAT)
+                  continue
+              if data.get("duplicate"):
+                  duplikat += 1
+                  print(f"Duplikat ({data.get('reason')}, "
+                        f"{duplikat}/{DUPLIKAT_MAKS}) — menunggu "
+                        f"{TUNGGU_DUPLIKAT} detik.")
+                  if duplikat >= DUPLIKAT_MAKS:
+                      print("::error::Endpoint cleanup terus menjawab "
+                            "duplikat — kunci idempotency mungkin macet, "
+                            "periksa koleksi cron-locks.")
+                      sys.exit(1)
+                  time.sleep(TUNGGU_DUPLIKAT)
+                  continue
+              total_hapus += hitung_hapus(data)
+              if ada_sisa(data):
+                  print(f"Masih ada sisa — lanjut iterasi berikutnya "
+                        f"(dihapus sejauh ini: {total_hapus}).")
+                  time.sleep(TUNGGU_ITERASI)
+                  continue
+              print(f"SELESAI: {total_hapus} dokumen dihapus dalam "
+                    f"{iterasi} iterasi.")
+              break
+          else:
+              print(f"::error::Masih ada sisa sesudah {ITERASI_MAKS} "
+                    "iterasi — volume hapus melebihi perkiraan, perlu "
+                    "investigasi sebelum Senin berikutnya.")
+              sys.exit(1)
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a",
+                    encoding="utf-8") as f:
+              f.write("## Cleanup terjadwal\n\n")
+              f.write(f"- Mulai: {mulai:%Y-%m-%d %H:%M:%S} UTC "
+                      f"({wib:%Y-%m-%d %H:%M:%S} WIB)\n")
+              f.write(f"- Iterasi: {iterasi}\n")
+              f.write(f"- Dokumen dihapus: {total_hapus}\n")
+              f.write(f"- Duplikat ditemui: {duplikat}\n")
+          PY

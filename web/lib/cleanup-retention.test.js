@@ -10,7 +10,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
-import { generateKeyPairSync } from "node:crypto";
+import { createHmac, generateKeyPairSync } from "node:crypto";
 import {
   resetServiceAccountTokenCache,
   todayJakarta,
@@ -36,6 +36,7 @@ register("./route-test-loader.mjs", import.meta.url);
 
 const {
   GET: getCleanup,
+  POST: postCleanup,
   RETENTION_POLICIES,
   cleanupCollection,
 } = await import("../app/api/cron/cleanup/route.js");
@@ -61,6 +62,28 @@ const deletedNames = [];
 const heartbeatWrites = [];
 /* Bila true, tulis heartbeat dijawab 500 (uji best-effort). */
 let heartbeatFail = false;
+/* Mode kunci idempotency (P-05): "ok" = create 200; "conflict" =
+ * create 409 lalu GET mengembalikan lockDoc. lockDoc null = GET
+ * 404 (dokumen lenyap). lockCalls mencatat semua panggilan kunci. */
+let lockMode = "ok";
+let lockDoc = null;
+const lockCalls = [];
+
+function lockDocResponse() {
+  return {
+    name: `${FS_BASE}/cron-locks/cleanup-${todayJakarta()}`,
+    fields: {
+      job: { stringValue: "cleanup" },
+      date: { stringValue: todayJakarta() },
+      runId: { stringValue: "run-lain" },
+      trigger: { stringValue: "github-actions" },
+      status: { stringValue: lockDoc.status },
+      startedAt: { stringValue: lockDoc.startedAt },
+      finishedAt: { stringValue: "" },
+    },
+    updateTime: lockDoc.updateTime,
+  };
+}
 
 function mockResponse({ ok, status, body }) {
   return {
@@ -123,6 +146,31 @@ globalThis.fetch = async (url, options = {}) => {
     }
     return mockResponse({ ok: true, status: 200, body: {} });
   }
+  /* Kunci idempotency (P-05): create / baca / lepas / hapus. */
+  if (u.includes("/cron-locks")) {
+    const method = (options.method || "GET").toUpperCase();
+    lockCalls.push({ method, url: u });
+    if (method === "POST") {
+      if (lockMode === "conflict") {
+        return mockResponse({ ok: false, status: 409 });
+      }
+      return mockResponse({
+        ok: true,
+        status: 200,
+        body: { updateTime: new Date().toISOString() },
+      });
+    }
+    if (method === "GET") {
+      if (!lockDoc) return mockResponse({ ok: false, status: 404 });
+      return mockResponse({ ok: true, status: 200, body: lockDocResponse() });
+    }
+    /* PATCH (lepas/takeover) + DELETE (fallback): selalu sukses. */
+    return mockResponse({
+      ok: true,
+      status: 200,
+      body: { updateTime: new Date().toISOString() },
+    });
+  }
   return mockResponse({ ok: false, status: 404 });
 };
 
@@ -135,10 +183,15 @@ beforeEach(() => {
   deletedNames.length = 0;
   heartbeatWrites.length = 0;
   heartbeatFail = false;
+  lockMode = "ok";
+  lockDoc = null;
+  lockCalls.length = 0;
   resetServiceAccountTokenCache();
   process.env.CRON_SECRET = "rahasia-cron-uji-w1g6-bukan-asli";
   process.env.FIREBASE_SERVICE_ACCOUNT = SA_JSON;
   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "proyek-uji";
+  delete process.env.QSTASH_CURRENT_SIGNING_KEY;
+  delete process.env.QSTASH_NEXT_SIGNING_KEY;
 });
 
 function cleanupRequest({ auth = true } = {}) {
@@ -531,5 +584,131 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     assert.equal(body.heartbeatWritten, false);
     assert.equal(body.retention.rate_limits.deleted, 2);
     assert.equal(heartbeatWrites.length, 1);
+  });
+});
+
+/* --- Idempotency + auth QStash + POST (P-05, C9/C7) --- */
+describe("idempotency cleanup (P-05, C9)", () => {
+  function tanamKunci(status, ageMs) {
+    const stamp = new Date(Date.now() - ageMs).toISOString();
+    lockDoc = { status, startedAt: stamp, updateTime: stamp };
+  }
+
+  it("duplikat (job sedang berjalan): 200 duplicate, tanpa hapus", async () => {
+    lockMode = "conflict";
+    tanamKunci("running", 30_000);
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.duplicate, true);
+    assert.equal(body.reason, "running");
+    assert.equal(body.job, "cleanup");
+    assert.deepEqual(deletedNames, []);
+    assert.equal(heartbeatWrites.length, 0);
+  });
+
+  it("done + allowRerun: jalan lagi (loop lanjutan Actions, C7)", async () => {
+    lockMode = "conflict";
+    tanamKunci("done", 60_000);
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.duplicate, undefined);
+    assert.equal(body.retention.rate_limits.deleted, 2);
+  });
+
+  it("kunci basi (> TTL): takeover, run jalan normal", async () => {
+    lockMode = "conflict";
+    tanamKunci("running", 10 * 60_000);
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.duplicate, undefined);
+    assert.equal(body.retention.rate_limits.deleted, 2);
+  });
+
+  it("run sukses: kunci dilepas done + trigger di heartbeat", async () => {
+    const req = cleanupRequest();
+    req.headers.set("x-karir-trigger", "github-actions");
+    const res = await getCleanup(req);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.heartbeatWritten, true);
+    const fields = heartbeatWrites[0].body.fields;
+    assert.equal(fields.trigger.stringValue, "github-actions");
+    const release = lockCalls.find(
+      (c) => c.method === "PATCH" && c.url.includes("/cron-locks/"),
+    );
+    assert.ok(release, "tidak ada PATCH lepas kunci");
+  });
+
+  it("run gagal: kunci dilepas failed (pemicu cadangan boleh ambil alih)", async () => {
+    modes.alerts = "fail";
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 500);
+    /* Lepas kunci tetap terjadi di jalur gagal (PATCH kunci ada). */
+    const release = lockCalls.find(
+      (c) => c.method === "PATCH" && c.url.includes("/cron-locks/"),
+    );
+    assert.ok(release, "tidak ada PATCH lepas kunci di jalur gagal");
+  });
+});
+
+describe("auth QStash + POST di route cleanup (P-05)", () => {
+  const QSTASH_KEY = "kunci-penandatangan-current-uji";
+
+  function jwtQstash() {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const header = Buffer.from(
+      JSON.stringify({ alg: "HS256", typ: "JWT" }),
+    ).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({
+        iss: "Upstash",
+        sub: "https://karir.local/api/cron/cleanup",
+        exp: nowSec + 300,
+        nbf: nowSec - 10,
+        /* Klaim body = hash SHA-256 string kosong (GET tanpa body). */
+        body: "47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU",
+      }),
+    ).toString("base64url");
+    const input = `${header}.${payload}`;
+    const sig = createHmac("sha256", QSTASH_KEY)
+      .update(input, "utf8")
+      .digest()
+      .toString("base64url");
+    return `${input}.${sig}`;
+  }
+
+  it("signature QStash valid: run jalan, trigger qstash", async () => {
+    process.env.QSTASH_CURRENT_SIGNING_KEY = QSTASH_KEY;
+    const req = {
+      url: "https://karir.local/api/cron/cleanup",
+      headers: new Headers({ "upstash-signature": jwtQstash() }),
+      nextUrl: new URL("https://karir.local/api/cron/cleanup"),
+    };
+    const res = await getCleanup(req);
+    assert.equal(res.status, 200);
+    const fields = heartbeatWrites[0].body.fields;
+    assert.equal(fields.trigger.stringValue, "qstash");
+  });
+
+  it("signature QStash palsu: 401", async () => {
+    process.env.QSTASH_CURRENT_SIGNING_KEY = QSTASH_KEY;
+    const req = {
+      url: "https://karir.local/api/cron/cleanup",
+      headers: new Headers({ "upstash-signature": "palsu.bukan.jwt" }),
+      nextUrl: new URL("https://karir.local/api/cron/cleanup"),
+    };
+    const res = await getCleanup(req);
+    assert.equal(res.status, 401);
+  });
+
+  it("POST + Bearer: run jalan", async () => {
+    const req = cleanupRequest();
+    req.method = "POST";
+    req.text = async () => "";
+    const res = await postCleanup(req);
+    assert.equal(res.status, 200);
   });
 });

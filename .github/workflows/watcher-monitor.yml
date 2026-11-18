@@ -1,0 +1,83 @@
+# Monitor watcher Karir (P-05, C5): jalur alarm INDEPENDEN dari
+# watcher itu sendiri. notify_watch.py (VM) menulis heartbeat ke
+# dokumen Firestore meta/watcher di akhir setiap run harian;
+# workflow ini memeriksa kesegaran heartbeat itu setiap hari.
+# Bila heartbeat basi/hilang (watcher mati atau tulis heartbeat
+# gagal), workflow GAGAL dan membuka GitHub issue berlabel
+# `watcher-down` — alarm yang tidak bergantung pada Telegram
+# maupun pada VM watcher.
+#
+# Jadwal: 01:00 UTC = 08:00 WIB setiap hari. Batas basi 26 jam:
+# watcher jalan 01:30 WIB, monitor jalan 08:00 WIB, jadi heartbeat
+# normal berumur ~6,5 jam; 26 jam memberi toleransi satu run yang
+# gagal ditulis + satu hari penuh.
+#
+# KREDENSIAL: secret FIREBASE_SERVICE_ACCOUNT (sudah ada di repo,
+# dipakai backup.yml). Bila belum dipasang, run GAGAL.
+#
+# Catatan: workflow ini sendiri dipantau notify_watch.py — bila
+# monitor gagal DAN watcher hidup, watcher juga mengabarkan lewat
+# Telegram. Bila keduanya mati, email kegagalan Actions ke pemilik
+# repo adalah lapisan terakhir.
+name: Monitor Watcher
+
+on:
+  schedule:
+    # 01:00 UTC = 08:00 WIB setiap hari.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: watcher-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # Node 24.x: sama dengan engines di web/package.json dan
+          # .nvmrc — konsisten dengan workflow app.yml.
+          node-version: "24.x"
+      - name: Periksa kesegaran heartbeat watcher
+        working-directory: web
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/check-watcher-heartbeat.mjs --max-age-hours 26
+      - name: Buka issue bila watcher mati
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Pastikan label ada (abaikan bila sudah ada).
+          gh label create watcher-down \
+            --description "Watcher Karir tidak memberi kabar" \
+            --color "d73a4a" 2>/dev/null || true
+          # Dedup: jangan buat issue baru bila sudah ada yang terbuka.
+          ADA=$(gh issue list --label watcher-down --state open \
+            --limit 1 --json number --jq length)
+          if [ "$ADA" -gt 0 ]; then
+            echo "Issue watcher-down sudah terbuka — tidak membuat duplikat."
+            exit 0
+          fi
+          gh issue create \
+            --title "Watcher Karir tidak memberi kabar" \
+            --label watcher-down \
+            --body "Heartbeat watcher (dokumen Firestore \`meta/watcher\`) basi atau hilang saat diperiksa workflow Monitor Watcher.
+
+          **Yang perlu diperiksa:**
+          1. Apakah notify_watch.py di VM masih berjalan sesuai jadwal harian 01:30 WIB?
+          2. Apakah tulis heartbeat ke Firestore gagal (kuota Firestore habis? kredensial service account berubah?)?
+          3. Bila watcher memang sengaja dimatikan, tutup issue ini dan nonaktifkan workflow Monitor Watcher.
+
+          **Run yang melaporkan:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Issue ini dibuat otomatis oleh workflow Monitor Watcher (P-05). Tutup issue ini sesudah heartbeat kembali segar."

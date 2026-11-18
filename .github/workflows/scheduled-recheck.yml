@@ -1,0 +1,117 @@
+# Recheck terjadwal Karir (P-05): GitHub Actions sebagai pelaksana
+# utama recheck harian, menggantikan Vercel Cron Hobby yang telat
+# 35-55 menit. Workflow ini memanggil endpoint /api/cron/recheck
+# (sudah ada) dengan CRON_SECRET dari GitHub Secrets.
+#
+# Jadwal: 18:00 UTC = 01:00 WIB setiap hari. Pemicu schedule HANYA
+# jalan di default branch (main); di branch fitur workflow ini
+# inert — aman diuji lewat workflow_dispatch tanpa memicu recheck
+# ganda (endpoint menolak duplikat lewat kunci idempotency).
+#
+# KREDENSIAL: secret CRON_SECRET (Settings > Secrets and variables >
+# Actions repo ini, nama persis CRON_SECRET) — nilainya sama dengan
+# variabel lingkungan CRON_SECRET di Vercel. Bila belum dipasang,
+# run GAGAL dengan pesan jelas.
+#
+# Respons duplikat (job sudah berjalan/selesai hari ini) dianggap
+# SUKSES — itu bukti idempotency bekerja, bukan kegagalan. Presisi
+# jadwal (kriteria 2: tiga run dalam +/-5 menit dari 01:00 WIB)
+# dibuktikan dari stempel waktu run workflow (created_at) di
+# halaman Actions, bukan dari log ini.
+name: Recheck Terjadwal
+
+on:
+  schedule:
+    # 18:00 UTC = 01:00 WIB setiap hari.
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+# Satu run recheck dalam satu waktu; run yang tumpang tindih
+# mengantre (bukan dibatalkan) supaya tidak ada hari yang terlewat.
+concurrency:
+  group: scheduled-recheck
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE_URL: https://karir-adiprmx.vercel.app
+    steps:
+      - name: Panggil endpoint recheck
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::Secret CRON_SECRET belum dipasang di repo (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          export MULAI_UTC
+          MULAI_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          HTTP=$(curl -sS --max-time 90 -o /tmp/recheck.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "X-Karir-Trigger: github-actions" \
+            "$SITE_URL/api/cron/recheck") || {
+            echo "::error::curl gagal memanggil endpoint recheck (jaringan/timeout)."
+            exit 1
+          }
+          export HTTP
+          echo "HTTP: $HTTP (mulai $MULAI_UTC)"
+          python3 - <<'PY'
+          """Nilai respons recheck dan tulis ringkasan.
+
+          Duplikat (job sudah berjalan/selesai) = sukses. HTTP bukan
+          200 atau ada field error = gagal.
+          """
+          import json
+          import os
+          import sys
+          from datetime import datetime, timedelta, timezone
+
+          http = os.environ["HTTP"]
+          with open("/tmp/recheck.json", encoding="utf-8") as f:
+              data = json.load(f)
+          mulai = datetime.fromisoformat(
+              os.environ["MULAI_UTC"].replace("Z", "+00:00")
+          )
+          wib = mulai.astimezone(timezone(timedelta(hours=7)))
+          ringkasan = [
+              "## Recheck terjadwal",
+              "",
+              f"- Mulai: {mulai:%Y-%m-%d %H:%M:%S} UTC "
+              f"({wib:%Y-%m-%d %H:%M:%S} WIB)",
+              f"- HTTP: {http}",
+          ]
+          if data.get("duplicate"):
+              ringkasan.append(
+                  f"- Hasil: duplikat ({data.get('reason')}) — "
+                  "job sudah berjalan/selesai, tidak ada eksekusi ganda."
+              )
+              print("DUPLIKAT: " + ringkasan[-1][2:])
+          elif http != "200" or "error" in data:
+              ringkasan.append(
+                  f"- Hasil: GAGAL — {data.get('error', 'tanpa pesan')}"
+              )
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a",
+                        encoding="utf-8") as f:
+                  f.write("\n".join(ringkasan) + "\n")
+              print(f"::error::Recheck gagal (HTTP {http}): "
+                    f"{data.get('error', 'tanpa pesan')}")
+              sys.exit(1)
+          else:
+              ringkasan.append(
+                  f"- Hasil: sukses — dicek {data.get('checked')}, "
+                  f"berubah {data.get('changed')}, "
+                  f"alert {data.get('alerts')}, "
+                  f"push {data.get('push')}"
+              )
+              print("SUKSES: " + ringkasan[-1][2:])
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a",
+                    encoding="utf-8") as f:
+              f.write("\n".join(ringkasan) + "\n")
+          PY
