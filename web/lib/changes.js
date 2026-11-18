@@ -12,7 +12,14 @@
  * membaca Firestore tiap request. Bila fetch gagal dan ada cache lama,
  * cache lama dipakai; bila tidak ada, lempar supaya pemanggil bisa
  * memutuskan sendiri (API /api/changes mengembalikan daftar kosong,
- * bukan error). */
+ * bukan error).
+ *
+ * Observabilitas (P-06, BE2-10): kegagalan baca dicatat log
+ * terstruktur throttled (API_ROUTE_ERROR) dengan pesan error —
+ * sebelumnya kegagalan ini hilang tanpa jejak. Baca dihitung per
+ * sumber (web-changes) untuk laporan 14 hari (T1). */
+import { OBS_CODES, emitObservabilityEvent } from "./observability.js";
+import { recordReads } from "./read-meter.js";
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
@@ -122,10 +129,19 @@ export async function getChanges(limit = 10) {
         (b.createdAt || "").localeCompare(a.createdAt || ""),
       );
       cache.set(n, { list, at: Date.now() });
+      recordReads("web-changes", list.length);
       return list;
     } catch (err) {
       /* Gagal total (429/offline): cache basi lebih baik daripada
-       * tidak ada data sama sekali. */
+       * tidak ada data sama sekali. Kegagalan dicatat throttled
+       * (BE2-10) — sebelumnya hilang tanpa jejak. */
+      emitObservabilityEvent({
+        code: OBS_CODES.API_ROUTE_ERROR,
+        component: "changes",
+        message:
+          err && err.message ? err.message : "Baca changes gagal.",
+        meta: { fallback: cached ? "stale-cache" : "throw" },
+      });
       if (cached) return cached.list;
       throw err;
     } finally {

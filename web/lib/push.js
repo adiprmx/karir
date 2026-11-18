@@ -280,11 +280,17 @@ function withTimeout(promise, ms) {
  * Best-effort total: fungsi ini TIDAK PERNAH melempar — setiap
  * kegagalan dikembalikan sebagai ringkasan supaya run cron tetap
  * sukses. Balasan: {push, pushSent, pushFailed, pushPruned,
- * pushTruncated}; `push` salah satu dari "sent" | "failed" |
- * "skipped-no-vapid" | "none". "failed" berarti fase kirim tidak
- * berjalan sebagaimana mestinya (daftar gagal, konfigurasi VAPID
- * bermasalah, atau tidak satu pun kirim berhasil); hasil per
- * langganan ada di pencacah.
+ * pushTruncated, pushTotal, pushHasMore, pushMalformed}; `push`
+ * salah satu dari "sent" | "failed" | "skipped-no-vapid" |
+ * "none". "failed" berarti fase kirim tidak berjalan sebagaimana
+ * mestinya (daftar gagal, konfigurasi VAPID bermasalah, atau
+ * tidak satu pun kirim berhasil); hasil per langganan ada di
+ * pencacah. pushTotal = jumlah dokumen langganan yang dibaca
+ * halaman ini; pushHasMore = masih ada halaman berikutnya;
+ * pushMalformed = dokumen yang gagal di-parse (null) — tetap
+ * dihitung ke pushFailed (perilaku lama), tetapi dipisah supaya
+ * watcher bisa membedakan "dokumen rusak" dari "kirim gagal"
+ * (P-06/P2).
  *
  * Parameter yang bisa disuntik (untuk test): sendImpl (pengganti
  * web-push), listImpl, deleteImpl, serta kunci VAPID, anggaran,
@@ -310,12 +316,18 @@ export async function sendPushDigest({
   let pushFailed = 0;
   let pushPruned = 0;
   let pushTruncated = false;
+  let pushTotal = 0;
+  let pushHasMore = false;
+  let pushMalformed = 0;
   const result = (push) => ({
     push,
     pushSent,
     pushFailed,
     pushPruned,
     pushTruncated,
+    pushTotal,
+    pushHasMore,
+    pushMalformed,
   });
 
   try {
@@ -343,6 +355,9 @@ export async function sendPushDigest({
       return result("failed");
     }
     const subscriptions = listed.subscriptions || [];
+    pushTotal = subscriptions.length;
+    pushHasMore = listed.hasMore === true;
+    pushMalformed = subscriptions.filter((sub) => !sub).length;
     if (listed.hasMore) {
       console.warn(
         `Langganan push melebihi ${PUSH_PAGE_SIZE}; hanya halaman ` +

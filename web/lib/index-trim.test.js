@@ -7,7 +7,7 @@
  * Env dummy dipasang di sini, BUKAN dari .env. Dijalankan dengan:
  *   node --test lib/index-trim.test.js
  */
-import { describe, it, beforeEach } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { resetSharedLimiter } from "./rate-limit.js";
@@ -37,6 +37,7 @@ const {
   trimCompanyForIndex,
   INDEX_COMPANY_FIELDS,
   resetIndexRevCache,
+  readIndexRev,
 } = await import("../app/api/index/route.js");
 
 /* --- Konstanta uji --- */
@@ -269,5 +270,102 @@ describe("GET /api/index (FIN-09/FE-16)", () => {
     );
     assert.equal(again.status, 200);
     assert.equal((await again.json()).companies.length, 2);
+  });
+});
+
+/* P-06/BE2-10: kegagalan baca marker indeks dicatat (bukan diam). */
+describe("readIndexRev: log kegagalan + meter (P-06)", () => {
+  let kejadian;
+  let warnAsli;
+  beforeEach(async () => {
+    resetIndexRevCache();
+    const obs = await import("./observability.js");
+    obs.resetObservabilityForTests();
+    const meter = await import("./read-meter.js");
+    meter.resetReadMetersForTests();
+    kejadian = [];
+    obs.registerObservabilitySink((event) => kejadian.push(event));
+    warnAsli = console.warn;
+    console.warn = () => {};
+  });
+
+  afterEach(async () => {
+    console.warn = warnAsli;
+    const obs = await import("./observability.js");
+    obs.resetObservabilityForTests();
+    const meter = await import("./read-meter.js");
+    meter.resetReadMetersForTests();
+  });
+
+  function markerEvents() {
+    return kejadian.filter((e) => e.code === "MARKER_READ_FAILED");
+  }
+
+  function markerOk(rev = 9) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        fields: { rev: { integerValue: String(rev) } },
+      }),
+    };
+  }
+
+  it("fetch melempar -> null + MARKER_READ_FAILED reason network", async () => {
+    const rev = await readIndexRev({
+      fetchImpl: async () => {
+        throw new Error("offline");
+      },
+    });
+    assert.equal(rev, null);
+    const ev = markerEvents();
+    assert.equal(ev.length, 1);
+    assert.equal(ev[0].meta.reason, "network");
+    assert.equal(ev[0].component, "api/index");
+  });
+
+  it("HTTP 500 -> null + MARKER_READ_FAILED status 500", async () => {
+    const rev = await readIndexRev({
+      fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({}) }),
+    });
+    assert.equal(rev, null);
+    assert.equal(markerEvents().length, 1);
+    assert.equal(markerEvents()[0].meta.status, 500);
+  });
+
+  it("body bukan JSON -> null + MARKER_READ_FAILED reason body-parse", async () => {
+    const rev = await readIndexRev({
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => {
+          throw new Error("JSON rusak");
+        },
+      }),
+    });
+    assert.equal(rev, null);
+    assert.equal(markerEvents().length, 1);
+    assert.equal(markerEvents()[0].meta.reason, "body-parse");
+  });
+
+  it("sukses -> rev + web-index-rev tercatat 1", async () => {
+    const rev = await readIndexRev({ fetchImpl: async () => markerOk(12) });
+    assert.equal(rev, 12);
+    assert.equal(markerEvents().length, 0);
+    const meter = await import("./read-meter.js");
+    assert.equal(meter.pendingReadsForTests()["web-index-rev"], 1);
+  });
+
+  it("gagal dalam fail-TTL 60 dtk tidak mengulang fetch/emit", async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return { ok: false, status: 500, json: async () => ({}) };
+    };
+    const now = Date.now();
+    assert.equal(await readIndexRev({ fetchImpl, now }), null);
+    assert.equal(await readIndexRev({ fetchImpl, now: now + 1000 }), null);
+    assert.equal(calls, 1);
+    assert.equal(markerEvents().length, 1);
   });
 });

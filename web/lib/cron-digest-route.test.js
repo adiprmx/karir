@@ -326,6 +326,10 @@ describe("run digest", () => {
     assert.equal(body.alertsTotal, 3);
     assert.equal(body.push, "sent");
     assert.equal(body.pushSent, 1);
+    /* P-06/P2: konteks push masuk ringkasan. */
+    assert.equal(body.pushTotal, 1);
+    assert.equal(body.pushHasMore, false);
+    assert.equal(body.pushMalformed, 0);
     assert.equal(body.pushedMarked, 2);
     assert.equal(body.pushedFailed, 0);
     assert.equal(body.trigger, "cron-secret");

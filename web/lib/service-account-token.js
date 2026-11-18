@@ -17,8 +17,14 @@
  * 1 jam dan dipakai ulang dengan margin aman 5 menit (sama seperti
  * perilaku lama analytics-server). Margin mencegah token dipakai
  * di detik-detik terakhir masa berlakunya saat request berikutnya
- * masih berjalan. */
+ * masih berjalan.
+ *
+ * Observabilitas (P-06, BE2-11): kelima titik kegagalan yang dulu
+ * mengembalikan null diam-diam kini mencatat log terstruktur
+ * throttled (SA_TOKEN_FAILED) dengan jenis kegagalan — tanpa
+ * pernah mencatat client_email atau detail kunci. */
 import { createSign } from "node:crypto";
+import { OBS_CODES, emitObservabilityEvent } from "./observability.js";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const TOKEN_SCOPE = "https://www.googleapis.com/auth/datastore";
@@ -64,6 +70,12 @@ export async function getServiceAccountAccessToken({
 } = {}) {
   const account = sa || parseServiceAccountEnv();
   if (!account || !account.client_email || !account.private_key) {
+    emitObservabilityEvent({
+      code: OBS_CODES.SA_TOKEN_FAILED,
+      component: "service-account-token",
+      message: "Token service account gagal: service account tidak tersedia.",
+      meta: { kind: "missing" },
+    });
     return null;
   }
   const cached = tokenCache.get(account.client_email);
@@ -89,6 +101,12 @@ export async function getServiceAccountAccessToken({
   try {
     signature = signer.sign(account.private_key, "base64url");
   } catch {
+    emitObservabilityEvent({
+      code: OBS_CODES.SA_TOKEN_FAILED,
+      component: "service-account-token",
+      message: "Token service account gagal: tanda tangan JWT gagal.",
+      meta: { kind: "sign-failed" },
+    });
     return null;
   }
   const jwt = `${header}.${payload}.${signature}`;
@@ -106,13 +124,35 @@ export async function getServiceAccountAccessToken({
       }).toString(),
     });
   } catch {
+    emitObservabilityEvent({
+      code: OBS_CODES.SA_TOKEN_FAILED,
+      component: "service-account-token",
+      message: "Token service account gagal: penukaran token tidak terjangkau.",
+      meta: { kind: "network" },
+    });
     return null;
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) return null;
+  if (!res.ok) {
+    emitObservabilityEvent({
+      code: OBS_CODES.SA_TOKEN_FAILED,
+      component: "service-account-token",
+      message: "Token service account gagal: penukaran token ditolak.",
+      meta: { kind: `http-${res.status}` },
+    });
+    return null;
+  }
   const body = await res.json().catch(() => null);
-  if (!body || !body.access_token) return null;
+  if (!body || !body.access_token) {
+    emitObservabilityEvent({
+      code: OBS_CODES.SA_TOKEN_FAILED,
+      component: "service-account-token",
+      message: "Token service account gagal: respons tanpa access token.",
+      meta: { kind: "no-token" },
+    });
+    return null;
+  }
   tokenCache.set(account.client_email, {
     token: body.access_token,
     expiresAtMs: nowMs + TOKEN_TTL_MS,

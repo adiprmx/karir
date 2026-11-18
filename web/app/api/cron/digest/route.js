@@ -41,8 +41,9 @@
  * seperti recheck/cleanup.
  *
  * Balasan: {status, alertsFound, alertsTotal, hasMore, push,
- * pushSent, pushFailed, pushPruned, pushTruncated, pushedMarked,
- * pushedFailed, trigger, heartbeatWritten} (200 bila run selesai,
+ * pushSent, pushFailed, pushPruned, pushTruncated, pushTotal,
+ * pushHasMore, pushMalformed, pushedMarked, pushedFailed, trigger,
+ * heartbeatWritten} (200 bila run selesai,
  * 500 + error bila kueri alert gagal atau digest tidak terkirim
  * sama sekali — kunci dilepas failed supaya pemicu cadangan bisa
  * mencoba lagi). */
@@ -208,6 +209,10 @@ async function runDigest(request) {
     pushFailed: 0,
     pushPruned: 0,
     pushTruncated: false,
+    /* Konteks digest push (P-06/P2) — lihat buildDigestRunRecord. */
+    pushTotal: 0,
+    pushHasMore: false,
+    pushMalformed: 0,
     pushedMarked: 0,
     pushedFailed: 0,
     trigger: auth.trigger,
@@ -264,6 +269,9 @@ async function runDigest(request) {
     summary.pushFailed = pushResult.pushFailed;
     summary.pushPruned = pushResult.pushPruned;
     summary.pushTruncated = pushResult.pushTruncated;
+    summary.pushTotal = pushResult.pushTotal;
+    summary.pushHasMore = pushResult.pushHasMore;
+    summary.pushMalformed = pushResult.pushMalformed;
     /* Penanda pushed — hanya bila digest terkirim penuh (tidak
      * terpotong): bila terpotong, sebagian langganan belum
      * menerima dan run besok mencoba lagi. */

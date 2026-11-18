@@ -31,6 +31,8 @@ import {
 import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
 import { requireEnv } from "@/lib/require-env";
+import { OBS_CODES, emitObservabilityEvent } from "@/lib/observability";
+import { recordReads } from "@/lib/read-meter";
 
 export const dynamic = "force-dynamic";
 
@@ -140,19 +142,42 @@ export async function readIndexRev({
       `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/meta/lastChange?key=${API_KEY}`,
       MARKER_TIMEOUT_MS,
     );
-  } catch {
+  } catch (err) {
     revFailAt = now;
+    emitObservabilityEvent({
+      code: OBS_CODES.MARKER_READ_FAILED,
+      component: "api/index",
+      message: "Baca marker indeks gagal.",
+      meta: { reason: err && err.name === "AbortError" ? "timeout" : "network" },
+    });
     return null;
   }
   if (!res.ok) {
     revFailAt = now;
+    emitObservabilityEvent({
+      code: OBS_CODES.MARKER_READ_FAILED,
+      component: "api/index",
+      message: "Baca marker indeks gagal.",
+      meta: { status: res.status },
+    });
     return null;
   }
   let body;
   try {
     body = await readJsonWithTimeout(res, MARKER_TIMEOUT_MS);
-  } catch {
+  } catch (err) {
     revFailAt = now;
+    emitObservabilityEvent({
+      code: OBS_CODES.MARKER_READ_FAILED,
+      component: "api/index",
+      message: "Baca marker indeks gagal.",
+      meta: {
+        reason:
+          err && err.message === "Timeout membaca marker."
+            ? "body-timeout"
+            : "body-parse",
+      },
+    });
     return null;
   }
   const rev = Number(body?.fields?.rev?.integerValue);
@@ -160,6 +185,7 @@ export async function readIndexRev({
     revFailAt = now;
     return null;
   }
+  recordReads("web-index-rev", 1);
   revCache = { rev, at: now };
   return rev;
 }
@@ -245,12 +271,14 @@ export async function GET(request) {
     });
   }
   try {
-    const { companies, source, seedDate } = await getCompaniesWithSource();
+    const { companies, source, seedDate, liveAsOf } =
+      await getCompaniesWithSource();
     return NextResponse.json(
       {
         companies: companies.map(trimCompanyForIndex),
         source,
         seedDate,
+        liveAsOf,
         /* Daftar seed tidak membawa rev: klien tidak boleh
          * memvalidasi data cadangan sebagai data live. */
         rev: source === "live" ? rev : null,
@@ -261,10 +289,16 @@ export async function GET(request) {
         },
       },
     );
-  } catch {
+  } catch (err) {
     /* getCompaniesWithSource tidak pernah melempar karena Firestore
      * (jatuh ke seed); 503 di sini hanya untuk kegagalan tak terduga
-     * (mis. seed ikut tidak bisa dimuat). */
+     * (mis. seed ikut tidak bisa dimuat). Dicatat throttled (BE2-10). */
+    emitObservabilityEvent({
+      code: OBS_CODES.API_ROUTE_ERROR,
+      component: "api/index",
+      message: err && err.message ? err.message : "Rute /api/index gagal.",
+      meta: { route: "/api/index" },
+    });
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
       { status: 503 },

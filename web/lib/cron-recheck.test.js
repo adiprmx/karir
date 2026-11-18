@@ -30,7 +30,7 @@
  * Kirim Telegram langsung tidak dites end-to-end (butuh token bot
  * asli); yang dites adalah cabangnya: tanpa token, pengiriman
  * dilewati dengan status skipped-no-token. */
-import { describe, it, beforeEach } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { createHmac, generateKeyPairSync } from "node:crypto";
@@ -140,7 +140,7 @@ function markerDoc() {
       updatedAt: { stringValue: "2026-11-15T00:00:00.000Z" },
       counterDay: { stringValue: todayWib() },
       refillsToday: { integerValue: "0" },
-      readsEstimate: { integerValue: "0" },
+      readsEstimate: { integerValue: String(modes.markerReads ?? 0) },
     },
   };
 }
@@ -170,7 +170,10 @@ function snapshotDoc(nos) {
  * ada strike) — dipakai tes two-strike 5xx (P-04).
  * `lock` mengendalikan POST /cron-locks (P-05): "ok" = 200,
  * "conflict" = 409 lalu GET mengembalikan `lockDoc`, "create-fail"
- * = 500. `lockDoc` null = GET 404. */
+ * = 500. `lockDoc` null = GET 404.
+ * `markerReads` (P-06/K2) = readsEstimate di dokumen marker.
+ * `quotaVerify` (P-06/K2) mengendalikan baca-balik alert kuota:
+ * "ok" = dokumen ditemukan, "missing" = 404 walau POST sukses. */
 const modes = {
   marker: "ok",
   list: "ok",
@@ -184,6 +187,8 @@ const modes = {
   prevRun: null,
   lock: "ok",
   lockDoc: null,
+  markerReads: 0,
+  quotaVerify: "ok",
 };
 const recorded = {
   patch: [],
@@ -227,6 +232,8 @@ function resetModes() {
   modes.prevRun = null;
   modes.lock = "ok";
   modes.lockDoc = null;
+  modes.markerReads = 0;
+  modes.quotaVerify = "ok";
   recorded.patch.length = 0;
   recorded.post.length = 0;
   recorded.alertIds.length = 0;
@@ -357,6 +364,22 @@ globalThis.fetch = async (url, options = {}) => {
       status: 200,
       body: { documents: [pushSubscriptionDoc()] },
     });
+  }
+  if (method === "GET" && u.includes("/alerts/")) {
+    /* Baca-balik alert kuota (P-06/K2): dokumen dianggap ada bila
+     * POST-nya tercatat dan mode verifikasi "ok". */
+    const id = decodeURIComponent(u.split("/alerts/")[1].split("?")[0]);
+    if (modes.quotaVerify === "missing") {
+      return mockResponse({ ok: false, status: 404 });
+    }
+    if (recorded.alertIds.includes(id)) {
+      return mockResponse({
+        ok: true,
+        status: 200,
+        body: { fields: { type: { stringValue: "quota" } } },
+      });
+    }
+    return mockResponse({ ok: false, status: 404 });
   }
   /* URL lain = cek portal oleh checkUrl (bukan Firestore): status
    * dari modes.portalStatus, default 404. Tiap pemanggilan
@@ -1242,5 +1265,242 @@ describe("penanda pushed sesudah digest recheck (P-05)", () => {
       p.url.includes("/alerts/"),
     );
     assert.equal(pushed.length, 0);
+  });
+});
+
+/* --- Observabilitas (P-06) --- */
+describe("cek kuota independen (P-06/K2)", () => {
+  it("reads 36.000 -> alert quota-70 dibuat + ringkasan mencatat 70", async () => {
+    modes.markerReads = 36000;
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.readsEstimate, 36000);
+    assert.equal(body.quotaPercent, 72);
+    assert.equal(body.quotaAlert, "70");
+    assert.ok(recorded.alertIds.includes(`quota-70-${todayWib()}`));
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.ok(heartbeat, "tidak ada PATCH heartbeat cron-runs");
+    assert.equal(heartbeat.body.fields.readsEstimate.integerValue, "36000");
+    assert.equal(heartbeat.body.fields.quotaPercent.integerValue, "72");
+    assert.equal(heartbeat.body.fields.quotaAlert.stringValue, "70");
+  });
+
+  it("reads 46.000 -> alert quota-90 dibuat (bukan 70 dari jalur cron)", async () => {
+    modes.markerReads = 46000;
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.readsEstimate, 46000);
+    assert.equal(body.quotaPercent, 92);
+    assert.equal(body.quotaAlert, "90");
+    assert.ok(recorded.alertIds.includes(`quota-90-${todayWib()}`));
+    /* Alert quota-70 yang tercatat berasal dari jalur web (refill),
+     * bukan dari cek kuota cron — jalur cron hanya membuat yang 90. */
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.equal(heartbeat.body.fields.quotaAlert.stringValue, "90");
+  });
+
+  it("reads di bawah ambang -> tidak ada alert kuota dari cron", async () => {
+    modes.markerReads = 1000;
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.quotaAlert, "none");
+    assert.equal(body.readsEstimate, 1000);
+    assert.equal(body.quotaPercent, 2);
+    assert.ok(!recorded.alertIds.includes(`quota-70-${todayWib()}`));
+    assert.ok(!recorded.alertIds.includes(`quota-90-${todayWib()}`));
+  });
+
+  it("POST alert kuota gagal -> quotaAlert 70-failed + error tercatat", async () => {
+    modes.markerReads = 36000;
+    modes.alerts = "failed";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.quotaAlert, "70-failed");
+    assert.equal(body.error, "Alert kuota 70% gagal dibuat.");
+  });
+
+  it("baca-balik gagal (dokumen tidak ditemukan) -> 70-failed", async () => {
+    modes.markerReads = 36000;
+    modes.quotaVerify = "missing";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.quotaAlert, "70-failed");
+  });
+});
+
+describe("heartbeat skipped + fase/error (P-06/C2/K4)", () => {
+  it("seed-only: 503 + heartbeat skipped dengan skipReason seed-only", async () => {
+    modes.marker = "429";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 503);
+    const skipped = recorded.patch.find(
+      (p) =>
+        p.url.includes(`/cron-runs/${todayWib()}`) &&
+        p.body.fields.status?.stringValue === "skipped",
+    );
+    assert.ok(skipped, "tidak ada PATCH heartbeat skipped");
+    assert.equal(skipped.body.fields.skipReason.stringValue, "seed-only");
+    assert.equal(skipped.body.fields.error.stringValue, "Sumber data seed.");
+    assert.equal(
+      skipped.body.fields.seedModeMinutes.integerValue !== undefined,
+      true,
+    );
+  });
+
+  it("tanpa CRON_SECRET: 503 + heartbeat skipped no-secret (best-effort)", async () => {
+    delete process.env.CRON_SECRET;
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 503);
+    const skipped = recorded.patch.find(
+      (p) =>
+        p.url.includes(`/cron-runs/${todayWib()}`) &&
+        p.body.fields.status?.stringValue === "skipped",
+    );
+    assert.ok(skipped, "tidak ada PATCH heartbeat skipped no-secret");
+    assert.equal(skipped.body.fields.skipReason.stringValue, "no-secret");
+  });
+
+  it("run normal: lastPhase heartbeat + phaseMs lengkap + error kosong", async () => {
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.lastPhase, "heartbeat");
+    assert.equal(body.error, "");
+    for (const fase of ["alerts", "checks", "writes", "heartbeat"]) {
+      assert.equal(typeof body.phaseMs[fase], "number");
+      assert.ok(body.phaseMs[fase] >= 0);
+    }
+    assert.equal(typeof body.seedModeMinutes, "number");
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.equal(heartbeat.body.fields.lastPhase.stringValue, "heartbeat");
+    assert.equal(
+      heartbeat.body.fields.phaseMs.mapValue.fields.alerts.integerValue !==
+        undefined,
+      true,
+    );
+  });
+
+  it("kunci gagal diambil: 503 + heartbeat skipped lock-failed", async () => {
+    modes.lock = "create-fail";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 503);
+    const skipped = recorded.patch.find(
+      (p) =>
+        p.url.includes(`/cron-runs/${todayWib()}`) &&
+        p.body.fields.status?.stringValue === "skipped",
+    );
+    assert.ok(skipped, "tidak ada PATCH heartbeat skipped lock-failed");
+    assert.equal(skipped.body.fields.skipReason.stringValue, "lock-failed");
+  });
+});
+
+describe("check-in Sentry (P-06/K3, implementasi tiruan)", () => {
+  let checkIns;
+  let flushCalls;
+  beforeEach(async () => {
+    const sentry = await import("./sentry.js");
+    checkIns = [];
+    flushCalls = 0;
+    sentry.__setSentryImpl({
+      captureCheckIn: (payload) => {
+        checkIns.push(payload);
+        return "checkin-uji-1";
+      },
+      flush: async () => {
+        flushCalls += 1;
+      },
+      captureException: () => {},
+    });
+  });
+  afterEach(async () => {
+    const sentry = await import("./sentry.js");
+    sentry.__resetSentryForTests();
+  });
+
+  it("run normal: in_progress (dengan monitorConfig) lalu ok + flush", async () => {
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    assert.equal(checkIns.length, 2);
+    assert.equal(checkIns[0].monitorSlug, "karir-recheck");
+    assert.equal(checkIns[0].status, "in_progress");
+    assert.equal(checkIns[0].monitorConfig.schedule.value, "0 18 * * *");
+    assert.equal(checkIns[0].monitorConfig.timezone, "Asia/Jakarta");
+    assert.equal(checkIns[1].status, "ok");
+    assert.equal(checkIns[1].checkInId, "checkin-uji-1");
+    assert.equal(checkIns[1].monitorConfig, undefined);
+    assert.equal(flushCalls, 1);
+  });
+
+  it("seed-only: in_progress lalu error + flush", async () => {
+    modes.marker = "429";
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 503);
+    assert.equal(checkIns.length, 2);
+    assert.equal(checkIns[0].status, "in_progress");
+    assert.equal(checkIns[1].status, "error");
+    assert.equal(checkIns[1].checkInId, "checkin-uji-1");
+    assert.equal(flushCalls, 1);
+  });
+
+  it("duplikat: tidak ada check-in sama sekali", async () => {
+    modes.lock = "conflict";
+    const stamp = new Date(Date.now() - 30_000).toISOString();
+    modes.lockDoc = {
+      name: "x/cron-locks/recheck-2026-11-18",
+      fields: {
+        job: { stringValue: "recheck" },
+        status: { stringValue: "running" },
+        startedAt: { stringValue: stamp },
+      },
+      updateTime: stamp,
+    };
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).duplicate, true);
+    assert.equal(checkIns.length, 0);
+    assert.equal(flushCalls, 0);
+  });
+});
+
+describe("konteks push di ringkasan (P-06/P2)", () => {
+  it("digest terkirim: pushTotal/pushHasMore/pushMalformed masuk ringkasan + heartbeat", async () => {
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = VAPID.publicKey;
+    process.env.VAPID_PRIVATE_KEY = VAPID.privateKey;
+    modes.snapshot = "ok";
+    modes.snapshotNos = [];
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.push, "sent");
+    assert.equal(body.pushTotal, 1);
+    assert.equal(body.pushHasMore, false);
+    assert.equal(body.pushMalformed, 0);
+    const heartbeat = recorded.patch.find((p) =>
+      p.url.includes(`/cron-runs/${todayWib()}`),
+    );
+    assert.equal(heartbeat.body.fields.pushTotal.integerValue, "1");
+    assert.equal(heartbeat.body.fields.pushHasMore.booleanValue, false);
+    assert.equal(heartbeat.body.fields.pushMalformed.integerValue, "0");
+  });
+
+  it("tanpa alert baru: pushTotal 0 (digest tidak jalan)", async () => {
+    modes.snapshot = "ok";
+    modes.snapshotNos = [1];
+    const res = await getRecheck(cronRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.push, "none");
+    assert.equal(body.pushTotal, 0);
   });
 });

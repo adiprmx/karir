@@ -22,12 +22,15 @@ import {
   splitTelegramMessage,
   markAlertsSent,
   buildCronRunRecord,
+  buildSkippedCronRunRecord,
   buildCleanupRunRecord,
   buildDigestRunRecord,
   TELEGRAM_MESSAGE_LIMIT,
   QUOTA_DAILY_LIMIT,
   QUOTA_ALERT_READS,
+  QUOTA_ALERT_90_READS,
   quotaAlertId,
+  quotaAlert90Id,
   quotaPercent,
   formatQuotaAlertMessage,
 } from "./notify.js";
@@ -788,5 +791,147 @@ describe("buildDigestRunRecord (P-05)", () => {
     assert.equal(record.status.stringValue, "ok");
     assert.equal(record.job.stringValue, "digest");
     assert.equal(record.durationMs.integerValue, "0");
+  });
+});
+
+describe("alert kuota 90% (P-06/K2)", () => {
+  it("ambang 90% dari 50.000 baca harian dengan id sendiri", () => {
+    assert.equal(QUOTA_ALERT_90_READS, 45000);
+    assert.equal(quotaAlert90Id("2026-11-18"), "quota-90-2026-11-18");
+    assert.notEqual(quotaAlert90Id("2026-11-18"), quotaAlertId("2026-11-18"));
+  });
+});
+
+describe("buildCronRunRecord field observabilitas (P-06/K4)", () => {
+  it("field error/lastPhase/phaseMs/skipReason/seedModeMinutes/kuota/push", () => {
+    const record = buildCronRunRecord(
+      {
+        checked: 10,
+        error: "Firestore gagal: HTTP 429.",
+        lastPhase: "writes",
+        phaseMs: { alerts: 1200, checks: 30000, writes: 800 },
+        skipReason: "",
+        seedModeMinutes: 65,
+        readsEstimate: 36000,
+        quotaPercent: 72,
+        quotaAlert: "70",
+        push: "sent",
+        pushTotal: 12,
+        pushHasMore: true,
+        pushMalformed: 2,
+      },
+      { date: "2026-11-18", startedAt: 1000, finishedAt: 4000 },
+    );
+    assert.equal(record.error.stringValue, "Firestore gagal: HTTP 429.");
+    assert.equal(record.lastPhase.stringValue, "writes");
+    assert.equal(record.phaseMs.mapValue.fields.alerts.integerValue, "1200");
+    assert.equal(record.phaseMs.mapValue.fields.checks.integerValue, "30000");
+    assert.equal(record.phaseMs.mapValue.fields.writes.integerValue, "800");
+    assert.equal(record.skipReason.stringValue, "");
+    assert.equal(record.seedModeMinutes.integerValue, "65");
+    assert.equal(record.readsEstimate.integerValue, "36000");
+    assert.equal(record.quotaPercent.integerValue, "72");
+    assert.equal(record.quotaAlert.stringValue, "70");
+    assert.equal(record.pushTotal.integerValue, "12");
+    assert.equal(record.pushHasMore.booleanValue, true);
+    assert.equal(record.pushMalformed.integerValue, "2");
+  });
+
+  it("tanpa ringkasan: field observabilitas default aman", () => {
+    const record = buildCronRunRecord(null, {
+      date: "2026-11-18",
+      startedAt: 1000,
+      finishedAt: 1000,
+    });
+    assert.equal(record.error.stringValue, "");
+    assert.equal(record.lastPhase.stringValue, "");
+    assert.deepEqual(record.phaseMs.mapValue.fields, {});
+    assert.equal(record.quotaAlert.stringValue, "none");
+    assert.equal(record.pushHasMore.booleanValue, false);
+  });
+});
+
+describe("buildSkippedCronRunRecord (P-06/C2)", () => {
+  it("status skipped + skipReason + trigger + seedModeMinutes", () => {
+    const record = buildSkippedCronRunRecord(
+      {
+        skipReason: "seed-only",
+        trigger: "github-actions",
+        seedModeMinutes: 130,
+        error: "Sumber data seed.",
+      },
+      { date: "2026-11-18", startedAt: 1000, finishedAt: 1500 },
+    );
+    assert.equal(record.status.stringValue, "skipped");
+    assert.equal(record.skipReason.stringValue, "seed-only");
+    assert.equal(record.trigger.stringValue, "github-actions");
+    assert.equal(record.seedModeMinutes.integerValue, "130");
+    assert.equal(record.error.stringValue, "Sumber data seed.");
+    assert.equal(record.durationMs.integerValue, "500");
+  });
+});
+
+describe("buildCleanupRunRecord hasMore per koleksi (P-06/C6)", () => {
+  it("flag hasMore tiap koleksi + incidents ikut dihitung", () => {
+    const record = buildCleanupRunRecord(
+      {
+        analytics: { deleted: 1, hasMore: false },
+        retention: {
+          rate_limits: { deleted: 2, hasMore: true },
+          alerts: { deleted: 3, hasMore: false },
+          changes: { deleted: 4, hasMore: true },
+          reports: { deleted: 5, hasMore: false },
+          audit_logs: { deleted: 6, hasMore: false },
+          "cron-runs": { deleted: 7, hasMore: false },
+          incidents: { deleted: 8, hasMore: true },
+        },
+      },
+      { date: "2026-11-23", startedAt: 1000, finishedAt: 2000 },
+    );
+    assert.equal(record.deleted.integerValue, "36");
+    assert.equal(record.rateLimitsHasMore.booleanValue, true);
+    assert.equal(record.alertsHasMore.booleanValue, false);
+    assert.equal(record.changesHasMore.booleanValue, true);
+    assert.equal(record.reportsHasMore.booleanValue, false);
+    assert.equal(record.auditLogsHasMore.booleanValue, false);
+    assert.equal(record.cronRunsHasMore.booleanValue, false);
+    assert.equal(record.incidentsDeleted.integerValue, "8");
+    assert.equal(record.incidentsHasMore.booleanValue, true);
+  });
+});
+
+describe("buildDigestRunRecord konteks push (P-06/P2)", () => {
+  it("pushTotal/pushHasMore/pushMalformed diteruskan", () => {
+    const record = buildDigestRunRecord(
+      {
+        alertsFound: 2,
+        push: "sent",
+        pushSent: 5,
+        pushTotal: 5,
+        pushHasMore: false,
+        pushMalformed: 1,
+      },
+      { date: "2026-11-18", startedAt: 1000, finishedAt: 2000 },
+    );
+    assert.equal(record.pushTotal.integerValue, "5");
+    assert.equal(record.pushHasMore.booleanValue, false);
+    assert.equal(record.pushMalformed.integerValue, "1");
+  });
+});
+
+describe("buildCleanupRunRecord phaseMs (P-06/K4)", () => {
+  it("durasi tiap fase masuk mapValue", () => {
+    const record = buildCleanupRunRecord(
+      {
+        analytics: { deleted: 0, hasMore: false },
+        retention: { alerts: { deleted: 1, hasMore: false } },
+        phaseMs: { analytics: 120, alerts: 45, incidents: 30 },
+      },
+      { date: "2026-11-23", startedAt: 1000, finishedAt: 2000 },
+    );
+    const fields = record.phaseMs.mapValue.fields;
+    assert.equal(fields.analytics.integerValue, "120");
+    assert.equal(fields.alerts.integerValue, "45");
+    assert.equal(fields.incidents.integerValue, "30");
   });
 });

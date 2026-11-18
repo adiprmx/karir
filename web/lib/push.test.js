@@ -520,6 +520,39 @@ describe("sendPushDigest (T10)", () => {
     assert.equal(result.push, "sent");
     assert.equal(result.pushSent, 1);
     assert.equal(result.pushFailed, 1);
+    /* P-06/P2: dokumen rusak dipisah ke pushMalformed (tetap
+     * dihitung gagal — perilaku lama dipertahankan). */
+    assert.equal(result.pushMalformed, 1);
+    assert.equal(result.pushTotal, 2);
+    assert.equal(result.pushHasMore, false);
+  });
+
+  it("P-06/P2: pushTotal + pushHasMore diteruskan saat halaman penuh", async () => {
+    const result = await sendPushDigest({
+      ...base,
+      listImpl: async () => ({
+        subscriptions: [subDoc("satu"), subDoc("dua")],
+        hasMore: true,
+      }),
+      sendImpl: async () => ({ statusCode: 201 }),
+    });
+    assert.equal(result.push, "sent");
+    assert.equal(result.pushSent, 2);
+    assert.equal(result.pushTotal, 2);
+    assert.equal(result.pushHasMore, true);
+    assert.equal(result.pushMalformed, 0);
+  });
+
+  it("P-06/P2: daftar gagal -> pushTotal tetap 0", async () => {
+    const result = await sendPushDigest({
+      ...base,
+      listImpl: async () => {
+        throw new Error("Firestore 429");
+      },
+    });
+    assert.equal(result.push, "failed");
+    assert.equal(result.pushTotal, 0);
+    assert.equal(result.pushHasMore, false);
   });
 
   it("410 -> langganan dihapus (prune), 429 -> dipertahankan (retry)", async () => {

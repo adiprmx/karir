@@ -1,0 +1,78 @@
+# Ekspor riwayat kesehatan harian Karir (P-06, K8).
+#
+# Log runtime Vercel Hobby hanya bertahan 1 jam — tanpa riwayat
+# ini, status situs kemarin tidak bisa ditelusuri. Workflow ini
+# menjalankan web/scripts/export-health-history.mjs tiap hari
+# 03:00 WIB dan meng-commit hasilnya ke docs/status-history/ bila
+# berubah (satu file per tanggal, isinya snapshot /api/health +
+# insiden 24 jam + heartbeat cron/watcher).
+#
+# Isi file ekspor AMAN DI-COMMIT ke repo publik: pesan insiden
+# sudah disanitasi di hulu (lib/observability.js) dan disamarkan
+# ulang oleh skrip (email -> [email]); tidak ada token, UID, atau
+# email yang pernah masuk file ini (lihat gerbang Red→Blue→Red
+# P-06). Jangan pernah menambahkan field mentah Firestore ke
+# skrip tanpa meninjau ulang aturan ini.
+#
+# KREDENSIAL: job ini butuh FIREBASE_SERVICE_ACCOUNT (string JSON
+# service account baca Firestore) — secret yang sama dengan
+# backup.yml. Tanpa secret, skrip tetap jalan dan menulis file
+# health-only dengan catatan (bukan gagal). Bila /api/health
+# tidak bisa diambil, skrip menulis file kegagalan dan keluar 1
+# (run merah = sinyal yang benar), TETAPI commit tetap jalan
+# (if: always) supaya kegagalan itu sendiri tercatat di riwayat.
+#
+# Jadwal: tiap hari 20:00 UTC = 03:00 WIB, plus jalan manual lewat
+# workflow_dispatch. 03:00 WIB dipilih sesudah recheck (01:00),
+# digest (01:30), dan watcher (01:30) — snapshot harian menangkap
+# hasil ketiga job itu.
+name: Ekspor riwayat kesehatan
+
+on:
+  schedule:
+    # 20:00 UTC = 03:00 WIB setiap hari.
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+
+# Satu run ekspor dalam satu waktu; run yang tumpang tindih
+# mengantre (bukan dibatalkan) supaya tidak ada hari yang terlewat.
+concurrency:
+  group: export-health-history
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          # Node 24.x: sama dengan engines di web/package.json dan
+          # .nvmrc — konsisten dengan workflow app.yml.
+          node-version: "24.x"
+      - name: Ekspor riwayat kesehatan hari ini
+        working-directory: web
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/export-health-history.mjs
+      - name: Commit dan push bila ada perubahan
+        # Selalu jalan: bila /api/health gagal diambil, file
+        # kegagalan tetap harus masuk riwayat.
+        if: always()
+        run: |
+          if git status --porcelain docs/status-history/ | grep -q .; then
+            git config user.name "karir-health[bot]"
+            git config user.email "karir-health[bot]@users.noreply.github.com"
+            git pull --rebase origin main || git pull --rebase origin HEAD
+            git add docs/status-history/
+            git commit -m "Riwayat kesehatan: $(date -u -d '+7 hours' +%Y-%m-%d) WIB"
+            git push origin HEAD:main
+          else
+            echo "Tidak ada perubahan riwayat kesehatan."
+          fi
