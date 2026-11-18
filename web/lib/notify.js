@@ -481,6 +481,17 @@ export function buildCronRunRecord(summary, { date, startedAt, finishedAt }) {
     pushFailed: { integerValue: String(s.pushFailed || 0) },
     pushPruned: { integerValue: String(s.pushPruned || 0) },
     pushTruncated: { booleanValue: s.pushTruncated === true },
+    /* Penanda pushed (P-05): alert yang ditandai sudah masuk digest
+     * sesudah digest recheck terkirim penuh — endpoint digest
+     * mandiri (01:30 WIB) memakai penanda ini supaya tidak
+     * mengirim ulang alert yang sama. */
+    pushedMarked: { integerValue: String(s.pushedMarked || 0) },
+    pushedFailed: { integerValue: String(s.pushedFailed || 0) },
+    /* Pemicu run ini (P-05): "github-actions" | "qstash" |
+     * "cron-secret" (Vercel Cron / manual). Dipakai observasi
+     * pasca-merge untuk membuktikan scheduler mana yang
+     * menjalankan run (kriteria presisi P-05 no. 2). */
+    trigger: { stringValue: s.trigger || "" },
     markerBumped: { booleanValue: s.markerBumped === true },
     queueTotal: { integerValue: String(queue.total || 0) },
     queueUrgent: { integerValue: String(queue.urgent || 0) },
@@ -552,6 +563,49 @@ export function buildCleanupRunRecord(
     reportsDeleted: { integerValue: String(reportsDeleted) },
     auditLogsDeleted: { integerValue: String(auditLogsDeleted) },
     cronRunsDeleted: { integerValue: String(cronRunsDeleted) },
+    /* Pemicu run ini (P-05) — lihat buildCronRunRecord. */
+    trigger: { stringValue: s.trigger || "" },
+    error: { stringValue: typeof s.error === "string" ? s.error : "" },
+  };
+}
+
+/* Ringkasan run digest push mandiri untuk heartbeat (P-05):
+ * ditulis route digest ke dokumen cron-runs/digest-{tanggal-WIB}.
+ * Id dokumen memakai awalan "digest-" supaya tidak menimpa
+ * heartbeat recheck hari yang sama (alasan yang sama dengan
+ * "cleanup-", lihat buildCleanupRunRecord). Field `job`
+ * membedakan ketiganya bagi pembaca koleksi. `status` "ok" bila
+ * run selesai (termasuk bila tidak ada alert yang belum pushed —
+ * itu hasil normal, bukan kegagalan); "failed" bila kueri alert
+ * atau kirim push gagal total. `alertsFound` = alert belum pushed
+ * yang ditemukan; `alertsTotal` = semua alert hari ini (termasuk
+ * yang sudah pushed + tipe non-digest); `hasMore` = masih ada
+ * alert hari ini di luar batas kueri 100. */
+export function buildDigestRunRecord(
+  summary,
+  { date, startedAt, finishedAt },
+) {
+  const s = summary || {};
+  return {
+    date: { stringValue: date },
+    job: { stringValue: "digest" },
+    status: { stringValue: s.status === "failed" ? "failed" : "ok" },
+    startedAt: { stringValue: new Date(startedAt).toISOString() },
+    finishedAt: { stringValue: new Date(finishedAt).toISOString() },
+    durationMs: {
+      integerValue: String(Math.max(0, finishedAt - startedAt)),
+    },
+    alertsFound: { integerValue: String(s.alertsFound || 0) },
+    alertsTotal: { integerValue: String(s.alertsTotal || 0) },
+    hasMore: { booleanValue: s.hasMore === true },
+    push: { stringValue: s.push || "none" },
+    pushSent: { integerValue: String(s.pushSent || 0) },
+    pushFailed: { integerValue: String(s.pushFailed || 0) },
+    pushPruned: { integerValue: String(s.pushPruned || 0) },
+    pushTruncated: { booleanValue: s.pushTruncated === true },
+    pushedMarked: { integerValue: String(s.pushedMarked || 0) },
+    pushedFailed: { integerValue: String(s.pushedFailed || 0) },
+    trigger: { stringValue: s.trigger || "" },
     error: { stringValue: typeof s.error === "string" ? s.error : "" },
   };
 }

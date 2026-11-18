@@ -2,21 +2,31 @@
  * dokumen lama dari tujuh koleksi Firestore — event analitik mentah
  * lebih tua dari 90 hari (maks 200/run, lewat cleanupOldEvents di
  * lib/analytics-server.js) ditambah enam koleksi di bawah (lewat
- * cleanupCollection di berkas ini). Dijalankan Vercel Cron tiap
- * Senin 02:00 WIB (vercel.json).
+ * cleanupCollection di berkas ini). Dijalankan terjadwal tiap
+ * Senin 02:00 WIB oleh workflow GitHub Actions (utama,
+ * .github/workflows/scheduled-cleanup.yml), dengan jadwal QStash
+ * sebagai pemicu cadangan dan Vercel Cron selama masa transisi
+ * (lihat docs/monitoring-cron.md). Endpoint menerima GET dan POST
+ * (POST untuk QStash).
  *
  * Anggaran hapus per run: 200 (analitik) + 200 + 100 + 100 + 100
  * + 100 + 100 = maks 900 hapus per run, seminggu sekali — jauh di
  * bawah batas hapus Firestore 20.000/hari. Tiap koleksi dihapus
  * dalam satu panggilan batchWrite (maks 500 tulis/panggilan; tiap
- * koleksi <= 200). Bila masih ada sisa (hasMore), run minggu
- * berikutnya melanjutkan.
+ * koleksi <= 200). Bila masih ada sisa (hasMore), workflow
+ * Actions memanggil endpoint lagi (loop sampai tidak ada sisa) —
+ * tiap panggilan adalah invokasi fungsi baru dengan anggaran 60
+ * detiknya sendiri, jadi skenario penuh ~110 detik tidak lagi
+ * terpotong maxDuration (P-05, C7). Kunci idempotency job ini
+ * mengizinkan jalan-ulang (allowRerun) PERSIS untuk loop itu;
+ * pemicu bersamaan tetap ditolak (kunci running).
  *
- * Guard sama seperti recheck: fail-closed bila CRON_SECRET belum
- * dipasang (503 generik), Bearer timing-safe, dan service account
- * wajib ada. Kegagalan hapus dicatat di log dan dijawab 500 — run
- * berikutnya mencoba lagi; tidak ada data pengguna yang hilang
- * bila satu run gagal, hanya dokumen lama yang tertunda dihapus.
+ * Guard: fail-closed bila CRON_SECRET belum dipasang (503 generik),
+ * Bearer timing-safe ATAU signature QStash yang valid
+ * (lib/cron-auth.js), dan service account wajib ada. Kegagalan
+ * hapus dicatat di log dan dijawab 500 — run berikutnya mencoba
+ * lagi; tidak ada data pengguna yang hilang bila satu run gagal,
+ * hanya dokumen lama yang tertunda dihapus.
  *
  * Heartbeat (S8/C-02): di akhir run — berhasil maupun gagal —
  * ringkasan ditulis ke dokumen cron-runs/cleanup-{tanggal-WIB}
@@ -31,8 +41,12 @@
  * account tidak ada yang bisa ditulis, dan pemanggil tanpa izin
  * tidak boleh meninggalkan jejak. */
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
-import { requireEnv } from "@/lib/require-env";
+import { randomUUID } from "node:crypto";
+import { authorizeCronRequest } from "@/lib/cron-auth";
+import {
+  acquireCronLock,
+  releaseCronLock,
+} from "@/lib/cron-idempotency";
 import {
   cleanupOldEvents,
   getServiceAccountAccessToken,
@@ -242,15 +256,6 @@ export async function cleanupCollection(
   return { deleted: toDelete.length, cutoff, hasMore };
 }
 
-/* Perbandingan string timing-safe: panjang beda langsung gagal, isi
- * dibandingkan tanpa bocor lewat waktu. */
-function secretsEqual(a, b) {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
 /* Balasan 503 generik untuk semua kegagalan konfigurasi cron
  * (SEC-05): satu pesan yang sama, tanpa menyebut variabel mana
  * yang hilang — detail itu hanya dicatat di log server. */
@@ -284,6 +289,7 @@ async function writeCleanupHeartbeat({
   analytics,
   retention,
   error,
+  trigger,
 }) {
   try {
     const pid = projectId || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
@@ -298,7 +304,7 @@ async function writeCleanupHeartbeat({
       `https://firestore.googleapis.com/v1/projects/${pid}` +
       `/databases/(default)/documents`;
     const fields = buildCleanupRunRecord(
-      { status, analytics, retention, error },
+      { status, analytics, retention, error, trigger },
       { date: today, startedAt, finishedAt: Date.now() },
     );
     const res = await fetchWithTimeout(
@@ -331,17 +337,31 @@ async function writeCleanupHeartbeat({
 }
 
 export async function GET(request) {
+  return runCleanup(request);
+}
+
+/* POST diterima untuk QStash (jadwal QStash dapat memakai POST):
+ * perilakunya identik dengan GET; body mentah dipakai verifikasi
+ * signature (klaim body JWT). */
+export async function POST(request) {
+  return runCleanup(request);
+}
+
+async function runCleanup(request) {
   /* 1. Keamanan cron: fail-closed. Tanpa CRON_SECRET, rute tidak
-   * pernah berjalan — menjawab 503, bukan mengizinkan tanpa auth. */
-  let secret;
-  try {
-    secret = requireEnv("CRON_SECRET");
-  } catch {
-    console.warn("Cron cleanup ditolak: CRON_SECRET belum dipasang.");
-    return cronUnavailable();
-  }
-  const auth = request.headers.get("authorization") || "";
-  if (!secretsEqual(auth, `Bearer ${secret}`)) {
+   * pernah berjalan — menjawab 503, bukan mengizinkan tanpa auth.
+   * Dua jalur lolos: Bearer CRON_SECRET atau signature QStash
+   * yang valid (lib/cron-auth.js). */
+  const rawBody =
+    request.method === "POST" && typeof request.text === "function"
+      ? await request.text()
+      : "";
+  const auth = authorizeCronRequest(request, { rawBody });
+  if (!auth.ok) {
+    if (auth.error === "unconfigured") {
+      console.warn("Cron cleanup ditolak: CRON_SECRET belum dipasang.");
+      return cronUnavailable();
+    }
     return NextResponse.json({ error: "Tidak diizinkan." }, { status: 401 });
   }
 
@@ -351,11 +371,80 @@ export async function GET(request) {
     console.warn("Cron cleanup ditolak: service account belum dipasang.");
     return cronUnavailable();
   }
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (!projectId) {
+    console.warn("Cron cleanup ditolak: project ID belum dipasang.");
+    return cronUnavailable();
+  }
 
   const startedAt = Date.now();
   const today = todayJakarta();
 
-  /* 3. Hapus event analitik lama (90 hari). cleanupOldEvents melempar
+  /* 3. Token service account (cache modul bersama, BE2-24) —
+   * dipakai kunci idempotency dan seluruh penghapusan. */
+  const token = await getServiceAccountAccessToken();
+  if (!token) {
+    console.warn("Cron cleanup ditolak: token service account gagal dibuat.");
+    return NextResponse.json(
+      { error: "Token service account gagal dibuat." },
+      { status: 503 },
+    );
+  }
+  const fsBase =
+    `https://firestore.googleapis.com/v1/projects/${projectId}` +
+    `/databases/(default)/documents`;
+
+  /* 4. Pengaman jalan-ganda (P-05, C9): satu eksekusi berjalan per
+   * hari untuk job cleanup. allowRerun: true — penghapusan retensi
+   * idempotent dan workflow Actions memanggil endpoint berulang
+   * sampai tidak ada sisa (C7); pemicu BERSAMAAN tetap ditolak
+   * lewat kunci running. Pemicu duplikat menjawab 200
+   * { duplicate: true } (bukan error). */
+  let lock;
+  try {
+    lock = await acquireCronLock({
+      fsBase,
+      token,
+      job: "cleanup",
+      date: today,
+      runId: randomUUID(),
+      trigger: auth.trigger,
+      allowRerun: true,
+    });
+  } catch (err) {
+    console.warn(
+      "Cron cleanup ditolak: kunci tidak bisa diambil:",
+      err && err.message ? err.message : err,
+    );
+    return NextResponse.json(
+      { error: "Kunci cron tidak bisa diambil." },
+      { status: 503 },
+    );
+  }
+  if (!lock.acquired) {
+    console.warn(
+      `Cron cleanup duplikat ditolak (alasan: ${lock.reason}, ` +
+        `pemicu: ${auth.trigger}, tanggal: ${today}).`,
+    );
+    return NextResponse.json({
+      duplicate: true,
+      reason: lock.reason,
+      job: "cleanup",
+      date: today,
+      trigger: auth.trigger,
+    });
+  }
+  const release = (status) =>
+    releaseCronLock({
+      fsBase,
+      token,
+      job: "cleanup",
+      date: today,
+      status,
+      updateTime: lock.updateTime,
+    });
+
+  /* 5. Hapus event analitik lama (90 hari). cleanupOldEvents melempar
    * bila gagal — catat, tulis heartbeat gagal, dan jawab 500 supaya
    * kegagalannya terlihat di log dan di heartbeat. */
   let analytics;
@@ -369,36 +458,31 @@ export async function GET(request) {
       startedAt,
       status: "failed",
       error: message,
+      trigger: auth.trigger,
     });
+    await release("failed");
     return NextResponse.json(
       { error: "Pembersihan event gagal." },
       { status: 500 },
     );
   }
 
-  /* 4. Retensi enam koleksi lain (FIN-08 + P-03). Satu token service
+  /* 6. Retensi enam koleksi lain (FIN-08 + P-03). Satu token service
    * account untuk semua koleksi (sudah di-cache modul saat langkah
-   * 3 mengambilnya). Kegagalan satu koleksi menghentikan run —
+   * 5 mengambilnya). Kegagalan satu koleksi menghentikan run —
    * run berikutnya mencoba lagi — supaya kegagalan terlihat, bukan
    * tertelan diam. Hasil parsial (analitik + koleksi yang sempat
    * selesai) ikut di balasan 500 (C-08) dan di heartbeat, supaya
    * bukti run parsial tidak hilang. */
   const retention = {};
   try {
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    const token = await getServiceAccountAccessToken();
-    if (!token) {
-      throw new Error(
-        "Token service account tidak tersedia; pembersihan dibatalkan.",
-      );
-    }
     for (const policy of RETENTION_POLICIES) {
       retention[policy.collection] = await cleanupCollection(policy, {
         token,
         projectId,
       });
     }
-    /* 5. Heartbeat (S8/C-02): catat ringkasan run ini ke
+    /* 7. Heartbeat (S8/C-02): catat ringkasan run ini ke
      * cron-runs/cleanup-{tanggal} supaya watcher bisa mendeteksi
      * run yang hilang atau gagal. Best-effort: gagal menulis
      * hanya dicatat di ringkasan. */
@@ -410,12 +494,14 @@ export async function GET(request) {
       status: "ok",
       analytics,
       retention,
+      trigger: auth.trigger,
     });
     if (!heartbeatWritten) {
       console.warn(
         "Heartbeat cleanup gagal ditulis: dokumen cron-runs tidak tercatat.",
       );
     }
+    await release("done");
     return NextResponse.json({ ...analytics, retention, heartbeatWritten });
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
@@ -427,7 +513,9 @@ export async function GET(request) {
       analytics,
       retention,
       error: message,
+      trigger: auth.trigger,
     });
+    await release("failed");
     return NextResponse.json(
       { error: "Pembersihan retensi gagal.", analytics, retention },
       { status: 500 },

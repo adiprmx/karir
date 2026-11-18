@@ -2,19 +2,30 @@
 
 Dokumen ini menjelaskan cara kerja cron cek ulang harian, antrean
 ceknya, koordinasi notifikasi Telegram, dan pemantauan kesehatan
-cron. Terakhir diperbarui: 15 Nov 2026 (T11, Fase 4).
+cron. Terakhir diperbarui: 18 Nov 2026 (P-05, Fase 2).
 
 ## Jadwal
 
 | Komponen | Jadwal | Tempat |
 |---|---|---|
-| Cron recheck `GET /api/cron/recheck` | tiap hari 18:00 UTC (01:00 WIB) | Vercel Cron (`web/vercel.json`) |
+| Recheck `GET /api/cron/recheck` | tiap hari 01:00 WIB | GitHub Actions `scheduled-recheck.yml` (utama, P-05); Vercel Cron (`web/vercel.json`) masih aktif sampai cutover pasca-merge — lihat `docs/scheduler-github-actions.md` |
+| Digest push `GET /api/cron/digest` | tiap hari 01:30 WIB | GitHub Actions `scheduled-digest.yml` (P-05) |
+| Cleanup `GET /api/cron/cleanup` | Senin 02:00 WIB | GitHub Actions `scheduled-cleanup.yml` (utama, P-05); Vercel Cron masih aktif sampai cutover |
+| Monitor watcher | tiap hari 08:00 WIB | GitHub Actions `watcher-monitor.yml` (P-05) |
 | Watcher `notify_watch.py` | tiap hari 01:30 WIB | cron agent-side (`~/workspace/.claude-v280/`) |
+| Pemicu cadangan QStash | recheck 01:05, digest 01:35, cleanup Senin 02:05 WIB | Upstash QStash (Free) — lihat `docs/qstash-setup.md` |
 
 Cron menulis alert ke Firestore; watcher meneruskan alert yang
 belum terkirim ke Telegram owner. Bila token bot Telegram dipasang
 di Vercel, cron juga mengirim langsung — lihat "Satu sumber
 kebenaran status terkirim" di bawah.
+
+Dua pemicu bersamaan (mis. GitHub Actions + QStash, atau Actions +
+Vercel Cron selama masa transisi) menghasilkan SATU eksekusi:
+endpoint mengambil kunci idempotency di koleksi `cron-locks`
+sebelum bekerja; pemicu kedua menjawab HTTP 200
+`{duplicate: true, reason}` tanpa efek samping. Detail di
+`docs/scheduler-github-actions.md`.
 
 ## Antrean cek (BE-05)
 
@@ -61,6 +72,15 @@ antrean.
 1. Auth fail-closed (`CRON_SECRET` wajib, perbandingan
    timing-safe; tanpa secret menjawab 503 — NOTIF-02/SEC-05/
    OPS-04, diperbaiki Fase 1 + masking pesan 503 di T11).
+   Sejak P-05, signature QStash (JWT HS256, header
+   `Upstash-Signature`) diterima sebagai jalur auth kedua;
+   tanpa `CRON_SECRET` maupun kunci QStash, endpoint tetap
+   503. Header `X-Karir-Trigger` hanya label pemicu di log
+   dan heartbeat, tidak memengaruhi auth.
+1b. Ambil kunci idempotency `cron-locks/recheck-{tanggal-WIB}`
+   (P-05): bila job sedang berjalan/sudah selesai hari ini,
+   jawab 200 `{duplicate: true}` tanpa bekerja. Kunci basi
+   (>3 menit, dari run yang mati) diambil alih otomatis.
 2. Muat perusahaan — HANYA dari live. Bila Firestore tidak bisa
    dibaca (source seed), run dilewati dengan 503 supaya tidak ada
    alert palsu atau tulis dari data basi.
@@ -90,7 +110,8 @@ antrean.
 `{checked, changed, updated, skipped, openSkipped, truncated,
 alerts, alertsFailed, telegram, telegramMarked,
 alertPhaseTruncated, snapshotKnown, snapshotWritten, queue,
-markerBumped, heartbeatWritten}`
+markerBumped, heartbeatWritten, trigger, pushedMarked,
+pushedFailed}`
 
 - `openSkipped` — perusahaan tier mendesak/terbuka yang tidak
   sempat dicek karena terpotong. Ini sinyal utama pemantauan:
@@ -100,6 +121,24 @@ markerBumped, heartbeatWritten}`
 - `telegram` — `sent` | `failed` | `skipped-no-token` | `none`;
   `telegramMarked` — alert yang berhasil ditandai terkirim
   sesudah kirim langsung.
+- `trigger` (P-05) — pemicu run: `github-actions` | `qstash` |
+  `cron-secret` (Vercel Cron/manual); tercatat juga di heartbeat.
+- `pushedMarked` / `pushedFailed` (P-05) — alert yang berhasil /
+  gagal ditandai `pushed` sesudah digest push terkirim penuh.
+  Bila digest terpotong/gagal, penanda tidak ditulis dan endpoint
+  digest 01:30 WIB mencoba lagi.
+
+## Endpoint digest mandiri (P-05)
+
+`GET /api/cron/digest` (dipicu 01:30 WIB oleh
+`scheduled-digest.yml`) mengambil alert hari ini yang BELUM
+`pushed` (tipe `new-target` dan `deadline` saja) dan mengirimnya
+sebagai satu digest push. Bila recheck sudah mengirim digest
+penuh, tidak ada yang ditemukan dan endpoint menjawab tanpa
+mengirim. Heartbeat-nya sendiri: `cron-runs/digest-{tanggal-WIB}`.
+Run gagal (kueri gagal / push gagal / tanpa VAPID) menjawab 500
++ kunci idempotency `failed` supaya pemicu cadangan (QStash
+01:35) bisa mengambil alih.
 
 ## Satu sumber kebenaran status terkirim (NOTIF-01)
 
@@ -122,11 +161,21 @@ Tiap run yang selesai menulis dokumen `cron-runs/{tanggal-WIB}`
 dan komposisi antrean. Dokumen ditulis lewat service account
 (mengabaikan rules); tidak ada aturan publik untuk koleksi ini.
 
-Watcher memeriksa heartbeat tiap pagi (01:30 WIB):
+Watcher memeriksa heartbeat tiap pagi (01:30 WIB). Sejak P-05,
+toleransi keterlambatan memakai masa tenggang 15 menit sesudah
+jadwal (01:00 → 01:15): watcher yang tiba sebelum akhir tenggang
+dan belum menemukan heartbeat MENUNGGU sampai akhir tenggang lalu
+cek ulang sekali; watcher yang tiba sebelum 01:00 melewati
+pemeriksaan (run belum dijadwalkan); sesudah tenggang lewat,
+heartbeat hilang langsung alarm tanpa tidur. Ini menggantikan
+jeda cek-ulang 180 detik lama yang tidak cukup menoleransi
+Vercel Cron yang molor 35–55 menit (C1).
 
 | Kondisi | Tindakan watcher |
 |---|---|
-| Dokumen hari ini tidak ada (dicek ulang sekali sesudah 180 detik) | Kirim alarm "cron belum tercatat berjalan", sekali per hari (penanda `cron-miss-{tanggal}`) |
+| Dokumen hari ini tidak ada, sesudah masa tenggang (01:15) | Kirim alarm "cron belum tercatat berjalan", sekali per hari (penanda `cron-miss-{tanggal}`) |
+| Dokumen hari ini tidak ada, masih dalam masa tenggang | Tunggu sampai akhir tenggang, cek ulang sekali; alarm hanya bila tetap tidak ada |
+| Watcher tiba sebelum 01:00 | Pemeriksaan dilewati (run belum dijadwalkan) |
 | `openSkipped > 0` hari ini DAN kemarin | Kirim alarm "tidak sempat mengecek semua perusahaan yang ada lowongan 2 hari berturut-turut", sekali per hari (penanda `cron-truncated-{tanggal}`) |
 | Dokumen ada, `openSkipped = 0` | Tidak ada pesan |
 | Baca heartbeat gagal (mis. 429 kuota) | Tidak ada alarm (kegagalan baca bukan bukti cron tidak jalan); coba lagi besok |
@@ -135,6 +184,19 @@ Penanda alarm ditulis di koleksi `alerts` dengan `sent=true`
 sehingga tidak pernah diteruskan sebagai alert perusahaan, dan
 watcher mengabaikan tipe selain `new-target` / `deadline` /
 `quota` saat meneruskan.
+
+## Heartbeat watcher (P-05, C5)
+
+Watcher menulis heartbeat-nya sendiri ke dokumen
+`meta/watcher` (`lastRunAt` + `lastRunOk`) di akhir setiap run
+(best-effort; kegagalan menulis tidak menggagalkan run).
+Workflow `watcher-monitor.yml` memeriksa kesegaran heartbeat
+itu tiap hari 08:00 WIB (batas basi 26 jam); bila basi/hilang,
+workflow gagal dan membuka GitHub issue berlabel `watcher-down`
+— jalur alarm yang tidak bergantung pada Telegram maupun VM
+watcher. `lastRunOk=false` pada heartbeat segar BUKAN alarm
+monitor: watcher yang berjalan sudah mengabarkan masalahnya
+sendiri lewat Telegram.
 
 ## Heartbeat cron cleanup (S8/C-02)
 
@@ -154,14 +216,22 @@ ini tiap run, terhadap **Senin terakhir yang run-nya sudah
 seharusnya selesai**: Senin sebelum 02:00 WIB memeriksa Senin
 seminggu sebelumnya; Senin jam 02:00 ke atas memeriksa hari ini;
 Selasa–Minggu memeriksa Senin terakhir (`last_cleanup_monday`).
-Bila dokumen tidak ada (dicek ulang sekali sesudah 180 detik)
-atau `status` bukan `"ok"`, watcher mengirim alarm sekali per
-Senin (penanda `cron-cleanup-miss-{tanggal}` /
-`cron-cleanup-failed-{tanggal}`); baca gagal (mis. 429) dilewati
-tanpa alarm, seperti recheck. Senin sebelum 23 November 2026
-tidak diperiksa: heartbeat cleanup baru ditulis kode v2.16.3,
-jadi run lama tidak pernah punya heartbeat dan "tidak ada" di
-sana bukan kegagalan (cutoff `CLEANUP_HEARTBEAT_START`).
+Bila dokumen tidak ada (masa tenggang 15 menit sesudah 02:00
+berlaku seperti recheck, P-05) atau `status` bukan `"ok"`,
+watcher mengirim alarm sekali per Senin (penanda
+`cron-cleanup-miss-{tanggal}` / `cron-cleanup-failed-{tanggal}`);
+baca gagal (mis. 429) dilewati tanpa alarm, seperti recheck.
+Senin sebelum 23 November 2026 tidak diperiksa: heartbeat cleanup
+baru ditulis kode v2.16.3, jadi run lama tidak pernah punya
+heartbeat dan "tidak ada" di sana bukan kegagalan (cutoff
+`CLEANUP_HEARTBEAT_START`).
+
+Sejak P-05, cleanup dipicu workflow `scheduled-cleanup.yml` yang
+me-loop endpoint sampai tidak ada sisa (C7 — satu panggilan
+~110 detik melebihi `maxDuration` 60 detik, jadi tiap panggilan
+menghapus satu batch dan melaporkan `hasMore`; workflow
+mengulang sampai `hasMore` false di semua koleksi, maks
+12 iterasi).
 
 ## Tipe alert
 
@@ -211,9 +281,18 @@ menyebut "hari ini" (0 hari), bukan "1 hari lagi".
   darurat; hindari pengecekan berulang yang memakan kuota.
 - **"Cron recheck belum tercatat berjalan"** — run 01:00 WIB
   tidak selesai. Kemungkinan: kuota habis (lihat pesan kuota),
-  Vercel Cron tidak jalan, atau konfigurasi cron belum lengkap.
-  Periksa log Vercel / panel admin; run besok mencoba lagi
-  otomatis.
+  workflow GitHub Actions tidak jalan, atau konfigurasi cron
+  belum lengkap. Periksa log run di GitHub repo adiprmx/karir >
+  Actions / panel admin; run besok mencoba lagi otomatis.
+- **"Cron cleanup belum tercatat berjalan / tercatat gagal"** —
+  run Senin 02:00 WIB tidak selesai. Periksa log workflow
+  Cleanup Terjadwal di GitHub Actions; data lama dibersihkan
+  pada run berikutnya.
+- **Issue GitHub "Watcher Karir tidak memberi kabar"** (label
+  `watcher-down`) — heartbeat watcher basi >26 jam. Periksa
+  apakah `notify_watch.py` di VM masih jalan sesuai jadwal
+  01:30 WIB dan apakah tulis heartbeat ke Firestore gagal.
+  Tutup issue sesudah heartbeat kembali segar.
 - **"Tidak sempat mengecek semua perusahaan 2 hari
   berturut-turut"** — antrean lebih besar dari anggaran. Bukan
   darurat satu hari, tapi bila berulang, antrean perlu

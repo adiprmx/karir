@@ -1,0 +1,109 @@
+# Digest push terjadwal Karir (P-05): GitHub Actions memanggil
+# endpoint /api/cron/digest (baru di P-05) setiap hari 01:30 WIB —
+# 30 menit sesudah recheck. Endpoint ini mengambil alert hari ini
+# yang BELUM terkirim (pushed=false) dan mengirimkannya sebagai
+# digest push; bila recheck sudah mengirim digest penuh, endpoint
+# tidak menemukan apa-apa dan menjawab tanpa mengirim.
+#
+# Jadwal: 18:30 UTC = 01:30 WIB setiap hari. Pemicu schedule HANYA
+# jalan di default branch (main); di branch fitur workflow ini
+# inert.
+#
+# KREDENSIAL: secret CRON_SECRET (Settings > Secrets and variables >
+# Actions repo ini). Bila belum dipasang, run GAGAL dengan pesan
+# jelas. Respons duplikat = SUKSES (bukti idempotency).
+name: Digest Terjadwal
+
+on:
+  schedule:
+    # 18:30 UTC = 01:30 WIB setiap hari.
+    - cron: "30 18 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-digest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE_URL: https://karir-adiprmx.vercel.app
+    steps:
+      - name: Panggil endpoint digest
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::Secret CRON_SECRET belum dipasang di repo (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          export MULAI_UTC
+          MULAI_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          HTTP=$(curl -sS --max-time 90 -o /tmp/digest.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "X-Karir-Trigger: github-actions" \
+            "$SITE_URL/api/cron/digest") || {
+            echo "::error::curl gagal memanggil endpoint digest (jaringan/timeout)."
+            exit 1
+          }
+          export HTTP
+          echo "HTTP: $HTTP (mulai $MULAI_UTC)"
+          python3 - <<'PY'
+          """Nilai respons digest dan tulis ringkasan.
+
+          Duplikat (job sudah berjalan/selesai) = sukses. HTTP bukan
+          200 atau ada field error = gagal.
+          """
+          import json
+          import os
+          import sys
+          from datetime import datetime, timedelta, timezone
+
+          http = os.environ["HTTP"]
+          with open("/tmp/digest.json", encoding="utf-8") as f:
+              data = json.load(f)
+          mulai = datetime.fromisoformat(
+              os.environ["MULAI_UTC"].replace("Z", "+00:00")
+          )
+          wib = mulai.astimezone(timezone(timedelta(hours=7)))
+          ringkasan = [
+              "## Digest terjadwal",
+              "",
+              f"- Mulai: {mulai:%Y-%m-%d %H:%M:%S} UTC "
+              f"({wib:%Y-%m-%d %H:%M:%S} WIB)",
+              f"- HTTP: {http}",
+          ]
+          if data.get("duplicate"):
+              ringkasan.append(
+                  f"- Hasil: duplikat ({data.get('reason')}) — "
+                  "digest sudah berjalan/selesai, tidak ada kirim ganda."
+              )
+              print("DUPLIKAT: " + ringkasan[-1][2:])
+          elif http != "200" or "error" in data:
+              ringkasan.append(
+                  f"- Hasil: GAGAL — {data.get('error', 'tanpa pesan')}"
+              )
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a",
+                        encoding="utf-8") as f:
+                  f.write("\n".join(ringkasan) + "\n")
+              print(f"::error::Digest gagal (HTTP {http}): "
+                    f"{data.get('error', 'tanpa pesan')}")
+              sys.exit(1)
+          else:
+              ringkasan.append(
+                  f"- Hasil: sukses — alert ditemukan "
+                  f"{data.get('alertsFound')}, push {data.get('push')}, "
+                  f"terkirim {data.get('pushSent')}, "
+                  f"ditandai {data.get('pushedMarked')}"
+              )
+              print("SUKSES: " + ringkasan[-1][2:])
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a",
+                    encoding="utf-8") as f:
+              f.write("\n".join(ringkasan) + "\n")
+          PY
