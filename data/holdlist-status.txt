@@ -11,28 +11,22 @@
 # Firestore; MATI -> write-back ke CSV; DIBLOKIR -> tinjau mingguan).
 #
 # 18 Nov 2026 (D3): 23 nomor HIDUP O-01 DIKELUARKAN — sudah dipulihkan
-# ke "Ada lowongan" di Firestore (restore27, marker rev 8). Tersisa 4
-# DIBLOKIR O-01 (tinjau mingguan) + 15 flip baru recheck 18 Nov yang
-# BELUM terverifikasi §B6.2 (verifikasi berjalan; jangan write-back
-# status mereka sebelum putusan). EMC Healthcare (382) TIDAK ada di
-# sini: putusannya MATI fungsional, status live "Portal tidak bisa
-# dibuka" BENAR dan CSV mengikutinya lewat write-back.
+# ke "Ada lowongan" di Firestore (restore27, marker rev 8). 15 flip
+# baru recheck 18 Nov terverifikasi §B6.2 malam ini: 8 HIDUP
+# dipulihkan (398, 418, 439, 440, 445, 476, 486, 502), 1 MATI
+# (504 Golden Energy Mines — status Portal ditulis ke CSV lewat
+# write-back), 2 DIBLOKIR dipulihkan + tetap ditahan (414, 531),
+# 4 TIDAK PASTI tetap ditahan untuk cek ulang 19 Nov (444, 470,
+# 511, 532). EMC Healthcare (382) TIDAK ada di sini: putusannya
+# MATI fungsional, status live "Portal tidak bisa dibuka" BENAR dan
+# CSV sudah mengikutinya lewat write-back 0248507e.
 23 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 72 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 121 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 374 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
-398 | Flip 18 Nov belum terverifikasi §B6.2: Glints | 2026-11-18
-414 | Flip 18 Nov belum terverifikasi §B6.2: Ciputra Development | 2026-11-18
-418 | Flip 18 Nov belum terverifikasi §B6.2: RS Premier Bintaro | 2026-11-18
-439 | Flip 18 Nov belum terverifikasi §B6.2: Japfa Comfeed Indonesia | 2026-11-18
-440 | Flip 18 Nov belum terverifikasi §B6.2: Siantar Top | 2026-11-18
-444 | Flip 18 Nov belum terverifikasi §B6.2: Greenfields Indonesia | 2026-11-18
-445 | Flip 18 Nov belum terverifikasi §B6.2: Ultra Jaya | 2026-11-18
-470 | Flip 18 Nov belum terverifikasi §B6.2: InJourney Hospitality | 2026-11-18
-476 | Flip 18 Nov belum terverifikasi §B6.2: MyRepublic Indonesia | 2026-11-18
-486 | Flip 18 Nov belum terverifikasi §B6.2: Lotte Grosir | 2026-11-18
-502 | Flip 18 Nov belum terverifikasi §B6.2: PT Harita Nickel | 2026-11-18
-504 | Flip 18 Nov belum terverifikasi §B6.2: PT Golden Energy Mines Tbk | 2026-11-18
-511 | Flip 18 Nov belum terverifikasi §B6.2: PT Ricobana Abadi | 2026-11-18
-531 | Flip 18 Nov belum terverifikasi §B6.2: PT Dharma Satya Nusantara | 2026-11-18
-532 | Flip 18 Nov belum terverifikasi §B6.2: PT Austindo Nusantara Jaya | 2026-11-18
+414 | Flip 18 Nov DIBLOKIR 403 (Ciputra): portal aktif + rekrut Nov 2026, dipulihkan, tinjau mingguan | 2026-11-18
+444 | Flip 18 Nov TIDAK PASTI (Greenfields): fetch gagal, cek ulang 19 Nov | 2026-11-18
+470 | Flip 18 Nov TIDAK PASTI (InJourney Hospitality): fetch gagal, cek ulang 19 Nov | 2026-11-18
+511 | Flip 18 Nov TIDAK PASTI (Ricobana): bukti hanya salinan Mei 2026 + lowongan kedaluwarsa, cek ulang 19 Nov | 2026-11-18
+531 | Flip 18 Nov DIBLOKIR (DSN Group): portal resmi + rekrut Nov 2026, menolak cek otomatis, dipulihkan, tinjau mingguan | 2026-11-18
+532 | Flip 18 Nov TIDAK PASTI (ANJ): bukti hanya salinan Apr 2025, cek ulang 19 Nov | 2026-11-18
