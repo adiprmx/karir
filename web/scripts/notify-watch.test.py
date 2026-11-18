@@ -47,6 +47,9 @@ class TestNotifyWatch(unittest.TestCase):
             "ensure_token": self.w.ensure_token,
             "gh_api_get": self.w.gh_api_get,
         }
+        # Statistik run (P-06) dinolkan supaya tes tidak bocor
+        # hitungan antar tes.
+        self.w.reset_run_stats()
 
     def tearDown(self):
         for k, v in self._asli.items():
@@ -211,44 +214,146 @@ class TestNotifyWatch(unittest.TestCase):
         self.assertEqual("\n".join(potongan), panjang)
         self.assertGreater(len(potongan), 1)
 
-    # --- list_unsent ---
+    # --- list_unsent (P-06: runQuery berfilter sent == false) ---
 
-    def test_list_unsent_paginasi_saring_urut(self):
-        halaman1 = {
-            "documents": [
-                self.dokumen_alert("b2", createdAt="2026-11-15T02:00:00Z"),
-                self.dokumen_alert("a1", createdAt="2026-11-15T01:00:00Z"),
-                self.dokumen_alert("sudah", sent=True),
-                self.dokumen_alert("penanda", tipe="cron-miss"),
-            ],
-            "nextPageToken": "hal2",
-        }
-        halaman2 = {
-            "documents": [
-                self.dokumen_alert("c3", tipe="deadline",
-                                   createdAt="2026-11-15T01:30:00Z"),
-            ],
-        }
+    def baris_run_query(self, dokumen):
+        """Satu halaman jawaban runQuery dari daftar dokumen."""
+        return [{"document": d} for d in dokumen]
+
+    def test_list_unsent_memakai_run_query_berfilter(self):
+        """P-06/C10: request pertama adalah POST :runQuery dengan
+        filter sent == false, orderBy createdAt + __name__,
+        limit 100 — tanpa list seluruh koleksi."""
         self.pasang_call_curl({
-            "pageToken=hal2": ("200", halaman2),
-            "/alerts?": ("200", halaman1),
+            ":runQuery": (
+                "200",
+                self.baris_run_query([self.dokumen_alert("a1")]),
+            ),
+        })
+        panggilan = []
+        asli = self.w.call_curl
+
+        def rekam(method, url, body=None):
+            panggilan.append((method, url, body))
+            return asli(method, url, body)
+
+        self.w.call_curl = rekam
+        hasil = self.w.list_unsent()
+        self.assertEqual([a["id"] for a in hasil], ["a1"])
+        self.assertEqual(len(panggilan), 1)
+        method, url, body = panggilan[0]
+        self.assertEqual(method, "POST")
+        self.assertTrue(url.endswith(":runQuery"))
+        q = body["structuredQuery"]
+        self.assertEqual(q["from"], [{"collectionId": "alerts"}])
+        self.assertEqual(
+            q["where"]["fieldFilter"]["field"], {"fieldPath": "sent"}
+        )
+        self.assertEqual(q["where"]["fieldFilter"]["op"], "EQUAL")
+        self.assertEqual(
+            q["where"]["fieldFilter"]["value"], {"booleanValue": False}
+        )
+        self.assertEqual(
+            q["orderBy"],
+            [
+                {"field": {"fieldPath": "createdAt"},
+                 "direction": "ASCENDING"},
+                {"field": {"fieldPath": "__name__"},
+                 "direction": "ASCENDING"},
+            ],
+        )
+        self.assertEqual(q["limit"], 100)
+        self.assertNotIn("startAt", q)
+
+    def test_list_unsent_paginasi_kursor_saring_urut(self):
+        """Halaman penuh (100 dokumen) dilanjutkan dengan kursor
+        startAt (createdAt + nama dokumen terakhir); tipe di luar
+        RELAY_TYPES disaring; hasil diurutkan."""
+        halaman1 = [
+            self.dokumen_alert(
+                f"d{i:03d}", createdAt=f"2026-11-15T0{i // 60}:"
+                f"{i % 60:02d}:00Z"
+            )
+            for i in range(100)
+        ]
+        halaman2 = self.baris_run_query([
+            self.dokumen_alert("penanda", tipe="cron-miss",
+                               createdAt="2026-11-15T03:00:00Z"),
+            self.dokumen_alert("c3", tipe="deadline",
+                               createdAt="2026-11-15T01:30:00Z"),
+        ])
+        panggilan = self.pasang_call_curl({
+            ":runQuery": [
+                ("200", self.baris_run_query(halaman1)),
+                ("200", halaman2),
+            ],
         })
         hasil = self.w.list_unsent()
-        self.assertEqual([a["id"] for a in hasil], ["a1", "c3", "b2"])
+        self.assertEqual(len(hasil), 101)
+        self.assertEqual(hasil[0]["id"], "d000")
+        self.assertNotIn("penanda", [a["id"] for a in hasil])
+        self.assertEqual(len(panggilan), 2)
+        start_at = panggilan[1][2]["structuredQuery"]["startAt"]["values"]
+        self.assertEqual(
+            start_at[0], {"stringValue": "2026-11-15T01:39:00Z"}
+        )
+        self.assertTrue(start_at[1]["referenceValue"].endswith("/d099"))
+
+    def test_list_unsent_401_retry_tidak_makan_anggaran_halaman(self):
+        """P-06/C11: retry 401 tidak menghabiskan anggaran halaman —
+        dengan LIST_MAX_PAGES=2, sesudah satu 401 kedua halaman
+        penuh tetap diambil (kode lama hanya mengambil 1)."""
+        halaman = self.baris_run_query([
+            self.dokumen_alert(f"d{i:03d}")
+            for i in range(100)
+        ])
+        halaman2 = self.baris_run_query([
+            self.dokumen_alert(f"e{i:03d}")
+            for i in range(100)
+        ])
+        self.w.ensure_token = lambda: True
+        jawaban = [
+            ("401", {}),
+            ("200", halaman),
+            ("200", halaman2),
+        ]
+        self.w.call_curl = lambda m, u, body=None: jawaban.pop(0)
+        lama = self.w.LIST_MAX_PAGES
+        self.w.LIST_MAX_PAGES = 2
+        try:
+            hasil = self.w.list_unsent()
+        finally:
+            self.w.LIST_MAX_PAGES = lama
+        self.assertEqual(len(hasil), 200)
 
     def test_list_unsent_401_retry_token_sekali(self):
         self.w.ensure_token = lambda: True
         jawaban = [
             ("401", {}),
-            ("200", {"documents": [self.dokumen_alert("a1")]}),
+            ("200", self.baris_run_query([self.dokumen_alert("a1")])),
         ]
         self.w.call_curl = lambda m, u, body=None: jawaban.pop(0)
         hasil = self.w.list_unsent()
         self.assertEqual([a["id"] for a in hasil], ["a1"])
 
     def test_list_unsent_baca_gagal_jadi_none(self):
-        self.pasang_call_curl({"/alerts?": ("500", {})})
+        self.pasang_call_curl({":runQuery": ("500", {})})
         self.assertIsNone(self.w.list_unsent())
+
+    def test_list_unsent_menghitung_baca(self):
+        """P-06/K7: tiap dokumen hasil runQuery dihitung 1 baca."""
+        self.w.reset_run_stats()
+        self.pasang_call_curl({
+            ":runQuery": (
+                "200",
+                self.baris_run_query([
+                    self.dokumen_alert("a1"),
+                    self.dokumen_alert("a2"),
+                ]),
+            ),
+        })
+        self.w.list_unsent()
+        self.assertEqual(self.w.RUN_STATS["reads"], 2)
 
     # --- kesehatan cron (OPS-01) ---
 
@@ -529,7 +634,8 @@ class TestNotifyWatch(unittest.TestCase):
 
     def test_workflows_dipantau_mencakup_scheduler_dan_monitor(self):
         """P-05: keempat workflow scheduler + monitor ikut dipantau;
-        cleanup mingguan berjendela 8 hari seperti backup."""
+        cleanup mingguan berjendela 8 hari seperti backup.
+        P-06: export-health-history.yml ikut dipantau."""
         self.assertEqual(
             self.w.WORKFLOWS_DIPANTAU,
             (
@@ -540,6 +646,7 @@ class TestNotifyWatch(unittest.TestCase):
                 "scheduled-cleanup.yml",
                 "scheduled-digest.yml",
                 "watcher-monitor.yml",
+                "export-health-history.yml",
             ),
         )
         self.assertEqual(self.w.WORKFLOW_JENDELA_JAM, 24)
@@ -858,31 +965,498 @@ class TestNotifyWatch(unittest.TestCase):
 
     def test_main_menulis_heartbeat_kecuali_dry_run(self):
         """main() menulis heartbeat sesudah pemeriksaan (bukan
-        dry-run), dengan lastRunOk mengikuti kode keluar."""
+        dry-run), dengan lastRunOk mengikuti kode keluar.
+        P-06: heartbeat membawa statistik run; bila ada baca,
+        read-stats watcher juga ditulis."""
         asli_jalankan = self.w.jalankan_pemeriksaan
         asli_tulis = self.w.tulis_heartbeat_watcher
+        asli_stats = self.w.tulis_read_stats_watcher
         asli_argv = sys.argv
         try:
             self.w.jalankan_pemeriksaan = lambda dry_run: 0
             ditulis = []
-            self.w.tulis_heartbeat_watcher = lambda ok: ditulis.append(ok)
+            self.w.tulis_heartbeat_watcher = (
+                lambda ok, stats=None: ditulis.append((ok, stats))
+            )
+            dibaca = []
+            self.w.tulis_read_stats_watcher = (
+                lambda reads, tanggal: dibaca.append((reads, tanggal))
+            )
             sys.argv = ["notify_watch.py"]
+            self.w.RUN_STATS["reads"] = 7
+            self.w.RUN_STATS["date"] = "2026-11-18"
             self.assertEqual(self.w.main(), 0)
-            self.assertEqual(ditulis, [True])
+            self.assertEqual(len(ditulis), 1)
+            self.assertTrue(ditulis[0][0])
+            self.assertEqual(ditulis[0][1]["reads"], 7)
+            self.assertEqual(dibaca, [(7, "2026-11-18")])
             # Kode gagal -> lastRunOk False.
             self.w.jalankan_pemeriksaan = lambda dry_run: 1
             ditulis.clear()
+            dibaca.clear()
             self.assertEqual(self.w.main(), 1)
-            self.assertEqual(ditulis, [False])
-            # Dry-run -> tidak menulis.
+            self.assertEqual(ditulis[0][0], False)
+            # Dry-run -> tidak menulis apa pun.
             sys.argv = ["notify_watch.py", "--dry-run"]
             ditulis.clear()
+            dibaca.clear()
             self.assertEqual(self.w.main(), 1)
             self.assertEqual(ditulis, [])
+            self.assertEqual(dibaca, [])
         finally:
             self.w.jalankan_pemeriksaan = asli_jalankan
             self.w.tulis_heartbeat_watcher = asli_tulis
+            self.w.tulis_read_stats_watcher = asli_stats
             sys.argv = asli_argv
+
+
+    # --- sinyal recheck (P-06/K4, C4) ---
+
+    def fields_heartbeat(self, **nilai):
+        """Map field Firestore REST dari nilai polos."""
+        fields = {}
+        for kunci, val in nilai.items():
+            if isinstance(val, bool):
+                fields[kunci] = {"booleanValue": val}
+            elif isinstance(val, int):
+                fields[kunci] = {"integerValue": str(val)}
+            else:
+                fields[kunci] = {"stringValue": val}
+        return fields
+
+    def test_sinyal_recheck_sehat_kosong(self):
+        fields = self.fields_heartbeat(
+            status="ok", telegram="sent", push="sent", pushSent=3,
+            pushFailed=0, pushTruncated=False,
+            alertPhaseTruncated=False, snapshotKnown=True,
+            snapshotWritten=True, quotaPercent=12, quotaAlert="none",
+        )
+        self.assertEqual(self.w.sinyal_recheck(fields), [])
+
+    def test_sinyal_recheck_dilewati(self):
+        sinyal = self.w.sinyal_recheck(self.fields_heartbeat(
+            status="skipped", skipReason="seed-only",
+            error="Sumber data seed.",
+        ))
+        self.assertEqual([s[0] for s in sinyal], ["cron-skipped"])
+        self.assertIn("seed-only", sinyal[0][1])
+        self.assertIn("Sumber data seed.", sinyal[0][1])
+
+    def test_sinyal_recheck_telegram(self):
+        gagal = self.w.sinyal_recheck(
+            self.fields_heartbeat(status="ok", telegram="failed")
+        )
+        self.assertEqual([s[0] for s in gagal], ["telegram-failed"])
+        tanpa = self.w.sinyal_recheck(self.fields_heartbeat(
+            status="ok", telegram="skipped-no-token"
+        ))
+        self.assertEqual([s[0] for s in tanpa], ["telegram-no-token"])
+        tidak_ada = self.w.sinyal_recheck(
+            self.fields_heartbeat(status="ok", telegram="none")
+        )
+        self.assertEqual(tidak_ada, [])
+
+    def test_sinyal_recheck_push(self):
+        gagal = self.w.sinyal_recheck(self.fields_heartbeat(
+            status="ok", push="failed", pushFailed=2
+        ))
+        self.assertEqual([s[0] for s in gagal], ["push-failed"])
+        self.assertIn("2 langganan gagal", gagal[0][1])
+        vapid = self.w.sinyal_recheck(self.fields_heartbeat(
+            status="ok", push="skipped-no-vapid"
+        ))
+        self.assertEqual([s[0] for s in vapid], ["push-no-vapid"])
+        potong = self.w.sinyal_recheck(self.fields_heartbeat(
+            status="ok", push="sent", pushTruncated=True
+        ))
+        self.assertEqual([s[0] for s in potong], ["push-truncated"])
+        # Ambang tinggi: 9 belum alarm, 10 alarm.
+        self.assertEqual(
+            [s[0] for s in self.w.sinyal_recheck(self.fields_heartbeat(
+                status="ok", push="sent", pushFailed=9
+            ))],
+            [],
+        )
+        tinggi = self.w.sinyal_recheck(self.fields_heartbeat(
+            status="ok", push="sent", pushFailed=10
+        ))
+        self.assertEqual([s[0] for s in tinggi], ["push-failed-high"])
+
+    def test_sinyal_recheck_fase_alert_dan_snapshot(self):
+        sinyal = self.w.sinyal_recheck(self.fields_heartbeat(
+            status="ok", alertPhaseTruncated=True,
+            snapshotKnown=True, snapshotWritten=False,
+        ))
+        self.assertEqual(
+            [s[0] for s in sinyal],
+            ["alert-phase-truncated", "snapshot-failed"],
+        )
+        # Snapshot tidak diketahui (baca gagal) -> tulis memang
+        # dilewati, bukan kegagalan tulis -> tanpa sinyal.
+        self.assertEqual(
+            self.w.sinyal_recheck(self.fields_heartbeat(
+                status="ok", snapshotKnown=False, snapshotWritten=False
+            )),
+            [],
+        )
+
+    def test_sinyal_recheck_kuota_hilang(self):
+        sinyal = self.w.sinyal_recheck(self.fields_heartbeat(
+            status="ok", quotaPercent=91, quotaAlert="90-failed"
+        ))
+        self.assertEqual([s[0] for s in sinyal], ["quota-alert-missing"])
+        self.assertIn("91%", sinyal[0][1])
+        # Alert 70% berhasil dibuat -> tanpa sinyal.
+        self.assertEqual(
+            self.w.sinyal_recheck(self.fields_heartbeat(
+                status="ok", quotaPercent=72, quotaAlert="70"
+            )),
+            [],
+        )
+        # Di bawah ambang 70% -> tanpa sinyal walau "none".
+        self.assertEqual(
+            self.w.sinyal_recheck(self.fields_heartbeat(
+                status="ok", quotaPercent=69, quotaAlert="none"
+            )),
+            [],
+        )
+
+    def test_check_recheck_signals_dry_run_mencetak_alarm(self):
+        self.pasang_call_curl({
+            "/cron-runs/2026-11-15": (
+                "200", {"fields": self.fields_heartbeat(
+                    status="skipped", skipReason="lock-failed",
+                    error="Kunci tidak didapat.",
+                )},
+            ),
+        })
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_recheck_signals(
+                "2026-11-15", dry_run=True
+            )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("DILEWATI", out.getvalue())
+        self.assertIn("lock-failed", out.getvalue())
+
+    def test_check_recheck_signals_penanda_sudah_ada_dan_hilang(self):
+        self.pasang_call_curl({
+            "/cron-runs/2026-11-15": (
+                "200", {"fields": self.fields_heartbeat(
+                    status="ok", telegram="failed"
+                )},
+            ),
+        })
+        self.w.marker_exists = lambda mid: True
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        self.assertTrue(
+            self.w.check_recheck_signals("2026-11-15", dry_run=False)
+        )
+        self.assertEqual(terkirim, [])
+        # Heartbeat hilang -> dilewati (urusan check_cron_run).
+        self.pasang_call_curl({"/cron-runs/2026-11-15": ("404", {})})
+        self.assertTrue(
+            self.w.check_recheck_signals("2026-11-15", dry_run=False)
+        )
+
+    def test_check_recheck_signals_kirim_gagal_kode_false(self):
+        self.pasang_call_curl({
+            "/cron-runs/2026-11-15": (
+                "200", {"fields": self.fields_heartbeat(
+                    status="ok", push="failed", pushFailed=1
+                )},
+            ),
+        })
+        self.w.marker_exists = lambda mid: False
+        self.w.send_telegram = lambda teks: False
+        self.assertFalse(
+            self.w.check_recheck_signals("2026-11-15", dry_run=False)
+        )
+
+    # --- mode seed (P-06, K1) ---
+
+    def pasang_insiden(self, ada):
+        """Mock GET incidents: `ada` = set doc id yang ada (200)."""
+        def tiruan(method, url, body=None):
+            for doc_id in ada:
+                if url.endswith(f"/incidents/{doc_id}"):
+                    return "200", {"fields": {
+                        "code": {"stringValue": doc_id.split("-")[0]},
+                        "count": {"integerValue": "2"},
+                    }}
+            if "/incidents/" in url:
+                return "404", {}
+            return "404", {}
+        self.w.call_curl = tiruan
+
+    def test_check_seed_mode_dua_jam_alarm(self):
+        self.pasang_insiden({
+            "REFILL_FAILED_SEED_FALLBACK-2026-11-18-00",
+            "REFILL_FAILED_SEED_FALLBACK-2026-11-18-01",
+        })
+        self.w.marker_exists = lambda mid: False
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_seed_mode(
+                datetime(2026, 11, 18, 1, 30), dry_run=True
+            )
+        self.assertTrue(hasil)
+        self.assertIn("LEBIH DARI 1 JAM", out.getvalue())
+        self.assertIn("REFILL_FAILED_SEED_FALLBACK", out.getvalue())
+
+    def test_check_seed_mode_satu_jam_belum_alarm(self):
+        self.pasang_insiden({
+            "MARKER_READ_FAILED-2026-11-18-01",
+        })
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_seed_mode(
+                datetime(2026, 11, 18, 1, 30), dry_run=False
+            )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+        self.assertIn("insiden < 2 jam", out.getvalue())
+
+    def test_check_seed_mode_baca_gagal_dilewati(self):
+        self.w.call_curl = lambda m, u, body=None: ("429", {})
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_seed_mode(
+                datetime(2026, 11, 18, 1, 30), dry_run=False
+            )
+        self.assertTrue(hasil)
+        self.assertIn("dilewati", out.getvalue())
+
+    # --- backlog retensi (P-06, C6) ---
+
+    def test_check_retention_backlog_dua_senin_alarm(self):
+        from datetime import date
+        self.pasang_call_curl({
+            "/cron-runs/cleanup-2026-11-23": (
+                "200", {"fields": self.fields_heartbeat(
+                    analyticsHasMore=True,
+                )},
+            ),
+        })
+        self.w.marker_exists = lambda mid: False
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_retention_backlog(
+                date(2026, 11, 30),
+                self.fields_heartbeat(alertsHasMore=True),
+                dry_run=True,
+            )
+        self.assertTrue(hasil)
+        self.assertIn("TERTINGGAL dua Senin", out.getvalue())
+
+    def test_check_retention_backlog_satu_senin_belum_alarm(self):
+        from datetime import date
+        self.pasang_call_curl({
+            "/cron-runs/cleanup-2026-11-23": (
+                "200", {"fields": self.fields_heartbeat()},
+            ),
+        })
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_retention_backlog(
+                date(2026, 11, 30),
+                self.fields_heartbeat(alertsHasMore=True),
+                dry_run=True,
+            )
+        self.assertTrue(hasil)
+        self.assertIn("belum alarm", out.getvalue())
+
+    def test_check_retention_backlog_senin_lalu_hilang_tanpa_alarm(self):
+        from datetime import date
+        self.pasang_call_curl({
+            "/cron-runs/cleanup-2026-11-23": ("404", {}),
+        })
+        out = io.StringIO()
+        with redirect_stdout(out):
+            hasil = self.w.check_retention_backlog(
+                date(2026, 11, 30),
+                self.fields_heartbeat(alertsHasMore=True),
+                dry_run=True,
+            )
+        self.assertTrue(hasil)
+        self.assertIn("belum bisa dikonfirmasi", out.getvalue())
+
+    # --- heartbeat watcher diperluas + read-stats (P-06/K7) ---
+
+    def test_tulis_heartbeat_watcher_dengan_statistik(self):
+        panggilan = []
+
+        def tiruan(method, url, body=None):
+            panggilan.append((method, url, body))
+            return "200", {}
+
+        self.w.call_curl = tiruan
+        stats = {
+            "reads": 42, "alerts_found": 3, "alerts_relayed": 3,
+            "checks": 5, "alarms": 1, "error": "",
+        }
+        self.assertTrue(self.w.tulis_heartbeat_watcher(True, stats=stats))
+        method, url, body = panggilan[0]
+        self.assertEqual(method, "PATCH")
+        for kunci in (
+            "readsUsed", "alertsFound", "alertsRelayed",
+            "checks", "alarmsSent", "error",
+        ):
+            self.assertIn(kunci, url)
+            self.assertIn(kunci, body["fields"])
+        self.assertEqual(
+            body["fields"]["readsUsed"], {"integerValue": "42"}
+        )
+        self.assertEqual(
+            body["fields"]["alarmsSent"], {"integerValue": "1"}
+        )
+
+    def test_tulis_read_stats_watcher_satu_write(self):
+        panggilan = []
+
+        def tiruan(method, url, body=None):
+            panggilan.append((method, url, body))
+            return "200", {}
+
+        self.w.call_curl = tiruan
+        self.assertTrue(
+            self.w.tulis_read_stats_watcher(42, "2026-11-18")
+        )
+        self.assertEqual(len(panggilan), 1)
+        method, url, body = panggilan[0]
+        self.assertEqual(method, "POST")
+        self.assertTrue(url.endswith(":batchWrite"))
+        # SATU Write: update updatedAt + updateTransforms increment
+        # (bentuk yang sama dengan lib/read-meter.js).
+        self.assertEqual(len(body["writes"]), 1)
+        tulis = body["writes"][0]
+        self.assertTrue(tulis["update"]["name"].endswith(
+            "/read-stats/2026-11-18"
+        ))
+        self.assertEqual(
+            tulis["updateMask"], {"fieldPaths": ["updatedAt"]}
+        )
+        self.assertEqual(tulis["updateTransforms"], [{
+            "fieldPath": "sources.watcher",
+            "increment": {"integerValue": "42"},
+        }])
+        self.assertNotIn("currentDocument", tulis)
+
+    def test_tulis_read_stats_watcher_nol_tidak_menulis(self):
+        panggilan = []
+        self.w.call_curl = lambda m, u, body=None: (
+            panggilan.append((m, u, body)), ("200", {})
+        )[1]
+        self.assertTrue(self.w.tulis_read_stats_watcher(0, "2026-11-18"))
+        self.assertEqual(panggilan, [])
+
+    # --- simulasi K6: write-back gagal + CI merah (P-06) ---
+
+    def test_k6_write_back_gagal_dan_ci_merah_kirim_telegram(self):
+        """K6: satu kegagalan write-back + satu CI merah (validate)
+        masing-masing memicu notifikasi Telegram dalam satu pesan
+        gabungan; penanda dedup ditulis per run."""
+        self.pasang_gh_api({
+            "write-back.yml": [
+                self.run_github(201, "failure", "2026-11-18T00:30:00Z",
+                                title="Write-back data"),
+            ],
+            "validate.yml": [
+                self.run_github(202, "failure", "2026-11-18T00:45:00Z",
+                                title="Validasi CI"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: False
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        penanda = []
+        self.w.write_marker = lambda mid, mt: penanda.append(mid) or True
+        hasil = self.w.check_workflow_runs(
+            datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+            dry_run=False,
+        )
+        self.assertTrue(hasil)
+        self.assertEqual(len(terkirim), 1)
+        self.assertIn("write-back.yml run 201", terkirim[0])
+        self.assertIn("validate.yml run 202", terkirim[0])
+        self.assertEqual(
+            sorted(penanda),
+            ["wf-fail-validate-202", "wf-fail-write-back-201"],
+        )
+
+    def test_k6_dedup_run_yang_sama_tidak_kirim_lagi(self):
+        """K6: run gagal yang penandanya sudah ada tidak mengirim
+        ulang (dedup per run id)."""
+        self.pasang_gh_api({
+            "write-back.yml": [
+                self.run_github(201, "failure", "2026-11-18T00:30:00Z"),
+            ],
+        })
+        self.w.marker_exists = lambda mid: True
+        terkirim = []
+        self.w.send_telegram = lambda teks: terkirim.append(teks) or True
+        hasil = self.w.check_workflow_runs(
+            datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+            dry_run=False,
+        )
+        self.assertTrue(hasil)
+        self.assertEqual(terkirim, [])
+
+    # --- jalinan jalankan_pemeriksaan (P-06) ---
+
+    def test_jalankan_pemeriksaan_sehat_menghitung_statistik(self):
+        """Semua pemeriksaan jalan (5 checks), statistik terkumpul,
+        kode 0. Dijalankan dry-run supaya tidak ada kirim/tulis.
+        Waktu dibekukan (FakeDatetime) supaya tanggal WIB
+        deterministik: now 2026-11-24 18:30 UTC = 25 Nov 01:30 WIB
+        (Senin terakhir 23 Nov — sesudah CLEANUP_HEARTBEAT_START,
+        jadi heartbeat cleanup ikut dibaca)."""
+        class FakeDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime(
+                    2026, 11, 24, 18, 30, tzinfo=timezone.utc
+                )
+
+        asli_datetime = self.w.datetime
+        self.w.datetime = FakeDatetime
+        try:
+            self.w.ensure_token = lambda: True
+            self.pasang_call_curl({
+                ":runQuery": ("200", []),
+                "/cron-runs/2026-11-25": (
+                    "200", {"fields": self.fields_heartbeat(
+                        status="ok", openSkipped=0, telegram="sent",
+                        push="sent", snapshotKnown=True,
+                        snapshotWritten=True, quotaPercent=5,
+                        quotaAlert="none",
+                    )},
+                ),
+                "/cron-runs/cleanup-2026-11-23": (
+                    "200", {"fields": self.fields_heartbeat(status="ok")},
+                ),
+                "/incidents/": ("404", {}),
+            })
+            self.w.gh_api_get = lambda path: {"workflow_runs": []}
+            self.w.marker_exists = lambda mid: False
+            out = io.StringIO()
+            with redirect_stdout(out):
+                kode = self.w.jalankan_pemeriksaan(dry_run=True)
+            self.assertEqual(kode, 0)
+            self.assertEqual(self.w.RUN_STATS["checks"], 5)
+            self.assertEqual(self.w.RUN_STATS["alerts_found"], 0)
+            self.assertEqual(self.w.RUN_STATS["error"], "")
+            # Baca: heartbeat recheck 2x (cron + sinyal) + cleanup 1x.
+            self.assertEqual(self.w.RUN_STATS["reads"], 3)
+        finally:
+            self.w.datetime = asli_datetime
 
 
 if __name__ == "__main__":

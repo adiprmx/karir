@@ -12,6 +12,7 @@ import { getChanges } from "@/lib/changes";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
 import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
+import { OBS_CODES, emitObservabilityEvent } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,16 @@ export async function GET(request) {
   try {
     const changes = await getChanges(10);
     return NextResponse.json({ changes, degraded: false });
-  } catch {
+  } catch (err) {
+    /* getChanges sudah mencatat kegagalannya sendiri; emit rute ini
+     * menandai respons terdegradasi (throttle per kode mencegah
+     * duplikasi baris log dalam satu menit). */
+    emitObservabilityEvent({
+      code: OBS_CODES.API_ROUTE_ERROR,
+      component: "api/changes",
+      message: err && err.message ? err.message : "Rute /api/changes gagal.",
+      meta: { route: "/api/changes" },
+    });
     return NextResponse.json({ changes: [], degraded: true });
   }
 }

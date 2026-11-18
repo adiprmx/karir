@@ -2,7 +2,11 @@
 
 Dokumen ini menjelaskan cara kerja cron cek ulang harian, antrean
 ceknya, koordinasi notifikasi Telegram, dan pemantauan kesehatan
-cron. Terakhir diperbarui: 18 Nov 2026 (P-05, Fase 2).
+cron. Terakhir diperbarui: 18 Nov 2026 (P-06, Fase 2).
+
+Untuk gambaran observabilitas menyeluruh (log terstruktur,
+insiden, Sentry, `/api/health`, riwayat harian, ambang alarm),
+lihat `docs/observability.md`.
 
 ## Jadwal
 
@@ -13,6 +17,8 @@ cron. Terakhir diperbarui: 18 Nov 2026 (P-05, Fase 2).
 | Cleanup `GET /api/cron/cleanup` | Senin 02:00 WIB | GitHub Actions `scheduled-cleanup.yml` (utama, P-05); Vercel Cron masih aktif sampai cutover |
 | Monitor watcher | tiap hari 08:00 WIB | GitHub Actions `watcher-monitor.yml` (P-05) |
 | Watcher `notify_watch.py` | tiap hari 01:30 WIB | cron agent-side (`~/workspace/.claude-v280/`) |
+| Ekspor riwayat kesehatan | tiap hari 03:00 WIB | GitHub Actions `export-health-history.yml` (P-06) — snapshot `/api/health` + insiden + heartbeat ke `docs/status-history/` |
+| Cron monitor Sentry `karir-recheck` | tiap hari 01:00 WIB | Sentry (P-06, perlu akun + DSN — lihat `docs/sentry-setup.md`); check-in hanya oleh pemegang kunci recheck |
 | Pemicu cadangan QStash | recheck 01:05, digest 01:35, cleanup Senin 02:05 WIB | Upstash QStash (Free) — lihat `docs/qstash-setup.md` |
 
 Cron menulis alert ke Firestore; watcher meneruskan alert yang
@@ -161,6 +167,20 @@ Tiap run yang selesai menulis dokumen `cron-runs/{tanggal-WIB}`
 dan komposisi antrean. Dokumen ditulis lewat service account
 (mengabaikan rules); tidak ada aturan publik untuk koleksi ini.
 
+Sejak P-06, heartbeat recheck diperluas: `error` (kesalahan
+pertama yang tersanitasi, maks 300 karakter), `lastPhase` +
+`phaseMs` (durasi tiap fase: alerts/checks/writes/heartbeat),
+`skipReason` + jejak jalur 503 awal (heartbeat `status:
+"skipped"` ditulis bila token service account tersedia — alasan:
+`no-secret`, `no-service-account`, `seed-only`,
+`token-failed`, `lock-failed`, `load-failed`), `seedModeMinutes`
+(menit berjalan dari seed saat run), `readsEstimate` +
+`quotaPercent` + `quotaAlert` (`none`/`70`/`90`/`70-failed`/
+`90-failed`), dan konteks push (`pushTotal`, `pushHasMore`,
+`pushMalformed`). Field P-04 (`unreachable`/`blocked`/
+`serverError` + `*Nos`) dan P-05 (`trigger`, `pushedMarked`,
+`pushedFailed`) tidak berubah.
+
 Watcher memeriksa heartbeat tiap pagi (01:30 WIB). Sejak P-05,
 toleransi keterlambatan memakai masa tenggang 15 menit sesudah
 jadwal (01:00 → 01:15): watcher yang tiba sebelum akhir tenggang
@@ -179,6 +199,13 @@ Vercel Cron yang molor 35–55 menit (C1).
 | `openSkipped > 0` hari ini DAN kemarin | Kirim alarm "tidak sempat mengecek semua perusahaan yang ada lowongan 2 hari berturut-turut", sekali per hari (penanda `cron-truncated-{tanggal}`) |
 | Dokumen ada, `openSkipped = 0` | Tidak ada pesan |
 | Baca heartbeat gagal (mis. 429 kuota) | Tidak ada alarm (kegagalan baca bukan bukti cron tidak jalan); coba lagi besok |
+| `status: "skipped"` (P-06) | Kirim alarm "cron dilewati" dengan `skipReason` + `error`, sekali per hari (penanda `cron-skipped-{tanggal}`) |
+| `telegram: "failed"` / `"skipped-no-token"` (P-06) | Kirim alarm Telegram gagal / tanpa token, sekali per hari |
+| Sinyal push bermasalah (P-06): `push` gagal, tanpa VAPID, terpotong, atau `pushFailed` tinggi | Kirim alarm push sesuai jenisnya, sekali per hari |
+| `alertsTruncated` / fase alert terpotong (P-06) | Kirim alarm "fase alert terpotong", sekali per hari |
+| Snapshot target gagal ditulis (P-06) | Kirim alarm "snapshot gagal", sekali per hari |
+| Kuota ≥ ambang tetapi tidak ada alert kuota (P-06) | Kirim alarm "alert kuota hilang", sekali per hari |
+| Insiden mode seed di jam ini DAN jam sebelumnya (P-06) | Kirim alarm "mode seed > 1 jam", sekali per hari (penanda `seed-mode-1h-{tanggal}`) |
 
 Penanda alarm ditulis di koleksi `alerts` dengan `sent=true`
 sehingga tidak pernah diteruskan sebagai alert perusahaan, dan
@@ -190,6 +217,12 @@ watcher mengabaikan tipe selain `new-target` / `deadline` /
 Watcher menulis heartbeat-nya sendiri ke dokumen
 `meta/watcher` (`lastRunAt` + `lastRunOk`) di akhir setiap run
 (best-effort; kegagalan menulis tidak menggagalkan run).
+Sejak P-06, heartbeat diperluas: `readsUsed` (total baca
+Firestore run itu), `alertsFound`, `alertsRelayed`, `checks`
+(jumlah pemeriksaan yang dijalankan), `alarmsSent`, dan `error`
+(pesan kegagalan pertama, kosong bila sukses). Hitungan baca
+watcher juga dicatat ke `read-stats/{tanggal}` sumber `watcher`
+(P-06/K7).
 Workflow `watcher-monitor.yml` memeriksa kesegaran heartbeat
 itu tiap hari 08:00 WIB (batas basi 26 jam); bila basi/hilang,
 workflow gagal dan membuka GitHub issue berlabel `watcher-down`
@@ -205,11 +238,17 @@ dokumen `cron-runs/cleanup-{tanggal-WIB}` di akhir run — berhasil
 (`status: "ok"`) maupun gagal (`status: "failed"`, dengan pesan
 error dan hasil parsial). Isi: `job: "cleanup"`, durasi,
 `deleted` total, hitungan per koleksi (`analyticsDeleted`,
-`rateLimitsDeleted`, `alertsDeleted`, `changesDeleted`),
-`analyticsHasMore`, dan `error` (kosong bila sukses). Id dokumen
+`rateLimitsDeleted`, `alertsDeleted`, `changesDeleted`,
+`reportsDeleted`, `auditLogsDeleted`, `cronRunsDeleted`,
+`incidentsDeleted` sejak P-06), `*HasMore` per koleksi (sejak
+P-06 — sebelumnya hanya `analyticsHasMore`), `phaseMs` (durasi
+tiap fase, sejak P-06), dan `error` (kosong bila sukses). Id dokumen
 memakai awalan `cleanup-` supaya tidak menimpa heartbeat recheck
 hari yang sama (PATCH tanpa updateMask mengganti seluruh
-dokumen; kedua cron jalan di pagi yang sama tiap Senin).
+dokumen; kedua cron jalan di pagi yang sama tiap Senin). Sejak
+P-06, koleksi `incidents` ikut dibersihkan (retensi 90 hari,
+maks 100/run) dan watcher memberi alarm bila cleanup dua Senin
+berturut-turut melaporkan `*HasMore` (backlog retensi).
 
 Watcher agent-side (`notify_watch.py`, v2.16.3) memantau heartbeat
 ini tiap run, terhadap **Senin terakhir yang run-nya sudah

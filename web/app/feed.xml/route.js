@@ -8,6 +8,7 @@
  * permintaan otomatis, dan menolaknya merusak fungsi umpan ini. */
 import { getChanges } from "@/lib/changes";
 import { buildFeedXml } from "@/lib/feed";
+import { OBS_CODES, emitObservabilityEvent } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,16 @@ export async function GET() {
   let changes = [];
   try {
     changes = await getChanges(20);
-  } catch {
+  } catch (err) {
+    /* getChanges sudah mencatat kegagalannya sendiri; emit rute ini
+     * menandai umpan kosong karena degradasi (throttle per kode
+     * mencegah duplikasi baris log dalam satu menit). */
+    emitObservabilityEvent({
+      code: OBS_CODES.API_ROUTE_ERROR,
+      component: "feed",
+      message: err && err.message ? err.message : "Rute /feed.xml gagal.",
+      meta: { route: "/feed.xml" },
+    });
     changes = [];
   }
   return new Response(buildFeedXml(changes), {

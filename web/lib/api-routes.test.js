@@ -12,7 +12,7 @@
  *   node --test lib/api-routes.test.js
  * (koordinator menambahkan berkas ini ke skrip `npm test`.)
  */
-import { describe, it, beforeEach } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { generateKeyPairSync, createSign } from "node:crypto";
@@ -711,6 +711,77 @@ describe("/api/companies/[no] dan seed-first", () => {
     const body = await res.json();
     assert.equal(body.source, "seed");
     assert.equal(body.total, 715);
+  });
+});
+
+/* --- P-06: liveAsOf (C13) + log degradasi (BE2-10) --- */
+describe("liveAsOf + log degradasi (P-06)", () => {
+  let kejadian;
+  let warnAsli;
+  beforeEach(async () => {
+    const obs = await import("./observability.js");
+    obs.resetObservabilityForTests();
+    kejadian = [];
+    obs.registerObservabilitySink((event) => kejadian.push(event));
+    warnAsli = console.warn;
+    console.warn = () => {};
+  });
+  afterEach(async () => {
+    console.warn = warnAsli;
+    const obs = await import("./observability.js");
+    obs.resetObservabilityForTests();
+  });
+
+  it("/api/stats sehat membawa liveAsOf (ISO)", async () => {
+    const res = await getStats(apiRequest("/api/stats", { ip: IP.misc }));
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.source, "live");
+    assert.equal(typeof body.liveAsOf, "string");
+    assert.ok(!Number.isNaN(Date.parse(body.liveAsOf)));
+  });
+
+  it("/api/stats dari seed membawa liveAsOf null", async () => {
+    modes.marker = "429";
+    const res = await getStats(apiRequest("/api/stats", { ip: IP.misc }));
+    const body = await res.json();
+    assert.equal(body.source, "seed");
+    assert.equal(body.liveAsOf, null);
+  });
+
+  it("/api/companies sehat membawa liveAsOf", async () => {
+    const res = await getCompanies(
+      apiRequest("/api/companies", { ip: IP.misc }),
+    );
+    const body = await res.json();
+    assert.equal(body.source, "live");
+    assert.equal(typeof body.liveAsOf, "string");
+  });
+
+  it("/api/changes 429: degraded + API_ROUTE_ERROR tercatat", async () => {
+    modes.changes = "429";
+    const res = await getChanges(
+      apiRequest("/api/changes", { ip: IP.changes }),
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { changes: [], degraded: true });
+    const ev = kejadian.filter((e) => e.code === "API_ROUTE_ERROR");
+    assert.ok(ev.length >= 1);
+    assert.ok(ev.some((e) => e.component === "changes"));
+  });
+
+  it("/api/companies/[no] saat Firestore putus: COMPANY_READ_FAILED tercatat", async () => {
+    modes.byId = "throw";
+    const res = await getCompanyByNo(
+      apiRequest("/api/companies/1", { ip: IP.company }),
+      { params: Promise.resolve({ no: "1" }) },
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.source, "seed");
+    const ev = kejadian.filter((e) => e.code === "COMPANY_READ_FAILED");
+    assert.equal(ev.length, 1);
+    assert.equal(ev[0].meta.companyNo, 1);
   });
 });
 

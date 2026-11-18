@@ -45,7 +45,7 @@ const {
 const FS_BASE =
   "projects/proyek-uji/databases/(default)/documents";
 /* Mode query per koleksi: "ok" | "fail". */
-const modes = { analytics_events: "ok", rate_limits: "ok", alerts: "ok", changes: "ok", reports: "ok", audit_logs: "ok", "cron-runs": "ok" };
+const modes = { analytics_events: "ok", rate_limits: "ok", alerts: "ok", changes: "ok", reports: "ok", audit_logs: "ok", "cron-runs": "ok", incidents: "ok" };
 /* Dokumen lama tiruan per koleksi (nama Firestore). */
 const oldDocs = {
   analytics_events: [],
@@ -55,6 +55,7 @@ const oldDocs = {
   reports: [`${FS_BASE}/reports/laporan-1`],
   audit_logs: [],
   "cron-runs": [`${FS_BASE}/cron-runs/2026-08-10`],
+  incidents: [`${FS_BASE}/incidents/MARKER_READ_FAILED-2026-08-10-01`],
 };
 /* Tulis batchWrite yang ditangkap mock. */
 const deletedNames = [];
@@ -208,7 +209,7 @@ function cleanupRequest({ auth = true } = {}) {
 
 /* --- Kebijakan retensi --- */
 describe("RETENTION_POLICIES (FIN-08)", () => {
-  it("enam koleksi dengan retensi + batas + tipe field yang benar", () => {
+  it("tujuh koleksi dengan retensi + batas + tipe field yang benar (P-06: +incidents)", () => {
     const byCollection = Object.fromEntries(
       RETENTION_POLICIES.map((p) => [p.collection, p]),
     );
@@ -217,6 +218,7 @@ describe("RETENTION_POLICIES (FIN-08)", () => {
       "audit_logs",
       "changes",
       "cron-runs",
+      "incidents",
       "rate_limits",
       "reports",
     ]);
@@ -268,6 +270,14 @@ describe("RETENTION_POLICIES (FIN-08)", () => {
       retentionDays: 90,
       maxDelete: 100,
     });
+    /* P-06: insiden observabilitas — 90 hari berdasarkan lastSeen. */
+    assert.deepEqual(byCollection.incidents, {
+      collection: "incidents",
+      field: "lastSeen",
+      valueType: "stringValue",
+      retentionDays: 90,
+      maxDelete: 100,
+    });
   });
 
   it("total maks hapus per run jauh di bawah batas 20.000/hari", () => {
@@ -276,8 +286,8 @@ describe("RETENTION_POLICIES (FIN-08)", () => {
       (sum, p) => sum + p.maxDelete,
       0,
     );
-    assert.equal(retentionMax, 700);
-    assert.equal(analyticsMax + retentionMax, 900);
+    assert.equal(retentionMax, 800);
+    assert.equal(analyticsMax + retentionMax, 1000);
     assert.ok(analyticsMax + retentionMax < 20000);
   });
 
@@ -489,7 +499,7 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     }
   });
 
-  it("200: analitik + retensi enam koleksi, hapus hanya dokumen lama", async () => {
+  it("200: analitik + retensi tujuh koleksi, hapus hanya dokumen lama", async () => {
     const res = await getCleanup(cleanupRequest());
     assert.equal(res.status, 200);
     const body = await res.json();
@@ -503,12 +513,15 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     assert.equal(body.retention.reports.deleted, 1);
     assert.equal(body.retention.audit_logs.deleted, 0);
     assert.equal(body.retention["cron-runs"].deleted, 1);
+    assert.equal(body.retention.incidents.deleted, 1);
+    assert.equal(body.retention.incidents.hasMore, false);
     assert.deepEqual(deletedNames, [
       `${FS_BASE}/rate_limits/kunci-a`,
       `${FS_BASE}/rate_limits/kunci-b`,
       `${FS_BASE}/changes/entri-1`,
       `${FS_BASE}/reports/laporan-1`,
       `${FS_BASE}/cron-runs/2026-08-10`,
+      `${FS_BASE}/incidents/MARKER_READ_FAILED-2026-08-10-01`,
     ]);
   });
 
@@ -534,7 +547,7 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     assert.equal(fields.date.stringValue, today);
     assert.equal(fields.job.stringValue, "cleanup");
     assert.equal(fields.status.stringValue, "ok");
-    assert.equal(fields.deleted.integerValue, "5");
+    assert.equal(fields.deleted.integerValue, "6");
     assert.equal(fields.analyticsDeleted.integerValue, "0");
     assert.equal(fields.rateLimitsDeleted.integerValue, "2");
     assert.equal(fields.alertsDeleted.integerValue, "0");
@@ -542,6 +555,26 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     assert.equal(fields.reportsDeleted.integerValue, "1");
     assert.equal(fields.auditLogsDeleted.integerValue, "0");
     assert.equal(fields.cronRunsDeleted.integerValue, "1");
+    assert.equal(fields.incidentsDeleted.integerValue, "1");
+    assert.equal(fields.incidentsHasMore.booleanValue, false);
+    /* P-06/K4: durasi tiap fase tercatat di heartbeat. */
+    const phaseMs = fields.phaseMs.mapValue.fields;
+    for (const kunci of [
+      "analytics",
+      "rate_limits",
+      "alerts",
+      "changes",
+      "reports",
+      "audit_logs",
+      "cron-runs",
+      "incidents",
+    ]) {
+      assert.equal(
+        typeof phaseMs[kunci]?.integerValue,
+        "string",
+        `phaseMs ${kunci} hilang`,
+      );
+    }
     assert.equal(fields.error.stringValue, "");
   });
 

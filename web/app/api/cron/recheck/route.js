@@ -169,7 +169,11 @@ import {
   releaseCronLock,
 } from "@/lib/cron-idempotency";
 import { markAlertsPushed } from "@/lib/cron-digest";
-import { getCompaniesWithSource, STATUS_ORDER } from "@/lib/companies";
+import {
+  getCompaniesWithSource,
+  getSeedModeInfo,
+  STATUS_ORDER,
+} from "@/lib/companies";
 import {
   firestoreFetch,
   firestoreGet,
@@ -184,13 +188,28 @@ import {
 import {
   OPEN_STATUS,
   DEFAULT_CHAT_ID,
+  QUOTA_ALERT_READS,
+  QUOTA_ALERT_90_READS,
+  QUOTA_ALERT_TYPE,
   collectNewTargetAlerts,
   collectDeadlineAlerts,
   formatTelegramMessage,
   sendTelegramMessage,
   markAlertsSent,
   buildCronRunRecord,
+  buildSkippedCronRunRecord,
+  quotaAlertId,
+  quotaAlert90Id,
+  quotaPercent,
 } from "@/lib/notify";
+import {
+  OBS_CODES,
+  emitObservabilityEvent,
+  sanitizeMessage,
+} from "@/lib/observability";
+import { checkInCron, flushSentry } from "@/lib/sentry";
+import { noteCronRun } from "@/lib/health-state";
+import { recordReads, flushReadMeters } from "@/lib/read-meter";
 
 export const dynamic = "force-dynamic";
 /* Batas durasi fungsi di Vercel (paket Hobby: maks 60 detik).
@@ -242,10 +261,13 @@ function yesterdayWib() {
   );
 }
 
-/* Buat satu dokumen alert dengan id deterministik. Kembalikan "created"
- * bila baru dibuat, "exists" bila id sudah ada (bukan error: id yang
- * sama berarti kejadian yang sama di run sebelumnya), dan "failed" bila
- * tulisnya gagal. */
+/* Buat satu dokumen alert dengan id deterministik. Kembalikan
+ * { status, reason }: status "created" bila baru dibuat, "exists"
+ * bila id sudah ada (bukan error: id yang sama berarti kejadian
+ * yang sama di run sebelumnya), dan "failed" bila tulisnya gagal —
+ * reason menjelaskan penyebabnya ("http-{status}" | "timeout" |
+ * "network"). Kegagalan dicatat log terstruktur throttled
+ * (BE2-11, P-06) — sebelumnya "failed" tanpa alasan apa pun. */
 async function createAlert(fsBase, token, alert) {
   const fields = {
     type: { stringValue: alert.type },
@@ -275,11 +297,80 @@ async function createAlert(fsBase, token, alert) {
         body: JSON.stringify({ fields }),
       },
     );
-    if (res.status === 409) return "exists";
-    if (!res.ok) return "failed";
-    return "created";
+    if (res.status === 409) return { status: "exists", reason: null };
+    if (!res.ok) {
+      const reason = `http-${res.status}`;
+      emitObservabilityEvent({
+        code: OBS_CODES.CRON_WRITE_FAILED,
+        component: "cron-recheck",
+        message: `Tulis alert ${alert.type} gagal.`,
+        meta: { reason, alertType: alert.type },
+      });
+      return { status: "failed", reason };
+    }
+    return { status: "created", reason: null };
+  } catch (err) {
+    const reason = err && err.name === "AbortError" ? "timeout" : "network";
+    emitObservabilityEvent({
+      code: OBS_CODES.CRON_WRITE_FAILED,
+      component: "cron-recheck",
+      message: `Tulis alert ${alert.type} gagal.`,
+      meta: { reason, alertType: alert.type },
+    });
+    return { status: "failed", reason };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Catat kegagalan pertama run ini ke summary.error (maks 300
+ * karakter, dibersihkan dari email/kredensial): pemenang pertama
+ * bertahan — error berikutnya tidak menimpanya, supaya heartbeat
+ * menunjukkan penyebab awal, bukan gejala lanjutan. */
+function recordRunError(summary, message) {
+  if (!summary || summary.error) return;
+  const clean = sanitizeMessage(message || "");
+  if (clean) summary.error = clean.slice(0, 300);
+}
+
+/* Buat alert kuota (70% atau 90%) dengan id deterministik, lalu
+ * baca balik untuk memastikan dokumennya benar-benar ada (K2).
+ * Kembalikan true bila alert ada (baru dibuat atau sudah ada),
+ * false bila pembuatan/verifikasi gagal. Bentuk field sama dengan
+ * alert kuota dari lapisan web (lib/companies.js) supaya watcher
+ * meneruskannya lewat jalur relay yang sama. */
+async function createQuotaAlert(fsBase, token, alertId, readsEstimate) {
+  const fields = {
+    type: { stringValue: QUOTA_ALERT_TYPE },
+    companyNo: { integerValue: "0" },
+    perusahaan: { stringValue: "" },
+    sent: { booleanValue: false },
+    createdAt: { stringValue: new Date().toISOString() },
+    readsEstimate: { integerValue: String(readsEstimate) },
+    percent: { integerValue: String(quotaPercent(readsEstimate)) },
+  };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(
+      `${fsBase}/alerts?documentId=${encodeURIComponent(alertId)}`,
+      {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fields }),
+      },
+    );
+    /* 409 = sudah dibuat run/jalur lain hari ini — tetap sah,
+     * verifikasi baca-balik di bawah yang memutuskan. */
+    if (res.status !== 409 && !res.ok) return false;
+    const doc = await firestoreGet(`${fsBase}/alerts/${alertId}`, token);
+    return Boolean(doc);
   } catch {
-    return "failed";
+    return false;
   } finally {
     clearTimeout(timer);
   }
@@ -363,6 +454,55 @@ async function writeCronRunRecord(fsBase, token, date, fields) {
   }
 }
 
+/* Tulis heartbeat "skipped" untuk run yang dilewati sebelum
+ * pemeriksaan dimulai (P-06/C2). Best-effort: tidak pernah
+ * melempar. */
+async function writeSkippedHeartbeat(
+  fsBase,
+  token,
+  { today, startedAt, skipReason, trigger, error },
+) {
+  try {
+    const seedModeMinutes = getSeedModeInfo().seedModeMinutes;
+    await writeCronRunRecord(
+      fsBase,
+      token,
+      today,
+      buildSkippedCronRunRecord(
+        { skipReason, trigger, seedModeMinutes, error },
+        { date: today, startedAt, finishedAt: Date.now() },
+      ),
+    );
+  } catch {
+    /* Best-effort: gagal menulis heartbeat skipped tidak boleh
+     * menggagalkan balasan 503. */
+  }
+}
+
+/* Upaya best-effort menulis heartbeat skipped dari env (dipakai
+ * jalur 503 awal sebelum token tersedia): bila SA tidak ada/tidak
+ * lengkap atau token gagal, diam — watcher menyimpulkan dari
+ * dokumen yang tidak ada. */
+async function tryWriteSkippedFromEnv({ skipReason, trigger, error }) {
+  try {
+    const saRaw = process.env.FIREBASE_SERVICE_ACCOUNT || "";
+    if (!saRaw) return;
+    const sa = JSON.parse(saRaw);
+    if (!sa.client_email || !sa.private_key || !sa.project_id) return;
+    const token = await getAccessToken(sa);
+    const fsBase = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents`;
+    await writeSkippedHeartbeat(fsBase, token, {
+      today: todayWib(),
+      startedAt: Date.now(),
+      skipReason,
+      trigger,
+      error,
+    });
+  } catch {
+    /* Best-effort: lihat writeSkippedHeartbeat. */
+  }
+}
+
 export async function GET(request) {
   return runRecheck(request);
 }
@@ -387,6 +527,16 @@ async function runRecheck(request) {
   if (!auth.ok) {
     if (auth.error === "unconfigured") {
       console.warn("Cron ditolak: CRON_SECRET belum dipasang.");
+      /* Jejak jalur 503 awal (P-06/C2): coba tulis heartbeat
+       * skipped dari env — bila SA tidak ada, watcher menyimpulkan
+       * dari dokumen yang tidak ada. Jalur 401 (secret salah)
+       * TIDAK menulis apa pun: permintaan tak terautentikasi tidak
+       * boleh memicu tulis Firestore. */
+      await tryWriteSkippedFromEnv({
+        skipReason: "no-secret",
+        trigger: auth.trigger || "",
+        error: "CRON_SECRET belum dipasang.",
+      });
       return cronUnavailable();
     }
     return NextResponse.json({ error: "Tidak diizinkan." }, { status: 401 });
@@ -396,6 +546,8 @@ async function runRecheck(request) {
   const saRaw = process.env.FIREBASE_SERVICE_ACCOUNT || "";
   if (!saRaw) {
     console.warn("Cron ditolak: service account belum dipasang.");
+    /* Tanpa SA tidak ada token untuk menulis heartbeat — watcher
+     * menyimpulkan dari dokumen yang tidak ada (P-06/C2). */
     return cronUnavailable();
   }
   let sa;
@@ -422,6 +574,11 @@ async function runRecheck(request) {
   try {
     token = await getAccessToken(sa);
   } catch {
+    /* Penukaran token baru saja gagal — mencoba lagi lewat jalur
+     * yang sama kemungkinan besar gagal juga, jadi heartbeat
+     * skipped tidak dicoba di sini; watcher menyimpulkan dari
+     * dokumen yang tidak ada (P-06/C2). Kegagalan penukarannya
+     * sendiri sudah dicatat SA_TOKEN_FAILED (BE2-11). */
     return NextResponse.json(
       { error: "Token service account gagal dibuat." },
       { status: 503 },
@@ -449,6 +606,15 @@ async function runRecheck(request) {
       "Cron ditolak: kunci tidak bisa diambil:",
       err && err.message ? err.message : err,
     );
+    /* Token tersedia: coba tulis jejak skipped (best-effort —
+     * bila Firestore sedang tidak bisa ditulis, gagal diam). */
+    await writeSkippedHeartbeat(fsBase, token, {
+      today,
+      startedAt,
+      skipReason: "lock-failed",
+      trigger: auth.trigger,
+      error: "Kunci cron tidak bisa diambil.",
+    });
     return NextResponse.json(
       { error: "Kunci cron tidak bisa diambil." },
       { status: 503 },
@@ -459,6 +625,8 @@ async function runRecheck(request) {
       `Cron recheck duplikat ditolak (alasan: ${lock.reason}, ` +
         `pemicu: ${auth.trigger}, tanggal: ${today}).`,
     );
+    /* Duplikat tidak check-in ke Sentry: run pertama yang memegang
+     * kunci yang check-in. */
     return NextResponse.json({
       duplicate: true,
       reason: lock.reason,
@@ -468,97 +636,19 @@ async function runRecheck(request) {
     });
   }
 
-  /* Cron adalah penulis: ia hanya boleh berjalan dari data LIVE.
-   * Bila Firestore tidak bisa dibaca (source=seed), lewati run —
-   * bertindak dari seed bisa membuat alert palsu dan tulis
-   * berdasarkan data basi. Kunci dilepas dengan status failed
-   * supaya pemicu cadangan bisa mengambil alih di jadwalnya. */
-  let companies;
-  try {
-    const loaded = await getCompaniesWithSource();
-    if (loaded.source !== "live") {
-      await releaseCronLock({
-        fsBase,
-        token,
-        job: "recheck",
-        date: today,
-        status: "failed",
-        updateTime: lock.updateTime,
-      });
-      return NextResponse.json(
-        {
-          error: "Data live tidak bisa dimuat, cron dilewati.",
-          detail: "Firestore tidak bisa dibaca saat ini.",
-        },
-        { status: 503 },
-      );
-    }
-    companies = loaded.companies;
-  } catch {
-    await releaseCronLock({
-      fsBase,
-      token,
-      job: "recheck",
-      date: today,
-      status: "failed",
-      updateTime: lock.updateTime,
-    });
-    return NextResponse.json(
-      { error: "Data perusahaan tidak bisa dimuat." },
-      { status: 503 },
-    );
-  }
-
-  /* Antrean cek tiga tier (BE-05, lihat buildCheckQueue di
-   * lib/check.js): mendesak (batas lamar dekat) dulu tiap run,
-   * lalu yang ada lowongan, lalu portal mati bergilir. */
-  const { queue, counts: queueCounts } = buildCheckQueue(companies, {
-    todayIso: today,
+  /* Check-in Sentry "in_progress" — HANYA pemegang kunci yang
+   * check-in, supaya monitor tidak mencatat run duplikat. Tanpa
+   * DSN ini no-op diam (fail-safe, P-06). */
+  let sentryCheckInId = null;
+  sentryCheckInId = await checkInCron({
+    status: "in_progress",
+    includeConfig: true,
   });
 
-  /* Two-strike 5xx (K-11, P-04): nomor perusahaan yang 5xx di run
-   * kemarin, dibaca dari dokumen cron-runs kemarin (1 baca/run).
-   * Bila dokumen tidak ada atau baca gagal, dianggap tidak ada
-   * strike — gagal tertutup: 5xx hari ini hanya dicatat, tidak
-   * membalik status. */
-  let struckYesterday = new Set();
-  try {
-    const prevRun = await firestoreGet(
-      `${fsBase}/cron-runs/${yesterdayWib()}`,
-      token,
-    );
-    const values =
-      prevRun?.fields?.serverErrorNos?.arrayValue?.values || [];
-    struckYesterday = new Set(
-      values
-        .map((v) => Number(v.integerValue))
-        .filter((n) => Number.isInteger(n)),
-    );
-  } catch {
-    struckYesterday = new Set();
-  }
-
-  /* Snapshot perusahaan yang ada lowongannya run sebelumnya. Bila
-   * dokumen belum ada (run pertama dengan fitur ini), snapshot ditulis
-   * tanpa alert supaya perusahaan yang sudah lama ada lowongan tidak
-   * langsung terkirim sebagai "baru". */
-  let previousTargetNos = null;
-  let snapshotKnown = true;
-  try {
-    const snap = await firestoreGet(`${fsBase}/meta/targets`, token);
-    if (snap && snap.fields && snap.fields.targetNos) {
-      const values = snap.fields.targetNos.arrayValue?.values || [];
-      previousTargetNos = values
-        .map((v) => Number(v.integerValue))
-        .filter((n) => Number.isInteger(n));
-    }
-  } catch {
-    /* Baca snapshot gagal: tandai tidak diketahui supaya fase alert
-     * tidak menimpa snapshot dengan data yang bisa menghilangkan
-     * deteksi lowongan baru di run berikut. */
-    snapshotKnown = false;
-  }
-
+  /* Ringkasan run — dibuat LEBIH AWAL dari versi lama (P-06/K4)
+   * supaya cek kuota + jalur dilewati bisa mencatat error/fase
+   * ke dalamnya. `queue` diisi sesudah antrean dibangun, dan
+   * `snapshotKnown` diperbarui sesudah snapshot dibaca. */
   const summary = {
     checked: 0,
     changed: 0,
@@ -586,17 +676,206 @@ async function runRecheck(request) {
     pushFailed: 0,
     pushPruned: 0,
     pushTruncated: false,
+    /* Konteks digest push (P-06/P2) — lihat buildCronRunRecord. */
+    pushTotal: 0,
+    pushHasMore: false,
+    pushMalformed: 0,
     /* Penanda pushed (P-05) + pemicu run — lihat buildCronRunRecord. */
     pushedMarked: 0,
     pushedFailed: 0,
     trigger: auth.trigger,
     alertPhaseTruncated: false,
-    snapshotKnown,
+    snapshotKnown: true,
     snapshotWritten: false,
-    queue: queueCounts,
+    queue: null,
     markerBumped: false,
     heartbeatWritten: false,
+    /* Observabilitas (P-06/K4): error pertama run ini (maks 300
+     * karakter, dibersihkan), fase terakhir yang dicapai, durasi
+     * tiap fase, menit berjalan dari seed saat run dimulai, dan
+     * hasil cek kuota independen (K2). */
+    error: "",
+    lastPhase: "",
+    phaseMs: {},
+    skipReason: "",
+    seedModeMinutes: getSeedModeInfo().seedModeMinutes,
+    readsEstimate: 0,
+    quotaPercent: 0,
+    quotaAlert: "none",
   };
+  /* Pelacak fase: lastPhase + durasi per fase (K4). */
+  const phaseStartedAt = {};
+  const startPhase = (name) => {
+    summary.lastPhase = name;
+    phaseStartedAt[name] = Date.now();
+  };
+  const endPhase = (name) => {
+    if (phaseStartedAt[name]) {
+      summary.phaseMs[name] = Date.now() - phaseStartedAt[name];
+    }
+  };
+
+  /* Cek kuota independen (P-06/K2, BE2-06/C12): baca marker (1
+   * baca) dan buat alert kuota bila melewati ambang — tanpa
+   * bergantung pada refill web, yang ikut mati saat kuota habis.
+   * 90% hanya membuat alert 90 (bukan 70 + 90) supaya watcher
+   * tidak mengirim dua pesan Telegram. Kegagalan cek tidak
+   * menggagalkan run; hasilnya dicatat di summary. */
+  try {
+    const marker = await firestoreGet(`${fsBase}/meta/lastChange`, token);
+    recordReads("cron-recheck", 1);
+    const reads = Number(marker?.fields?.readsEstimate?.integerValue) || 0;
+    summary.readsEstimate = reads;
+    summary.quotaPercent = quotaPercent(reads);
+    if (reads >= QUOTA_ALERT_90_READS) {
+      const ok = await createQuotaAlert(
+        fsBase,
+        token,
+        quotaAlert90Id(today),
+        reads,
+      );
+      summary.quotaAlert = ok ? "90" : "90-failed";
+      if (!ok) {
+        recordRunError(summary, "Alert kuota 90% gagal dibuat.");
+      }
+    } else if (reads >= QUOTA_ALERT_READS) {
+      const ok = await createQuotaAlert(
+        fsBase,
+        token,
+        quotaAlertId(today),
+        reads,
+      );
+      summary.quotaAlert = ok ? "70" : "70-failed";
+      if (!ok) {
+        recordRunError(summary, "Alert kuota 70% gagal dibuat.");
+      }
+    }
+  } catch (err) {
+    recordRunError(
+      summary,
+      err && err.message
+        ? `Cek kuota gagal: ${err.message}`
+        : "Cek kuota gagal.",
+    );
+  }
+
+  /* Cron adalah penulis: ia hanya boleh berjalan dari data LIVE.
+   * Bila Firestore tidak bisa dibaca (source=seed), lewati run —
+   * bertindak dari seed bisa membuat alert palsu dan tulis
+   * berdasarkan data basi. Kunci dilepas dengan status failed
+   * supaya pemicu cadangan bisa mengambil alih di jadwalnya. */
+  let companies;
+  try {
+    const loaded = await getCompaniesWithSource();
+    if (loaded.source !== "live") {
+      await releaseCronLock({
+        fsBase,
+        token,
+        job: "recheck",
+        date: today,
+        status: "failed",
+        updateTime: lock.updateTime,
+      });
+      /* Jejak dilewati (P-06/C2) + Sentry error: run ini gagal
+       * sebelum pemeriksaan dimulai — watcher + Sentry harus tahu. */
+      await writeSkippedHeartbeat(fsBase, token, {
+        today,
+        startedAt,
+        skipReason: "seed-only",
+        trigger: auth.trigger,
+        error: "Sumber data seed.",
+      });
+      await checkInCron({ status: "error", checkInId: sentryCheckInId });
+      await flushSentry();
+      return NextResponse.json(
+        {
+          error: "Data live tidak bisa dimuat, cron dilewati.",
+          detail: "Firestore tidak bisa dibaca saat ini.",
+        },
+        { status: 503 },
+      );
+    }
+    companies = loaded.companies;
+  } catch {
+    await releaseCronLock({
+      fsBase,
+      token,
+      job: "recheck",
+      date: today,
+      status: "failed",
+      updateTime: lock.updateTime,
+    });
+    await writeSkippedHeartbeat(fsBase, token, {
+      today,
+      startedAt,
+      skipReason: "load-failed",
+      trigger: auth.trigger,
+      error: "Data perusahaan tidak bisa dimuat.",
+    });
+    await checkInCron({ status: "error", checkInId: sentryCheckInId });
+    await flushSentry();
+    return NextResponse.json(
+      { error: "Data perusahaan tidak bisa dimuat." },
+      { status: 503 },
+    );
+  }
+
+  /* Antrean cek tiga tier (BE-05, lihat buildCheckQueue di
+   * lib/check.js): mendesak (batas lamar dekat) dulu tiap run,
+   * lalu yang ada lowongan, lalu portal mati bergilir. */
+  const { queue, counts: queueCounts } = buildCheckQueue(companies, {
+    todayIso: today,
+  });
+  summary.queue = queueCounts;
+
+  /* Two-strike 5xx (K-11, P-04): nomor perusahaan yang 5xx di run
+   * kemarin, dibaca dari dokumen cron-runs kemarin (1 baca/run).
+   * Bila dokumen tidak ada atau baca gagal, dianggap tidak ada
+   * strike — gagal tertutup: 5xx hari ini hanya dicatat, tidak
+   * membalik status. */
+  let struckYesterday = new Set();
+  try {
+    const prevRun = await firestoreGet(
+      `${fsBase}/cron-runs/${yesterdayWib()}`,
+      token,
+    );
+    recordReads("cron-recheck", 1);
+    const values =
+      prevRun?.fields?.serverErrorNos?.arrayValue?.values || [];
+    struckYesterday = new Set(
+      values
+        .map((v) => Number(v.integerValue))
+        .filter((n) => Number.isInteger(n)),
+    );
+  } catch {
+    struckYesterday = new Set();
+  }
+
+  /* Snapshot perusahaan yang ada lowongannya run sebelumnya. Bila
+   * dokumen belum ada (run pertama dengan fitur ini), snapshot ditulis
+   * tanpa alert supaya perusahaan yang sudah lama ada lowongan tidak
+   * langsung terkirim sebagai "baru". */
+  let previousTargetNos = null;
+  let snapshotKnown = true;
+  try {
+    const snap = await firestoreGet(`${fsBase}/meta/targets`, token);
+    recordReads("cron-recheck", 1);
+    if (snap && snap.fields && snap.fields.targetNos) {
+      const values = snap.fields.targetNos.arrayValue?.values || [];
+      previousTargetNos = values
+        .map((v) => Number(v.integerValue))
+        .filter((n) => Number.isInteger(n));
+    }
+  } catch {
+    /* Baca snapshot gagal: tandai tidak diketahui supaya fase alert
+     * tidak menimpa snapshot dengan data yang bisa menghilangkan
+     * deteksi lowongan baru di run berikut. */
+    snapshotKnown = false;
+  }
+
+  /* summary dibuat lebih awal (sesudah kunci diambil, P-06/K4);
+   * snapshotKnown diperbarui di sini sesudah snapshot dibaca. */
+  summary.snapshotKnown = snapshotKnown;
 
   /* Status tiap perusahaan, mulai dari data yang baru dimuat. Fase
    * alert di bawah membaca peta ini sebelum loop cek jalan; loop cek
@@ -612,6 +891,7 @@ async function runRecheck(request) {
    * perusahaan baru ke daftar itu (hanya ada lowongan -> mati atau
    * mati -> belum terverifikasi), jadi perbandingan snapshot tetap
    * benar. */
+  startPhase("alerts");
   const freshAlerts = [];
   /* Nomor new-target yang tulis alertnya gagal (atau belum sempat
    * dicoba karena anggaran fase alert habis): dikeluarkan dari
@@ -656,9 +936,13 @@ async function runRecheck(request) {
         })),
       );
       for (const { alert, result } of results) {
-        if (result === "created") freshAlerts.push(alert);
-        else if (result === "failed") {
+        if (result.status === "created") freshAlerts.push(alert);
+        else if (result.status === "failed") {
           alertsFailed += 1;
+          recordRunError(
+            summary,
+            `Tulis alert ${alert.type} gagal (${result.reason || "tidak diketahui"}).`,
+          );
           if (alert.type === "new-target") {
             failedNewTargetNos.add(alert.companyNo);
           }
@@ -699,6 +983,7 @@ async function runRecheck(request) {
           "Tulis snapshot meta/targets gagal; deteksi lowongan baru " +
             "bisa berulang besok.",
         );
+        recordRunError(summary, "Tulis snapshot meta/targets gagal.");
       }
     }
 
@@ -721,6 +1006,10 @@ async function runRecheck(request) {
         summary.telegram = sent.ok ? "sent" : "failed";
         if (!sent.ok) {
           console.warn(`Notifikasi Telegram gagal: ${sent.error}`);
+          recordRunError(
+            summary,
+            `Notifikasi Telegram gagal: ${sent.error || "tidak diketahui"}`,
+          );
         } else {
           /* NOTIF-01: kirim langsung berhasil — tandai tiap alert
            * sent=true + sentAt supaya watcher agent-side tidak
@@ -776,6 +1065,9 @@ async function runRecheck(request) {
       summary.pushFailed = pushResult.pushFailed;
       summary.pushPruned = pushResult.pushPruned;
       summary.pushTruncated = pushResult.pushTruncated;
+      summary.pushTotal = pushResult.pushTotal;
+      summary.pushHasMore = pushResult.pushHasMore;
+      summary.pushMalformed = pushResult.pushMalformed;
       /* Penanda pushed (P-05): bila digest terkirim penuh (tidak
        * terpotong anggaran), tandai alert sudah masuk digest supaya
        * endpoint digest mandiri 01:30 WIB tidak mengirim ulang.
@@ -797,9 +1089,24 @@ async function runRecheck(request) {
         summary.pushedFailed = marked.failed;
       }
     }
-  } catch {
-    /* Alert dan Telegram tidak boleh menggagalkan cron. */
+  } catch (err) {
+    /* Alert dan Telegram tidak boleh menggagalkan cron — tetapi
+     * kegagalan fase ini dicatat (BE2-11): sebelumnya hanya
+     * telegram="failed" tanpa pesan apa pun. */
     summary.telegram = "failed";
+    recordRunError(
+      summary,
+      err && err.message ? `Fase alert gagal: ${err.message}` : "Fase alert gagal.",
+    );
+    emitObservabilityEvent({
+      code: OBS_CODES.CRON_WRITE_FAILED,
+      component: "cron-recheck",
+      message:
+        err && err.message ? err.message : "Fase alert gagal.",
+      meta: { phase: "alerts" },
+    });
+  } finally {
+    endPhase("alerts");
   }
 
   /* 6. Loop cek portal, tetap dibatasi anggaran 50 detik. Bila waktu
@@ -809,6 +1116,7 @@ async function runRecheck(request) {
    * (berbeda dari summary.changed yang baru naik setelah entri
    * changes ikut tertulis): bila PATCH status berhasil tapi tulis
    * changes gagal, data tetap berubah dan marker tetap harus naik. */
+  startPhase("checks");
   let statusPatched = 0;
   for (let i = 0; i < queue.length; i += BATCH) {
     if (Date.now() > deadline) {
@@ -892,7 +1200,19 @@ async function runRecheck(request) {
                 },
               }),
             },
-          ).catch(() => {}),
+          ).catch((err) => {
+            /* Tulis gagal_cek best-effort (BE2-11): kegagalan
+             * dicatat throttled, tidak menambah skipped. */
+            emitObservabilityEvent({
+              code: OBS_CODES.CRON_WRITE_FAILED,
+              component: "cron-recheck",
+              message:
+                err && err.message
+                  ? err.message
+                  : "Tulis gagal_cek gagal.",
+              meta: { kind: "gagal-cek" },
+            });
+          }),
         );
         continue;
       }
@@ -955,8 +1275,23 @@ async function runRecheck(request) {
               body: JSON.stringify(changeBody),
             });
             summary.changed += 1;
-          })().catch(() => {
+          })().catch((err) => {
             summary.skipped += 1;
+            recordRunError(
+              summary,
+              err && err.message
+                ? `Tulis status/perubahan gagal: ${err.message}`
+                : "Tulis status/perubahan gagal.",
+            );
+            emitObservabilityEvent({
+              code: OBS_CODES.CRON_WRITE_FAILED,
+              component: "cron-recheck",
+              message:
+                err && err.message
+                  ? err.message
+                  : "Tulis status/perubahan gagal.",
+              meta: { kind: "status-change" },
+            });
           }),
         );
       } else {
@@ -968,8 +1303,23 @@ async function runRecheck(request) {
             .then(() => {
               summary.updated += 1;
             })
-            .catch(() => {
+            .catch((err) => {
               summary.skipped += 1;
+              recordRunError(
+                summary,
+                err && err.message
+                  ? `Tulis status gagal: ${err.message}`
+                  : "Tulis status gagal.",
+              );
+              emitObservabilityEvent({
+                code: OBS_CODES.CRON_WRITE_FAILED,
+                component: "cron-recheck",
+                message:
+                  err && err.message
+                    ? err.message
+                    : "Tulis status gagal.",
+                meta: { kind: "status-patch" },
+              });
             }),
         );
       }
@@ -984,15 +1334,22 @@ async function runRecheck(request) {
    * Tanggal_cek ikut memicu bump supaya tanggal cek yang tampil
    * tidak basi: biayanya ~1 refill/hari/instance (±610 baca),
    * jauh di bawah kuota, dan metering FIN-02 menjaganya. */
+  endPhase("checks");
+  startPhase("writes");
   if (statusPatched > 0 || summary.updated > 0) {
     summary.markerBumped = await bumpMarker(fsBase, token, today);
+    if (!summary.markerBumped) {
+      recordRunError(summary, "Naikkan marker gagal.");
+    }
   }
+  endPhase("writes");
 
   /* 8. Heartbeat (OPS-01): catat ringkasan run ini ke
    * cron-runs/{tanggal} supaya watcher bisa mendeteksi run yang
    * hilang atau terpotong. Best-effort: gagal menulis hanya
    * dicatat di ringkasan — watcher akan menganggap run ini tidak
    * tercatat dan memberitahu owner. */
+  startPhase("heartbeat");
   const finishedAt = Date.now();
   summary.heartbeatWritten = await writeCronRunRecord(
     fsBase,
@@ -1004,10 +1361,18 @@ async function runRecheck(request) {
       finishedAt,
     }),
   );
+  endPhase("heartbeat");
   if (!summary.heartbeatWritten) {
     console.warn(
       "Heartbeat cron gagal ditulis: dokumen cron-runs tidak tercatat.",
     );
+    recordRunError(summary, "Heartbeat cron gagal ditulis.");
+    emitObservabilityEvent({
+      code: OBS_CODES.CRON_WRITE_FAILED,
+      component: "cron-recheck",
+      message: "Heartbeat cron gagal ditulis.",
+      meta: { phase: "heartbeat" },
+    });
   }
 
   /* Lepas kunci idempotency (P-05): run selesai, status done.
@@ -1020,6 +1385,21 @@ async function runRecheck(request) {
     status: "done",
     updateTime: lock.updateTime,
   });
+
+  /* Observabilitas akhir run (P-06): catat ringkasan untuk
+   * /api/health (0 baca), check-in Sentry "ok" (run selesai —
+   * termasuk bila terpotong anggaran, karena itu hasil normal,
+   * bukan kegagalan), lalu flush meter baca + antrean Sentry
+   * sebelum fungsi serverless dibekukan. */
+  noteCronRun({
+    date: today,
+    status: summary.truncated ? "truncated" : "ok",
+    trigger: auth.trigger,
+    finishedAt: new Date(finishedAt).toISOString(),
+  });
+  await checkInCron({ status: "ok", checkInId: sentryCheckInId });
+  await flushReadMeters();
+  await flushSentry();
 
   return NextResponse.json(summary);
 }

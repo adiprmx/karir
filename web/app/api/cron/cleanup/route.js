@@ -10,7 +10,8 @@
  * (POST untuk QStash).
  *
  * Anggaran hapus per run: 200 (analitik) + 200 + 100 + 100 + 100
- * + 100 + 100 = maks 900 hapus per run, seminggu sekali — jauh di
+ * + 100 + 100 + 100 (incidents, P-06) = maks 1.000 hapus per run,
+ * seminggu sekali — jauh di
  * bawah batas hapus Firestore 20.000/hari. Tiap koleksi dihapus
  * dalam satu panggilan batchWrite (maks 500 tulis/panggilan; tiap
  * koleksi <= 200). Bila masih ada sisa (hasMore), workflow
@@ -53,6 +54,7 @@ import {
   todayJakarta,
 } from "@/lib/analytics-server";
 import { buildCleanupRunRecord } from "@/lib/notify";
+import { recordReads, flushReadMeters } from "@/lib/read-meter";
 
 /* Batas durasi fungsi di Vercel (paket Hobby: maks 60 detik),
  * sama seperti recheck. Anggaran timeout internal (10 detik
@@ -148,6 +150,16 @@ export const RETENTION_POLICIES = [
     retentionDays: 90,
     maxDelete: 100,
   },
+  /* P-06: insiden observabilitas (lib/incidents.js) — retensi 90
+   * hari berdasarkan lastSeen (string ISO); dokumen yang masih
+   * berulang (lastSeen segar) tidak pernah terhapus. */
+  {
+    collection: "incidents",
+    field: "lastSeen",
+    valueType: "stringValue",
+    retentionDays: 90,
+    maxDelete: 100,
+  },
 ];
 
 const CLEANUP_TIMEOUT_MS = 15_000;
@@ -231,6 +243,9 @@ export async function cleanupCollection(
   const names = (Array.isArray(rows) ? rows : [])
     .map((r) => r && r.document && r.document.name)
     .filter(Boolean);
+  /* Pengukur baca (P-06/K7): tiap baris yang dikembalikan kueri
+   * dihitung 1 baca — termasuk baris penanda sisa ke-(maxDelete+1). */
+  recordReads("cron-cleanup", names.length);
   if (names.length === 0) {
     return { deleted: 0, cutoff, hasMore: false };
   }
@@ -288,6 +303,7 @@ async function writeCleanupHeartbeat({
   status,
   analytics,
   retention,
+  phaseMs,
   error,
   trigger,
 }) {
@@ -304,7 +320,7 @@ async function writeCleanupHeartbeat({
       `https://firestore.googleapis.com/v1/projects/${pid}` +
       `/databases/(default)/documents`;
     const fields = buildCleanupRunRecord(
-      { status, analytics, retention, error, trigger },
+      { status, analytics, retention, phaseMs, error, trigger },
       { date: today, startedAt, finishedAt: Date.now() },
     );
     const res = await fetchWithTimeout(
@@ -444,12 +460,24 @@ async function runCleanup(request) {
       updateTime: lock.updateTime,
     });
 
+  /* Durasi tiap fase (P-06/K4) untuk heartbeat. */
+  const phaseMs = {};
+
   /* 5. Hapus event analitik lama (90 hari). cleanupOldEvents melempar
    * bila gagal — catat, tulis heartbeat gagal, dan jawab 500 supaya
    * kegagalannya terlihat di log dan di heartbeat. */
   let analytics;
   try {
+    const analyticsStart = Date.now();
     analytics = await cleanupOldEvents();
+    phaseMs.analytics = Date.now() - analyticsStart;
+    /* Baris yang dibaca kueri analitik = yang dihapus + 1 baris
+     * penanda bila masih ada sisa (pola yang sama dengan
+     * cleanupCollection di bawah). */
+    recordReads(
+      "cron-cleanup",
+      (Number(analytics.deleted) || 0) + (analytics.hasMore ? 1 : 0),
+    );
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
     console.warn("Cron cleanup gagal:", message);
@@ -457,30 +485,35 @@ async function runCleanup(request) {
       today,
       startedAt,
       status: "failed",
+      phaseMs,
       error: message,
       trigger: auth.trigger,
     });
     await release("failed");
+    await flushReadMeters();
     return NextResponse.json(
       { error: "Pembersihan event gagal." },
       { status: 500 },
     );
   }
 
-  /* 6. Retensi enam koleksi lain (FIN-08 + P-03). Satu token service
-   * account untuk semua koleksi (sudah di-cache modul saat langkah
-   * 5 mengambilnya). Kegagalan satu koleksi menghentikan run —
-   * run berikutnya mencoba lagi — supaya kegagalan terlihat, bukan
-   * tertelan diam. Hasil parsial (analitik + koleksi yang sempat
-   * selesai) ikut di balasan 500 (C-08) dan di heartbeat, supaya
-   * bukti run parsial tidak hilang. */
+  /* 6. Retensi tujuh koleksi lain (FIN-08 + P-03 + P-06
+   * incidents). Satu token service account untuk semua koleksi
+   * (sudah di-cache modul saat langkah 5 mengambilnya). Kegagalan
+   * satu koleksi menghentikan run — run berikutnya mencoba lagi —
+   * supaya kegagalan terlihat, bukan tertelan diam. Hasil parsial
+   * (analitik + koleksi yang sempat selesai) ikut di balasan 500
+   * (C-08) dan di heartbeat, supaya bukti run parsial tidak
+   * hilang. */
   const retention = {};
   try {
     for (const policy of RETENTION_POLICIES) {
+      const collectionStart = Date.now();
       retention[policy.collection] = await cleanupCollection(policy, {
         token,
         projectId,
       });
+      phaseMs[policy.collection] = Date.now() - collectionStart;
     }
     /* 7. Heartbeat (S8/C-02): catat ringkasan run ini ke
      * cron-runs/cleanup-{tanggal} supaya watcher bisa mendeteksi
@@ -494,6 +527,7 @@ async function runCleanup(request) {
       status: "ok",
       analytics,
       retention,
+      phaseMs,
       trigger: auth.trigger,
     });
     if (!heartbeatWritten) {
@@ -502,6 +536,7 @@ async function runCleanup(request) {
       );
     }
     await release("done");
+    await flushReadMeters();
     return NextResponse.json({ ...analytics, retention, heartbeatWritten });
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
@@ -512,10 +547,12 @@ async function runCleanup(request) {
       status: "failed",
       analytics,
       retention,
+      phaseMs,
       error: message,
       trigger: auth.trigger,
     });
     await release("failed");
+    await flushReadMeters();
     return NextResponse.json(
       { error: "Pembersihan retensi gagal.", analytics, retention },
       { status: 500 },

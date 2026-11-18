@@ -42,6 +42,14 @@
  * mencapai 70% kuota harian, satu alert `quota` dibuat di koleksi
  * alerts (id deterministik per hari, lihat lib/notify.js).
  *
+ * Observabilitas (P-06, BE2-02): ketujuh titik yang dulu menelan
+ * kegagalan diam-diam kini mencatat log terstruktur throttled
+ * (lib/observability.js) — baca marker, refill, pencacah, alert
+ * kuota, muat seed, dan baca per-perusahaan. Pelacak mode seed
+ * (getSeedModeInfo) mengukur menit berjalan dari seed untuk
+ * heartbeat cron + /api/health. Baca Firestore dihitung per sumber
+ * (lib/read-meter.js) untuk laporan 14 hari (T1).
+ *
  * Marker adalah mekanisme invalidasi lintas-instance yang benar
  * untuk serverless: tiap instance memeriksa marker dan refill
  * sendiri bila rev berubah. Helper revalidateCompanies() di bawah
@@ -54,6 +62,11 @@ import {
   quotaAlertId,
   quotaPercent,
 } from "./notify.js";
+import {
+  OBS_CODES,
+  emitObservabilityEvent,
+} from "./observability.js";
+import { recordReads } from "./read-meter.js";
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
@@ -89,6 +102,12 @@ let inflightResolve = null;
 /* Cache per-perusahaan: no -> {company, at}, dan janji per no. */
 const byIdCache = new Map();
 const byIdInflight = new Map();
+/* Pelacak mode seed (P-06, BE2-02): kapan refill live terakhir
+ * berhasil dan sejak kapan instance ini menyajikan seed. Dipakai
+ * pencacah "menit berjalan dari seed" di heartbeat cron + endpoint
+ * /api/health, dan alarm watcher bila mode seed > 1 jam. */
+let lastLiveRefillAt = 0;
+let seedModeSince = 0;
 /* Hari (WIB) terakhir alert kuota dicoba dibuat di instance ini —
  * supaya percobaan tidak diulang tiap refill setelah ambang lewat
  * (id dokumen deterministik sudah mencegah duplikat di Firestore,
@@ -170,6 +189,86 @@ export function revalidateCompanies() {
   inflightResolve = null;
   byIdCache.clear();
   byIdInflight.clear();
+  lastLiveRefillAt = 0;
+  seedModeSince = 0;
+}
+
+/* Klasifikasi penyebab kegagalan fetch untuk log (tanpa pesan mentah
+ * yang bisa mengandung detail internal): timeout dibedakan dari
+ * kegagalan jaringan umum. */
+function classifyFetchError(err) {
+  if (err && err.name === "AbortError") return "timeout";
+  return "network";
+}
+
+/* Catat bahwa instance ini mulai menyajikan seed (dipanggil saat
+ * resolveCompanies jatuh ke seed; pemanggilan berulang dalam satu
+ * periode seed tidak menggeser stempel awal). */
+function noteSeedFallback(nowMs = Date.now()) {
+  if (!seedModeSince) seedModeSince = nowMs;
+}
+
+/* Catat refill live berhasil: mode seed berakhir. */
+function noteLiveRefill(nowMs = Date.now()) {
+  lastLiveRefillAt = nowMs;
+  seedModeSince = 0;
+}
+
+/* Status mode seed instance ini: seedMode true bila sedang
+ * menyajikan seed, seedModeMinutes = menit sejak mode seed dimulai
+ * (0 bila tidak dalam mode seed), lastLiveAt = refill live terakhir
+ * yang berhasil (null bila belum pernah). */
+export function getSeedModeInfo(nowMs = Date.now()) {
+  const seedMode = seedModeSince > 0;
+  return {
+    seedMode,
+    seedModeMinutes: seedMode
+      ? Math.floor((nowMs - seedModeSince) / 60000)
+      : 0,
+    seedModeSince: seedMode
+      ? new Date(seedModeSince).toISOString()
+      : null,
+    lastLiveAt: lastLiveRefillAt
+      ? new Date(lastLiveRefillAt).toISOString()
+      : null,
+  };
+}
+
+/* Cuplikan kuota dari cache marker (0 baca): estimasi baca,
+ * refill hari ini, dan hari pencacah. Dipakai heartbeat cron +
+ * endpoint /api/health. */
+export function getQuotaSnapshot() {
+  return {
+    readsEstimate: markerCache ? markerCache.readsEstimate : 0,
+    refillsToday: markerCache ? markerCache.refillsToday : 0,
+    counterDay: markerCache ? markerCache.counterDay : "",
+  };
+}
+
+/* Cuplikan kesehatan instance ini untuk /api/health — 0 baca
+ * Firestore: semua field dari cache modul. `source` dihitung dari
+ * cache live (ada = "live", belum ada = "seed"); `liveAsOf`
+ * menunjukkan kapan data live terakhir berhasil di-refill supaya
+ * "live" dari cache basi tidak terbaca sebagai data segar (C13).
+ * seedDate memuat seed dari disk (bukan Firestore). */
+export async function getCompaniesHealthSnapshot(nowMs = Date.now()) {
+  const seedInfo = getSeedModeInfo(nowMs);
+  const quota = getQuotaSnapshot();
+  const seedDate = await getSeedDate();
+  return {
+    source: liveCache ? "live" : "seed",
+    rev: markerCache ? markerCache.rev : (liveRev ?? null),
+    seedDate,
+    readsEstimate: quota.readsEstimate,
+    quotaPercent: quotaPercent(quota.readsEstimate),
+    liveAsOf: seedInfo.lastLiveAt,
+    lastMarkerCheck: markerAt ? new Date(markerAt).toISOString() : null,
+    seedModeMinutes: seedInfo.seedModeMinutes,
+    cacheAgeMs: liveCache && lastLiveRefillAt
+      ? Math.max(0, nowMs - lastLiveRefillAt)
+      : null,
+    cacheWarm: liveCache !== null,
+  };
 }
 
 function docToCompany(d) {
@@ -219,6 +318,14 @@ async function loadSeed() {
     const { default: seed } = await import("@/data/companies.json");
     seedCache = seed;
   } catch {
+    /* Impor alias gagal (di luar Next, alias @ tidak ada) — catat
+     * sekali (throttled) lalu coba impor relatif cadangan. */
+    emitObservabilityEvent({
+      code: OBS_CODES.SEED_LOAD_FAILED,
+      component: "companies",
+      message: "Muat seed lewat alias gagal, memakai impor relatif.",
+      meta: { reason: "alias-import-failed" },
+    });
     const { default: seed } = await import("../data/companies.json", {
       with: { type: "json" },
     });
@@ -237,7 +344,13 @@ export async function getSeedDate() {
   let seed;
   try {
     seed = await loadSeed();
-  } catch {
+  } catch (err) {
+    emitObservabilityEvent({
+      code: OBS_CODES.SEED_LOAD_FAILED,
+      component: "companies",
+      message: "Muat seed gagal, tanggal seed tidak diketahui.",
+      meta: { reason: classifyFetchError(err) },
+    });
     return "";
   }
   let latest = "";
@@ -288,19 +401,33 @@ async function readMarker() {
         markerCache = null;
         markerAt = now;
         markerLoaded = true;
+        recordReads("web-marker", 1);
         return { ok: true, marker: null };
       }
       if (!res.ok) {
         markerFailAt = now;
+        emitObservabilityEvent({
+          code: OBS_CODES.MARKER_READ_FAILED,
+          component: "companies",
+          message: "Baca marker gagal.",
+          meta: { status: res.status },
+        });
         return { ok: false };
       }
       const marker = parseMarker(await jsonWithTimeout(res));
       markerCache = marker;
       markerAt = now;
       markerLoaded = true;
+      recordReads("web-marker", 1);
       return { ok: true, marker };
-    } catch {
+    } catch (err) {
       markerFailAt = now;
+      emitObservabilityEvent({
+        code: OBS_CODES.MARKER_READ_FAILED,
+        component: "companies",
+        message: "Baca marker gagal.",
+        meta: { reason: classifyFetchError(err) },
+      });
       return { ok: false };
     } finally {
       if (inflightMarker === promise) inflightMarker = null;
@@ -359,10 +486,26 @@ async function maybeCreateQuotaAlert(day, readsEstimate) {
         }),
       },
     );
-    /* 200 = dibuat, 409 = sudah ada hari ini. Status lain ditelan. */
-    void res;
-  } catch {
-    /* Best-effort: alert gagal tidak menggagalkan apa pun. */
+    /* 200 = dibuat, 409 = sudah ada hari ini. Status lain dicatat
+     * (throttled) — peringatan dini kuota 70% tidak boleh hilang
+     * tanpa jejak (BE2-02/C12). */
+    if (!res.ok && res.status !== 409) {
+      emitObservabilityEvent({
+        code: OBS_CODES.QUOTA_ALERT_FAILED,
+        component: "companies",
+        message: "Alert kuota gagal dibuat.",
+        meta: { status: res.status, readsEstimate },
+      });
+    }
+  } catch (err) {
+    /* Best-effort: alert gagal tidak menggagalkan apa pun — tetapi
+     * kegagalannya dicatat (throttled). */
+    emitObservabilityEvent({
+      code: OBS_CODES.QUOTA_ALERT_FAILED,
+      component: "companies",
+      message: "Alert kuota gagal dibuat.",
+      meta: { reason: classifyFetchError(err), readsEstimate },
+    });
   }
 }
 
@@ -408,9 +551,26 @@ async function bumpRefillCounters(marker, docsRead) {
       if (readsEstimate >= QUOTA_ALERT_READS) {
         await maybeCreateQuotaAlert(day, readsEstimate);
       }
+    } else {
+      /* PATCH ditolak (mis. 403 karena rules belum terbit): metering
+       * berhenti diam-diam tanpa jejak ini — estimasi pemakaian
+       * menjadi terlalu rendah. Dicatat throttled. */
+      emitObservabilityEvent({
+        code: OBS_CODES.METERING_FAILED,
+        component: "companies",
+        message: "Naikkan pencacah refill gagal.",
+        meta: { status: res.status },
+      });
     }
-  } catch {
-    /* Best-effort: metering gagal tidak menggagalkan refill. */
+  } catch (err) {
+    /* Best-effort: metering gagal tidak menggagalkan refill —
+     * tetapi kegagalannya dicatat (throttled). */
+    emitObservabilityEvent({
+      code: OBS_CODES.METERING_FAILED,
+      component: "companies",
+      message: "Naikkan pencacah refill gagal.",
+      meta: { reason: classifyFetchError(err) },
+    });
   }
 }
 
@@ -430,8 +590,11 @@ async function resolveCompanies() {
       /* Marker tidak bisa dibaca (429 kuota / offline / error):
        * JANGAN coba refill — Firestore kemungkinan besar sedang
        * tidak bisa dipakai, dan refill 610 baca hanya menambah
-       * beban. Sajikan cache live bila ada, seed bila tidak. */
+       * beban. Sajikan cache live bila ada, seed bila tidak.
+       * Kegagalan baca marker-nya sendiri sudah dicatat di
+       * readMarker; di sini hanya dicatat peralihan ke seed. */
       if (liveCache) return { list: liveCache, source: "live" };
+      noteSeedFallback();
       return { list: await loadSeed(), source: "seed" };
     }
     const rev = marker ? marker.rev : null;
@@ -443,14 +606,25 @@ async function resolveCompanies() {
       const list = await refillFromFirestore();
       liveCache = list;
       liveRev = rev;
+      noteLiveRefill();
+      recordReads("web-refill", list.length);
       /* Metering best-effort; kegagalannya tidak menggagalkan
        * refill, dan refill tetap disajikan. */
       await bumpRefillCounters(marker, list.length);
       return { list, source: "live" };
-    } catch {
+    } catch (err) {
       /* Refill gagal (429 kuota / error): sajikan cache live lama
-       * bila ada, seed bila tidak. Tanpa 503. */
+       * bila ada, seed bila tidak. Tanpa 503. Kegagalan dicatat
+       * throttled (BE2-02) — sebelumnya tidak ada jejak sama sekali. */
+      emitObservabilityEvent({
+        code: OBS_CODES.REFILL_FAILED_SEED_FALLBACK,
+        component: "companies",
+        message:
+          err && err.message ? err.message : "Refill Firestore gagal.",
+        meta: { fallback: liveCache ? "live-cache" : "seed" },
+      });
       if (liveCache) return { list: liveCache, source: "live" };
+      noteSeedFallback();
       return { list: await loadSeed(), source: "seed" };
     }
   })();
@@ -467,13 +641,22 @@ export async function getCompanies() {
 }
 
 /* Seperti getCompanies(), plus asal data dan tanggal seed — dipakai
- * rute API supaya respons membawa `source` + `seedDate`. */
+ * rute API supaya respons membawa `source` + `seedDate`. `liveAsOf`
+ * adalah refill live terakhir yang berhasil (null bila belum pernah):
+ * bila `source` "live" dari cache lama saat Firestore 429, klien
+ * bisa melihat seberapa basi datanya — tanpa field ini, "live" dari
+ * cache memberi hasil positif palsu (C13). */
 export async function getCompaniesWithSource() {
   const [{ list, source }, seedDate] = await Promise.all([
     resolveCompanies(),
     getSeedDate(),
   ]);
-  return { companies: list, source, seedDate };
+  return {
+    companies: list,
+    source,
+    seedDate,
+    liveAsOf: getSeedModeInfo().lastLiveAt,
+  };
 }
 
 /* Satu perusahaan berdasarkan nomor baris. Cache memori 5 menit +
@@ -494,12 +677,16 @@ export async function getCompanyById(no) {
   const promise = (async () => {
     try {
       const res = await fetchJson(`${BASE}/companies/${id}?key=${API_KEY}`);
-      if (res.status === 404) return null;
+      if (res.status === 404) {
+        recordReads("web-by-id", 1);
+        return null;
+      }
       if (!res.ok) {
         throw new Error(`Firestore get gagal: HTTP ${res.status}`);
       }
       const company = docToCompany(await jsonWithTimeout(res));
       byIdCache.set(id, { company, at: Date.now() });
+      recordReads("web-by-id", 1);
       return company;
     } catch (err) {
       /* Gagal total (429/offline): cache basi lebih baik daripada
@@ -528,7 +715,18 @@ export async function getCompanyByIdWithSource(no) {
   try {
     const company = await getCompanyById(no);
     return { company, source: "live" };
-  } catch {
+  } catch (err) {
+    /* Gagal baca Firestore (429/offline) -> seed, tanpa melempar.
+     * Kegagalan dicatat throttled (BE2-02) — sebelumnya detail
+     * perusahaan dari seed tanpa jejak. Nomor perusahaan adalah
+     * data publik katalog, bukan data pribadi. */
+    emitObservabilityEvent({
+      code: OBS_CODES.COMPANY_READ_FAILED,
+      component: "companies",
+      message:
+        err && err.message ? err.message : "Baca perusahaan gagal.",
+      meta: { companyNo: Number(no) || 0 },
+    });
     const seed = await loadSeed();
     return {
       company: seed.find((c) => c.no === Number(no)) || null,

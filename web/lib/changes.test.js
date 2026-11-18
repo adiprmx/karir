@@ -12,7 +12,7 @@
  *     mengubahnya menjadi daftar kosong).
  * (d) BE-09: res.json() yang stall ditolak setelah timeout 5 detik,
  *     bukan menggantung selamanya; dengan cache basi, cache dipakai. */
-import { describe, it, after } from "node:test";
+import { describe, it, beforeEach, afterEach, after } from "node:test";
 import assert from "node:assert/strict";
 
 /* changes.js membaca env saat modul dimuat, jadi env dipasang
@@ -240,5 +240,63 @@ describe("getChanges: BE-09 timeout res.json()", () => {
     } finally {
       pulihkan();
     }
+  });
+});
+
+/* P-06/BE2-10: kegagalan baca dicatat + baca dihitung per sumber. */
+describe("getChanges: log kegagalan + meter (P-06)", () => {
+  let kejadian;
+  let warnAsli;
+  beforeEach(async () => {
+    revalidateChanges();
+    const obs = await import("./observability.js");
+    obs.resetObservabilityForTests();
+    const meter = await import("./read-meter.js");
+    meter.resetReadMetersForTests();
+    kejadian = [];
+    obs.registerObservabilitySink((event) => kejadian.push(event));
+    warnAsli = console.warn;
+    console.warn = () => {};
+  });
+  afterEach(async () => {
+    console.warn = warnAsli;
+    const obs = await import("./observability.js");
+    obs.resetObservabilityForTests();
+    const meter = await import("./read-meter.js");
+    meter.resetReadMetersForTests();
+  });
+
+  it("Firestore 500 dingin -> lempar + API_ROUTE_ERROR tercatat", async () => {
+    const rec = { panggilan: [] };
+    pasangMock(rec, { status: 500 });
+    await assert.rejects(() => getChanges(10), /HTTP 500/);
+    const ev = kejadian.filter((e) => e.code === "API_ROUTE_ERROR");
+    assert.equal(ev.length, 1);
+    assert.equal(ev[0].component, "changes");
+    assert.equal(ev[0].meta.fallback, "throw");
+    assert.ok(ev[0].message.includes("500"));
+  });
+
+  it("gagal setelah sukses -> cache basi dipakai + API_ROUTE_ERROR tercatat", async () => {
+    const rec = { panggilan: [] };
+    pasangMock(rec, modeOk());
+    const pertama = await getChanges(10);
+    assert.equal(pertama.length, 2);
+    const pulihkan = geserJam(61 * 60 * 1000);
+    pasangMock(rec, { status: 429 });
+    const kedua = await getChanges(10);
+    pulihkan();
+    assert.deepEqual(kedua, pertama);
+    const ev = kejadian.filter((e) => e.code === "API_ROUTE_ERROR");
+    assert.equal(ev.length, 1);
+    assert.equal(ev[0].meta.fallback, "stale-cache");
+  });
+
+  it("baca sukses mencatat web-changes sejumlah dokumen", async () => {
+    const rec = { panggilan: [] };
+    pasangMock(rec, modeOk());
+    await getChanges(10);
+    const meter = await import("./read-meter.js");
+    assert.equal(meter.pendingReadsForTests()["web-changes"], 2);
   });
 });

@@ -8,6 +8,7 @@ import { getLocale, t } from "@/lib/i18n";
 import SiteNav from "./site-nav";
 import AnalyticsTrack from "./analytics-track";
 import { InstallPromptListener } from "./install-prompt";
+import ErrorReporter from "./error-reporter";
 import { LabelsProvider } from "./labels-provider";
 import { Icon, ToastHost } from "./visual";
 
@@ -192,6 +193,8 @@ export default async function RootLayout({ children }) {
         {/* MKT-08: menangkap event pasang aplikasi sejak awal supaya
           * kartu di /pengaturan tidak kelewat eventnya. */}
         <InstallPromptListener />
+        {/* P-06: pelapor error klien (tanpa tampilan). */}
+        <ErrorReporter />
         {/* tabIndex -1: target skip link dan cadangan fokus pindah
           * rute (AKSES-01); tidak menambah tab stop. */}
         <LabelsProvider locale={locale} labels={sharedLabels}>

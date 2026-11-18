@@ -246,3 +246,103 @@ describe("getServiceAccountAccessToken — satu cache bersama (BE2-24)", () => {
     );
   });
 });
+
+/* P-06/BE2-11: kegagalan penukaran token dicatat throttled dengan
+ * jenis kegagalan — tanpa pernah mencatat client_email. */
+describe("log kegagalan penukaran token (P-06/BE2-11)", () => {
+  let saUji;
+  let kejadian;
+  let warnAsli;
+  before(() => {
+    const { privateKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+    });
+    saUji = {
+      client_email: "uji@proyek-uji.iam.gserviceaccount.com",
+      private_key: privateKey.export({ type: "pkcs8", format: "pem" }),
+      project_id: "proyek-uji",
+    };
+  });
+  beforeEach(async () => {
+    resetServiceAccountTokenCache();
+    const obs = await import("./observability.js");
+    obs.resetObservabilityForTests();
+    kejadian = [];
+    obs.registerObservabilitySink((event) => kejadian.push(event));
+    warnAsli = console.warn;
+    console.warn = () => {};
+  });
+  afterEach(async () => {
+    console.warn = warnAsli;
+    const obs = await import("./observability.js");
+    obs.resetObservabilityForTests();
+  });
+
+  function jenisYangDicatat() {
+    return kejadian
+      .filter((e) => e.code === "SA_TOKEN_FAILED")
+      .map((e) => e.meta.kind);
+  }
+
+  it("tanpa SA -> null + SA_TOKEN_FAILED kind missing", async () => {
+    const saLama = process.env.FIREBASE_SERVICE_ACCOUNT;
+    delete process.env.FIREBASE_SERVICE_ACCOUNT;
+    try {
+      const token = await getServiceAccountAccessToken({});
+      assert.equal(token, null);
+      assert.deepEqual(jenisYangDicatat(), ["missing"]);
+    } finally {
+      if (saLama !== undefined) {
+        process.env.FIREBASE_SERVICE_ACCOUNT = saLama;
+      }
+    }
+  });
+
+  it("kunci privat tidak valid -> kind sign-failed", async () => {
+    const token = await getServiceAccountAccessToken({
+      sa: { ...saUji, private_key: "bukan-kunci" },
+      fetchImpl: async () => jsonResponse({ access_token: "x" }),
+    });
+    assert.equal(token, null);
+    assert.deepEqual(jenisYangDicatat(), ["sign-failed"]);
+  });
+
+  it("fetch melempar -> kind network", async () => {
+    const token = await getServiceAccountAccessToken({
+      sa: saUji,
+      fetchImpl: async () => {
+        throw new Error("offline");
+      },
+    });
+    assert.equal(token, null);
+    assert.deepEqual(jenisYangDicatat(), ["network"]);
+  });
+
+  it("endpoint 500 -> kind http-500", async () => {
+    const token = await getServiceAccountAccessToken({
+      sa: saUji,
+      fetchImpl: async () => jsonResponse({}, 500),
+    });
+    assert.equal(token, null);
+    assert.deepEqual(jenisYangDicatat(), ["http-500"]);
+  });
+
+  it("respons tanpa access_token -> kind no-token", async () => {
+    const token = await getServiceAccountAccessToken({
+      sa: saUji,
+      fetchImpl: async () => jsonResponse({}),
+    });
+    assert.equal(token, null);
+    assert.deepEqual(jenisYangDicatat(), ["no-token"]);
+  });
+
+  it("tidak ada kejadian yang memuat client_email", async () => {
+    await getServiceAccountAccessToken({
+      sa: saUji,
+      fetchImpl: async () => jsonResponse({}, 500),
+    });
+    const gabungan = JSON.stringify(kejadian);
+    assert.ok(!gabungan.includes("uji@proyek-uji"));
+    assert.ok(!gabungan.includes("gserviceaccount"));
+  });
+});

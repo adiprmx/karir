@@ -10,6 +10,7 @@ import { countBy, topEntries } from "@/lib/search";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
 import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
+import { OBS_CODES, emitObservabilityEvent } from "@/lib/observability";
 
 const WINDOW_MS = 60_000;
 const LIMIT_PER_MINUTE = 60;
@@ -41,7 +42,7 @@ export async function GET(request) {
     );
   }
   try {
-    const [{ companies, source, seedDate }, stats, stale] =
+    const [{ companies, source, seedDate, liveAsOf }, stats, stale] =
       await Promise.all([
         getCompaniesWithSource(),
         getStats(),
@@ -50,6 +51,7 @@ export async function GET(request) {
     return NextResponse.json({
       source,
       seedDate,
+      liveAsOf,
       total: stats.total,
       byStatus: stats.byStatus,
       byCategory: topEntries(countBy(companies, "kategori"), 8),
@@ -61,7 +63,13 @@ export async function GET(request) {
   } catch (err) {
     /* getCompaniesWithSource tidak pernah melempar karena Firestore
      * (jatuh ke seed); 503 di sini hanya untuk kegagalan tak terduga
-     * (mis. seed ikut tidak bisa dimuat). */
+     * (mis. seed ikut tidak bisa dimuat). Dicatat throttled (BE2-10). */
+    emitObservabilityEvent({
+      code: OBS_CODES.API_ROUTE_ERROR,
+      component: "api/stats",
+      message: err && err.message ? err.message : "Rute /api/stats gagal.",
+      meta: { route: "/api/stats" },
+    });
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
       { status: 503 },

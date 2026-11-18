@@ -13,6 +13,7 @@ import { runSearch, matchesFreeText } from "@/lib/search";
 import { isBotUa, getClientIp } from "@/lib/api-guard";
 import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
+import { OBS_CODES, emitObservabilityEvent } from "@/lib/observability";
 
 const WINDOW_MS = 60_000;
 const LIMIT_PER_MINUTE = 60;
@@ -54,7 +55,7 @@ export async function GET(request) {
   );
   const q = params.get("q") || "";
   try {
-    const { companies: all, source, seedDate } =
+    const { companies: all, source, seedDate, liveAsOf } =
       await getCompaniesWithSource();
     let companies = all;
     // Pencarian bebas: saring ke baris yang menyebut kata kunci di nama,
@@ -75,6 +76,7 @@ export async function GET(request) {
     return NextResponse.json({
       source,
       seedDate,
+      liveAsOf,
       total: results.length,
       mode,
       groups: groups
@@ -94,7 +96,13 @@ export async function GET(request) {
   } catch (err) {
     /* getCompaniesWithSource tidak pernah melempar karena Firestore
      * (jatuh ke seed); 503 di sini hanya untuk kegagalan tak terduga
-     * (mis. seed ikut tidak bisa dimuat). */
+     * (mis. seed ikut tidak bisa dimuat). Dicatat throttled (BE2-10). */
+    emitObservabilityEvent({
+      code: OBS_CODES.API_ROUTE_ERROR,
+      component: "api/companies",
+      message: err && err.message ? err.message : "Rute /api/companies gagal.",
+      meta: { route: "/api/companies" },
+    });
     return NextResponse.json(
       { error: "Data perusahaan tidak bisa dimuat." },
       { status: 503 },

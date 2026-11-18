@@ -47,6 +47,22 @@ export function quotaAlertId(dayIso) {
   return `quota-70-${dayIso}`;
 }
 
+/* Ambang kedua (P-06/K2, C12): 90% kuota — alert terpisah dengan
+ * id sendiri supaya watcher bisa membedakan peringatan dini 70%
+ * dari kondisi genting 90%. Dibuat cron recheck lewat token
+ * service account (jalur independen dari refill web). Tipe alert
+ * tetap "quota" supaya watcher meneruskannya lewat jalur relay
+ * yang sama; pesannya sudah memuat persen (lihat
+ * formatQuotaAlertMessage). */
+export const QUOTA_ALERT_90_RATIO = 0.9;
+export const QUOTA_ALERT_90_READS = Math.round(
+  QUOTA_DAILY_LIMIT * QUOTA_ALERT_90_RATIO,
+);
+
+export function quotaAlert90Id(dayIso) {
+  return `quota-90-${dayIso}`;
+}
+
 /* Persen pemakaian kuota dari estimasi baca, dibulatkan. */
 export function quotaPercent(readsEstimate) {
   const n = Number(readsEstimate) || 0;
@@ -502,6 +518,68 @@ export function buildCronRunRecord(summary, { date, startedAt, finishedAt }) {
     },
     snapshotKnown: { booleanValue: s.snapshotKnown !== false },
     snapshotWritten: { booleanValue: s.snapshotWritten === true },
+    /* Observabilitas (P-06/K4): jejak kegagalan + konteks run.
+     * error = kegagalan pertama run ini (maks 300 karakter,
+     * dibersihkan dari secret/email di route); lastPhase = fase
+     * terakhir yang dicapai ("alerts"|"checks"|"writes"|
+     * "heartbeat"); phaseMs = durasi tiap fase; skipReason =
+     * alasan run dilewati ("no-secret"|"no-service-account"|
+     * "seed-only"|"token-failed"|""); seedModeMinutes = menit
+     * berjalan dari seed saat run dimulai; readsEstimate +
+     * quotaPercent + quotaAlert = hasil cek kuota independen
+     * (K2); pushTotal/pushHasMore/pushMalformed = konteks digest
+     * push (P2) supaya watcher bisa membedakan "tidak ada
+     * pelanggan" dari "gagal baca pelanggan". */
+    error: { stringValue: typeof s.error === "string" ? s.error : "" },
+    lastPhase: { stringValue: s.lastPhase || "" },
+    phaseMs: {
+      mapValue: {
+        fields: Object.fromEntries(
+          Object.entries(s.phaseMs || {}).map(([k, v]) => [
+            k,
+            { integerValue: String(Number(v) || 0) },
+          ]),
+        ),
+      },
+    },
+    skipReason: { stringValue: s.skipReason || "" },
+    seedModeMinutes: { integerValue: String(s.seedModeMinutes || 0) },
+    readsEstimate: { integerValue: String(s.readsEstimate || 0) },
+    quotaPercent: { integerValue: String(s.quotaPercent || 0) },
+    quotaAlert: { stringValue: s.quotaAlert || "none" },
+    pushTotal: { integerValue: String(s.pushTotal || 0) },
+    pushHasMore: { booleanValue: s.pushHasMore === true },
+    pushMalformed: { integerValue: String(s.pushMalformed || 0) },
+  };
+}
+
+/* Dokumen heartbeat untuk run recheck yang dilewati sebelum
+ * pemeriksaan dimulai (P-06/C2): jalur 503 awal (secret belum
+ * dipasang, service account hilang/tidak lengkap, token gagal,
+ * seed-only, atau data gagal dimuat). Tanpa dokumen ini, watcher
+ * tidak bisa membedakan "cron dilewati karena alasan diketahui"
+ * dari "cron tidak jalan sama sekali". Status "skipped";
+ * skipReason menjelaskan alasannya; error berisi detail singkat
+ * bila ada. Ditulis hanya bila token service account tersedia
+ * (jalur tanpa secret tidak bisa menulis — watcher menyimpulkan
+ * dari dokumen yang tidak ada + sinyal lain). */
+export function buildSkippedCronRunRecord(
+  summary,
+  { date, startedAt, finishedAt },
+) {
+  const s = summary || {};
+  return {
+    date: { stringValue: date },
+    status: { stringValue: "skipped" },
+    startedAt: { stringValue: new Date(startedAt).toISOString() },
+    finishedAt: { stringValue: new Date(finishedAt).toISOString() },
+    durationMs: {
+      integerValue: String(Math.max(0, finishedAt - startedAt)),
+    },
+    skipReason: { stringValue: s.skipReason || "" },
+    trigger: { stringValue: s.trigger || "" },
+    seedModeMinutes: { integerValue: String(s.seedModeMinutes || 0) },
+    error: { stringValue: typeof s.error === "string" ? s.error : "" },
   };
 }
 
@@ -535,6 +613,8 @@ export function buildCleanupRunRecord(
   const reportsDeleted = Number(retention.reports?.deleted) || 0;
   const auditLogsDeleted = Number(retention.audit_logs?.deleted) || 0;
   const cronRunsDeleted = Number(retention["cron-runs"]?.deleted) || 0;
+  /* P-06: koleksi incidents ikut dibersihkan (retensi 90 hari). */
+  const incidentsDeleted = Number(retention.incidents?.deleted) || 0;
   return {
     date: { stringValue: date },
     job: { stringValue: "cleanup" },
@@ -552,17 +632,51 @@ export function buildCleanupRunRecord(
           changesDeleted +
           reportsDeleted +
           auditLogsDeleted +
-          cronRunsDeleted,
+          cronRunsDeleted +
+          incidentsDeleted,
       ),
     },
     analyticsDeleted: { integerValue: String(analyticsDeleted) },
     analyticsHasMore: { booleanValue: analytics.hasMore === true },
     rateLimitsDeleted: { integerValue: String(rateLimitsDeleted) },
+    rateLimitsHasMore: {
+      booleanValue: retention.rate_limits?.hasMore === true,
+    },
     alertsDeleted: { integerValue: String(alertsDeleted) },
+    alertsHasMore: { booleanValue: retention.alerts?.hasMore === true },
     changesDeleted: { integerValue: String(changesDeleted) },
+    changesHasMore: {
+      booleanValue: retention.changes?.hasMore === true,
+    },
     reportsDeleted: { integerValue: String(reportsDeleted) },
+    reportsHasMore: {
+      booleanValue: retention.reports?.hasMore === true,
+    },
     auditLogsDeleted: { integerValue: String(auditLogsDeleted) },
+    auditLogsHasMore: {
+      booleanValue: retention.audit_logs?.hasMore === true,
+    },
     cronRunsDeleted: { integerValue: String(cronRunsDeleted) },
+    cronRunsHasMore: {
+      booleanValue: retention["cron-runs"]?.hasMore === true,
+    },
+    incidentsDeleted: { integerValue: String(incidentsDeleted) },
+    incidentsHasMore: {
+      booleanValue: retention.incidents?.hasMore === true,
+    },
+    /* Durasi tiap fase (P-06/K4): "analytics" + satu entri per
+     * koleksi retensi — dipakai watcher mendeteksi koleksi yang
+     * melambat. */
+    phaseMs: {
+      mapValue: {
+        fields: Object.fromEntries(
+          Object.entries(s.phaseMs || {}).map(([k, v]) => [
+            k,
+            { integerValue: String(Number(v) || 0) },
+          ]),
+        ),
+      },
+    },
     /* Pemicu run ini (P-05) — lihat buildCronRunRecord. */
     trigger: { stringValue: s.trigger || "" },
     error: { stringValue: typeof s.error === "string" ? s.error : "" },
@@ -603,6 +717,10 @@ export function buildDigestRunRecord(
     pushFailed: { integerValue: String(s.pushFailed || 0) },
     pushPruned: { integerValue: String(s.pushPruned || 0) },
     pushTruncated: { booleanValue: s.pushTruncated === true },
+    /* Konteks digest push (P-06/P2) — lihat buildCronRunRecord. */
+    pushTotal: { integerValue: String(s.pushTotal || 0) },
+    pushHasMore: { booleanValue: s.pushHasMore === true },
+    pushMalformed: { integerValue: String(s.pushMalformed || 0) },
     pushedMarked: { integerValue: String(s.pushedMarked || 0) },
     pushedFailed: { integerValue: String(s.pushedFailed || 0) },
     trigger: { stringValue: s.trigger || "" },
