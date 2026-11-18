@@ -919,6 +919,118 @@ describe("buildDigestRunRecord konteks push (P-06/P2)", () => {
   });
 });
 
+describe("konteks push P-07 di heartbeat recheck + digest", () => {
+  it("buildCronRunRecord: pushConfigError/pushPages/pushStaleKey/pushUnknownKey diteruskan", () => {
+    const record = buildCronRunRecord(
+      {
+        push: "failed",
+        pushConfigError: true,
+        pushPages: 2,
+        pushStaleKey: 7,
+        pushUnknownKey: 3,
+      },
+      { date: "2026-11-18", startedAt: 1000, finishedAt: 2000 },
+    );
+    assert.equal(record.pushConfigError.booleanValue, true);
+    assert.equal(record.pushPages.integerValue, "2");
+    assert.equal(record.pushStaleKey.integerValue, "7");
+    assert.equal(record.pushUnknownKey.integerValue, "3");
+  });
+
+  it("buildCronRunRecord tanpa ringkasan: field push P-07 default aman", () => {
+    const record = buildCronRunRecord(null, {
+      date: "2026-11-18",
+      startedAt: 1000,
+      finishedAt: 1000,
+    });
+    assert.equal(record.pushConfigError.booleanValue, false);
+    assert.equal(record.pushPages.integerValue, "0");
+    assert.equal(record.pushStaleKey.integerValue, "0");
+    assert.equal(record.pushUnknownKey.integerValue, "0");
+  });
+
+  it("buildDigestRunRecord: field push P-07 diteruskan", () => {
+    const record = buildDigestRunRecord(
+      {
+        push: "sent",
+        pushConfigError: false,
+        pushPages: 1,
+        pushStaleKey: 0,
+        pushUnknownKey: 11,
+      },
+      { date: "2026-11-18", startedAt: 1000, finishedAt: 2000 },
+    );
+    assert.equal(record.pushConfigError.booleanValue, false);
+    assert.equal(record.pushPages.integerValue, "1");
+    assert.equal(record.pushStaleKey.integerValue, "0");
+    assert.equal(record.pushUnknownKey.integerValue, "11");
+  });
+});
+
+describe("buildCleanupRunRecord pembersihan langganan push (P-07/K3)", () => {
+  it("hitungan pembersihan diteruskan + cleaned masuk total deleted", () => {
+    const record = buildCleanupRunRecord(
+      {
+        analytics: { deleted: 1, hasMore: false },
+        retention: {
+          alerts: { deleted: 2, hasMore: false },
+          push_subscriptions: {
+            deleted: 3,
+            hasMore: true,
+            examined: 10,
+            malformed: 3,
+            cleaned: 3,
+            failed: 0,
+          },
+        },
+      },
+      { date: "2026-11-23", startedAt: 1000, finishedAt: 2000 },
+    );
+    assert.equal(record.deleted.integerValue, "6");
+    assert.equal(record.pushCleanupExamined.integerValue, "10");
+    assert.equal(record.pushCleanupMalformed.integerValue, "3");
+    assert.equal(record.pushCleanupCleaned.integerValue, "3");
+    assert.equal(record.pushCleanupFailed.integerValue, "0");
+    assert.equal(record.pushCleanupHasMore.booleanValue, true);
+    assert.equal(record.pushCleanupSkipped.booleanValue, false);
+    assert.equal(record.pushCleanupSkipReason.stringValue, "");
+  });
+
+  it("fase dilewati (flag mati): skipped + alasan tercatat, total tidak berubah", () => {
+    const record = buildCleanupRunRecord(
+      {
+        analytics: { deleted: 1, hasMore: false },
+        retention: {
+          push_subscriptions: {
+            deleted: 0,
+            hasMore: false,
+            skipped: true,
+            skipReason: "flag-mati",
+          },
+        },
+      },
+      { date: "2026-11-23", startedAt: 1000, finishedAt: 2000 },
+    );
+    assert.equal(record.deleted.integerValue, "1");
+    assert.equal(record.pushCleanupSkipped.booleanValue, true);
+    assert.equal(record.pushCleanupSkipReason.stringValue, "flag-mati");
+    assert.equal(record.pushCleanupCleaned.integerValue, "0");
+  });
+
+  it("tanpa entri push_subscriptions: field default aman", () => {
+    const record = buildCleanupRunRecord(
+      {
+        analytics: { deleted: 0, hasMore: false },
+        retention: {},
+      },
+      { date: "2026-11-23", startedAt: 1000, finishedAt: 2000 },
+    );
+    assert.equal(record.pushCleanupExamined.integerValue, "0");
+    assert.equal(record.pushCleanupSkipped.booleanValue, false);
+    assert.equal(record.pushCleanupSkipReason.stringValue, "");
+  });
+});
+
 describe("buildCleanupRunRecord phaseMs (P-06/K4)", () => {
   it("durasi tiap fase masuk mapValue", () => {
     const record = buildCleanupRunRecord(

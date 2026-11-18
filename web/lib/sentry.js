@@ -91,6 +91,10 @@ async function loadSentry() {
 export async function sentrySink(event) {
   try {
     if (!event || typeof event.code !== "string") return false;
+    /* P-07: kejadian level "info" (mis. progres per halaman
+     * digest) adalah kabar rutin, bukan masalah — tidak pernah
+     * menjadi exception Sentry. */
+    if (event.level === "info") return false;
     const now = Date.now();
     const last = lastSentAt.get(event.code) || 0;
     if (now - last < SENTRY_DEDUP_MS) return false;

@@ -21,10 +21,49 @@
 
 const FETCH_TIMEOUT_MS = 15_000;
 
+/* Kunci localStorage untuk kunci publik VAPID yang dipakai saat
+ * subscribe terakhir (P-07/K5 — deteksi rotasi kunci). Nilainya
+ * adalah kunci publik itu sendiri: bukan rahasia (kunci publik
+ * memang dibagikan ke browser), yang dibandingkan hanya
+ * kesamaannya dengan kunci publik build saat ini. */
+export const VAPID_KEY_STORAGE_KEY = "karir-vapid-public-key";
+
 /* Kunci publik VAPID dari env build (bukan rahasia: kunci ini
  * memang dibagikan ke browser). */
 function vapidPublicKey() {
   return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+}
+
+/* Baca kunci VAPID yang dipakai saat subscribe terakhir (""
+ * bila belum pernah subscribe / storage tidak tersedia). */
+export function readStoredVapidKey() {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return "";
+    return window.localStorage.getItem(VAPID_KEY_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeVapidKey(publicKey) {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(VAPID_KEY_STORAGE_KEY, publicKey);
+    }
+  } catch {
+    /* Abaikan: storage penuh/diblokir — deteksi basi tidak jalan,
+     * subscribe tetap jalan. */
+  }
+}
+
+function clearStoredVapidKey() {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.removeItem(VAPID_KEY_STORAGE_KEY);
+    }
+  } catch {
+    /* Abaikan. */
+  }
 }
 
 /* Ubah string base64url menjadi Uint8Array untuk
@@ -56,7 +95,16 @@ export function isPushSupported() {
  * - "unsupported": browser tidak mendukung push.
  * - "denied": izin notifikasi ditolak di browser (prompt ulang
  *   tidak diizinkan browser).
- * - "active": izin diberikan dan ada langganan push aktif.
+ * - "active": izin diberikan dan ada langganan push aktif yang
+ *   kuncinya masih sama dengan kunci publik build saat ini.
+ * - "stale-key" (P-07/K5): ada langganan aktif, tetapi kunci VAPID
+ *   yang dipakai saat subscribe berbeda dengan kunci publik build
+ *   saat ini — server sudah merotasi kunci dan langganan ini tidak
+ *   akan menerima digest lagi sampai subscribe ulang. Langganan
+ *   lama (sebelum P-07, tanpa kunci tersimpan) TIDAK dianggap
+ *   basi — tidak ada bukti rotasi, dan menandai semua langganan
+ *   lama sebagai basi akan membanjiri pengguna dengan permintaan
+ *   subscribe ulang yang tidak perlu.
  * - "inactive": selain itu (izin belum diputuskan, atau izin
  *   diberikan tapi belum berlangganan).
  * Hanya MEMBACA registrasi yang sudah ada; tidak mendaftarkan
@@ -69,7 +117,13 @@ export async function getPushStatus() {
     const registration = await navigator.serviceWorker.getRegistration();
     if (!registration) return "inactive";
     const subscription = await registration.pushManager.getSubscription();
-    return subscription ? "active" : "inactive";
+    if (!subscription) return "inactive";
+    const storedKey = readStoredVapidKey();
+    const currentKey = vapidPublicKey();
+    if (storedKey && currentKey && storedKey !== currentKey) {
+      return "stale-key";
+    }
+    return "active";
   } catch {
     return "inactive";
   }
@@ -181,7 +235,12 @@ export async function subscribePush() {
     if (err && err.name === "AbortError") return { ok: false, code: "gagal" };
     return { ok: false, code: "offline" };
   }
-  if (result.ok) return { ok: true, code: "ok" };
+  if (result.ok) {
+    /* Simpan kunci yang dipakai subscribe ini (P-07/K5) supaya
+     * rotasi kunci berikutnya terdeteksi getPushStatus. */
+    storeVapidKey(publicKey);
+    return { ok: true, code: "ok" };
+  }
   /* Server menolak / gagal menyimpan: batalkan langganan browser
    * supaya status tidak bohong ("aktif" padahal server tidak punya
    * catatannya). Pengguna bisa menekan tombol lagi untuk mencoba. */
@@ -218,6 +277,9 @@ export async function unsubscribePush() {
   } catch {
     return { ok: false, code: "gagal" };
   }
+  /* Langganan browser sudah tidak ada: kunci tersimpan ikut
+   * dibersihkan supaya tidak membingungkan subscribe berikut. */
+  clearStoredVapidKey();
   /* Hapus di server (best-effort): butuh ID token; bila tidak
    * ada akun yang masuk, lewati — dokumen server akan terhapus
    * sendiri saat kirim mendapat 410. */
@@ -238,4 +300,17 @@ export async function unsubscribePush() {
     /* Abaikan: unsubscribe lokal sudah berhasil. */
   }
   return { ok: true, code: "ok" };
+}
+
+/* Subscribe ulang sesudah rotasi kunci VAPID (P-07/K5): batalkan
+ * langganan browser lama (yang terikat kunci lama), lalu subscribe
+ * baru dengan kunci saat ini. Dipanggil dari ketukan tombol
+ * "Aktifkan ulang notifikasi" di /pengaturan — izin sudah
+ * diberikan, jadi tidak ada prompt izin baru. Mengembalikan kode
+ * yang sama dengan subscribePush. */
+export async function resubscribePush() {
+  if (!isPushSupported()) return { ok: false, code: "tidak-didukung" };
+  const off = await unsubscribePush();
+  if (!off.ok) return off;
+  return subscribePush();
 }

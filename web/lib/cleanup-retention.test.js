@@ -59,6 +59,25 @@ const oldDocs = {
 };
 /* Tulis batchWrite yang ditangkap mock. */
 const deletedNames = [];
+/* Dokumen langganan push tiruan untuk fase pembersihan malformed
+ * (P-07/K3) + mode daftarnya: "ok" | "fail". */
+let pushDocs = [];
+let pushListMode = "ok";
+function pushDocBaik(id) {
+  const p256dh = Buffer.alloc(65);
+  p256dh[0] = 0x04;
+  p256dh[1] = 0xab;
+  const auth = Buffer.alloc(16, 0x11);
+  return {
+    name: `${FS_BASE}/push_subscriptions/${id}`,
+    fields: {
+      uid: { stringValue: "uid-uji" },
+      endpoint: { stringValue: `https://example.com/push/${id}` },
+      p256dh: { stringValue: p256dh.toString("base64url") },
+      auth: { stringValue: auth.toString("base64url") },
+    },
+  };
+}
 /* Tulis heartbeat cron-runs yang ditangkap mock (S8/C-02). */
 const heartbeatWrites = [];
 /* Bila true, tulis heartbeat dijawab 500 (uji best-effort). */
@@ -134,6 +153,18 @@ globalThis.fetch = async (url, options = {}) => {
     }
     return mockResponse({ ok: true, status: 200, body: {} });
   }
+  /* Daftar langganan push (P-07/K3): satu halaman, tanpa
+   * nextPageToken. */
+  if (u.includes("/push_subscriptions")) {
+    if (pushListMode === "fail") {
+      return mockResponse({ ok: false, status: 500 });
+    }
+    return mockResponse({
+      ok: true,
+      status: 200,
+      body: { documents: pushDocs },
+    });
+  }
   if (u.includes("/cron-runs/")) {
     let body = null;
     try {
@@ -187,10 +218,13 @@ beforeEach(() => {
   lockMode = "ok";
   lockDoc = null;
   lockCalls.length = 0;
+  pushDocs = [];
+  pushListMode = "ok";
   resetServiceAccountTokenCache();
   process.env.CRON_SECRET = "rahasia-cron-uji-w1g6-bukan-asli";
   process.env.FIREBASE_SERVICE_ACCOUNT = SA_JSON;
   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "proyek-uji";
+  delete process.env.PUSH_MALFORMED_CLEANUP_ENABLED;
   delete process.env.QSTASH_CURRENT_SIGNING_KEY;
   delete process.env.QSTASH_NEXT_SIGNING_KEY;
 });
@@ -617,6 +651,85 @@ describe("GET /api/cron/cleanup (FIN-08)", () => {
     assert.equal(body.heartbeatWritten, false);
     assert.equal(body.retention.rate_limits.deleted, 2);
     assert.equal(heartbeatWrites.length, 1);
+  });
+});
+
+describe("pembersihan langganan push malformed di route cleanup (P-07/K3)", () => {
+  it("flag mati (default): fase dilewati, dicatat skipped di balasan + heartbeat", async () => {
+    pushDocs = [pushDocBaik("baik-1")];
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.retention.push_subscriptions.skipped, true);
+    assert.equal(body.retention.push_subscriptions.skipReason, "flag-mati");
+    assert.equal(body.retention.push_subscriptions.cleaned, 0);
+    assert.equal(body.retention.push_subscriptions.hasMore, false);
+    /* Tidak ada hapus push walau dokumennya ada. */
+    assert.equal(
+      deletedNames.some((n) => n.includes("/push_subscriptions/")),
+      false,
+    );
+    assert.equal(heartbeatWrites.length, 1);
+    const fields = heartbeatWrites[0].body.fields;
+    assert.equal(fields.pushCleanupSkipped.booleanValue, true);
+    assert.equal(fields.pushCleanupSkipReason.stringValue, "flag-mati");
+    assert.equal(fields.pushCleanupCleaned.integerValue, "0");
+    assert.equal(fields.deleted.integerValue, "6");
+  });
+
+  it("flag nyala: dokumen malformed dihapus, yang baik dipertahankan, hitungan di heartbeat", async () => {
+    process.env.PUSH_MALFORMED_CLEANUP_ENABLED = "1";
+    const buruk = pushDocBaik("buruk-1");
+    buruk.fields.endpoint = { stringValue: "http://example.com/push" };
+    pushDocs = [pushDocBaik("baik-1"), buruk];
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    const push = body.retention.push_subscriptions;
+    assert.equal(push.examined, 2);
+    assert.equal(push.malformed, 1);
+    assert.equal(push.cleaned, 1);
+    assert.equal(push.deleted, 1);
+    assert.equal(push.failed, 0);
+    assert.equal(push.hasMore, false);
+    assert.equal(push.skipped, undefined);
+    assert.deepEqual(push.reasons, { endpoint: 1, p256dh: 0, auth: 0 });
+    assert.ok(
+      deletedNames.includes(`${FS_BASE}/push_subscriptions/buruk-1`),
+    );
+    assert.equal(
+      deletedNames.includes(`${FS_BASE}/push_subscriptions/baik-1`),
+      false,
+    );
+    const fields = heartbeatWrites[0].body.fields;
+    assert.equal(fields.pushCleanupExamined.integerValue, "2");
+    assert.equal(fields.pushCleanupMalformed.integerValue, "1");
+    assert.equal(fields.pushCleanupCleaned.integerValue, "1");
+    assert.equal(fields.pushCleanupSkipped.booleanValue, false);
+    /* Total deleted ikut menghitung hapus push (6 retensi + 1). */
+    assert.equal(fields.deleted.integerValue, "7");
+    /* Durasi fase tercatat. */
+    assert.equal(
+      typeof fields.phaseMs.mapValue.fields.push_subscriptions
+        ?.integerValue,
+      "string",
+    );
+  });
+
+  it("flag nyala + daftar gagal: 500 + heartbeat failed + hasil parsial", async () => {
+    process.env.PUSH_MALFORMED_CLEANUP_ENABLED = "1";
+    pushListMode = "fail";
+    const res = await getCleanup(cleanupRequest());
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.equal(body.error, "Pembersihan retensi gagal.");
+    /* Hasil parsial: retensi yang sudah selesai ikut di balasan. */
+    assert.equal(body.retention.rate_limits.deleted, 2);
+    assert.equal(body.retention.push_subscriptions.listFailed, true);
+    assert.equal(heartbeatWrites.length, 1);
+    const fields = heartbeatWrites[0].body.fields;
+    assert.equal(fields.status.stringValue, "failed");
+    assert.match(fields.error.stringValue, /langganan push/);
   });
 });
 

@@ -10,7 +10,14 @@
  * DIHAPUS supaya limiter bersama memakai store memori
  * (deterministik, tanpa jaringan). Dijalankan dengan:
  *   node --test lib/push-subscribe.test.js
- */
+ *
+ * P-07/K4: mock Firestore di sini STATEFUL dan meniru semantik
+ * atomik Firestore yang dipakai route — pembuatan dokumen
+ * POST ?documentId (satu pemenang, sisanya 409) dan CAS PATCH /
+ * DELETE dengan prasyarat updateTime (412 bila stempel tidak
+ * cocok) — supaya tes konkurensi (dua subscribe bersamaan)
+ * membuktikan satu dokumen yang konsisten, bukan hanya dua
+ * balasan 200. */
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -105,18 +112,37 @@ function validSubscription(endpoint = ENDPOINT_A) {
   return { endpoint, keys: validKeys() };
 }
 
-/* Dokumen langganan yang "ada" di Firestore tiruan: docId -> UID pemilik. */
-let docsById = {};
+/* Dokumen langganan yang "ada" di Firestore tiruan: docId ->
+ * { fields, updateTime }. Tulis apa pun menaikkan updateTime
+ * (stempel server tiruan, monoton naik) supaya prasyarat CAS
+ * bisa diuji: PATCH/DELETE dengan updateTime basi dijawab 412. */
+let docs = {};
+/* Panggilan buat dokumen atomik yang ditangkap mock (url + body). */
+let createCalls = [];
 /* Tulis PATCH yang ditangkap mock (url + body). */
 let patchCalls = [];
-/* Hapus DELETE yang ditangkap mock (url). */
+/* Hapus DELETE yang ditangkap mock (url) — hanya hapus yang
+ * benar-benar jalan (bukan percobaan yang ditolak 412). */
 let deleteCalls = [];
+/* Jumlah percobaan DELETE (termasuk yang ditolak 412). */
+let deleteAttempts = 0;
+/* Bila true, POST buat dokumen dijawab 500. */
+let createFail = false;
 /* Bila true, PATCH dijawab 500. */
 let patchFail = false;
 /* Bila true, GET dokumen dijawab 500. */
 let getFail = false;
 /* Bila true, DELETE dijawab 500. */
 let deleteFail = false;
+/* Bila true, DELETE pertama menukar pemilik dokumen menjadi UID_B
+ * lalu menjawab 412 (simulasi dokumen berubah di tengah jalan). */
+let deleteFlipOwner = false;
+
+let updateCounter = 0;
+function nextUpdateTime() {
+  updateCounter += 1;
+  return new Date(Date.now() + updateCounter).toISOString();
+}
 
 function mockResponse({ ok, status, body }) {
   return {
@@ -126,6 +152,13 @@ function mockResponse({ ok, status, body }) {
     json: async () => body ?? {},
     text: async () => JSON.stringify(body ?? {}),
   };
+}
+
+function docName(docId) {
+  return (
+    `projects/proyek-uji/databases/(default)/documents/` +
+    `push_subscriptions/${docId}`
+  );
 }
 
 globalThis.fetch = async (url, options = {}) => {
@@ -141,28 +174,96 @@ globalThis.fetch = async (url, options = {}) => {
       body: { access_token: "token-sa-uji", expires_in: 3600 },
     });
   }
+  /* POST buat dokumen atomik: /push_subscriptions?documentId=X.
+   * Cabang ini tidak memakai await sebelum cek + tulis, jadi
+   * bersifat atomik di event loop JS — sama seperti Firestore:
+   * satu pemenang (200), sisanya 409. */
+  if (u.includes("/push_subscriptions?") && method === "POST") {
+    if (createFail) return mockResponse({ ok: false, status: 500 });
+    const docId = new URL(u).searchParams.get("documentId");
+    if (docs[docId]) return mockResponse({ ok: false, status: 409 });
+    const body = JSON.parse(options.body || "{}");
+    createCalls.push({ url: u, body });
+    const updateTime = nextUpdateTime();
+    docs[docId] = { fields: body.fields || {}, updateTime };
+    return mockResponse({
+      ok: true,
+      status: 200,
+      body: { name: docName(docId), fields: body.fields, updateTime },
+    });
+  }
   if (u.includes("/push_subscriptions/")) {
     const docId = u.split("/push_subscriptions/")[1].split("?")[0];
     if (method === "PATCH") {
       if (patchFail) return mockResponse({ ok: false, status: 500 });
-      patchCalls.push({ url: u, body: JSON.parse(options.body || "{}") });
-      return mockResponse({ ok: true, status: 200, body: {} });
+      /* CAS: prasyarat currentDocument.updateTime harus cocok
+       * dengan stempel tersimpan bila disertakan. */
+      const precondition = new URL(u).searchParams.get(
+        "currentDocument.updateTime",
+      );
+      const existing = docs[docId];
+      if (
+        precondition &&
+        (!existing || existing.updateTime !== precondition)
+      ) {
+        return mockResponse({ ok: false, status: 412 });
+      }
+      const body = JSON.parse(options.body || "{}");
+      patchCalls.push({ url: u, body });
+      const updateTime = nextUpdateTime();
+      /* PATCH tanpa updateMask menimpa seluruh dokumen; dengan
+       * updateMask hanya field yang disebut — mock menyederhanakan
+       * dengan menggabung field baru ke field lama (cukup untuk
+       * tes klaim dan refresh UID). */
+      docs[docId] = {
+        fields: { ...(existing ? existing.fields : {}), ...(body.fields || {}) },
+        updateTime,
+      };
+      return mockResponse({ ok: true, status: 200, body: { updateTime } });
     }
     if (method === "DELETE") {
+      deleteAttempts += 1;
       if (deleteFail) return mockResponse({ ok: false, status: 500 });
+      if (deleteFlipOwner) {
+        deleteFlipOwner = false;
+        const existing = docs[docId];
+        if (existing) {
+          docs[docId] = {
+            fields: {
+              ...existing.fields,
+              uid: { stringValue: UID_B },
+            },
+            updateTime: nextUpdateTime(),
+          };
+        }
+        return mockResponse({ ok: false, status: 412 });
+      }
+      const precondition = new URL(u).searchParams.get(
+        "currentDocument.updateTime",
+      );
+      const existing = docs[docId];
+      if (
+        precondition &&
+        (!existing || existing.updateTime !== precondition)
+      ) {
+        return mockResponse({ ok: false, status: 412 });
+      }
+      if (!existing) return mockResponse({ ok: false, status: 404 });
       deleteCalls.push(u);
+      delete docs[docId];
       return mockResponse({ ok: true, status: 200, body: {} });
     }
     /* GET satu dokumen. */
     if (getFail) return mockResponse({ ok: false, status: 500 });
-    const ownerUid = docsById[docId];
-    if (!ownerUid) return mockResponse({ ok: false, status: 404 });
+    const existing = docs[docId];
+    if (!existing) return mockResponse({ ok: false, status: 404 });
     return mockResponse({
       ok: true,
       status: 200,
       body: {
-        name: `projects/proyek-uji/databases/(default)/documents/push_subscriptions/${docId}`,
-        fields: { uid: { stringValue: ownerUid } },
+        name: docName(docId),
+        fields: existing.fields,
+        updateTime: existing.updateTime,
       },
     });
   }
@@ -170,15 +271,26 @@ globalThis.fetch = async (url, options = {}) => {
 };
 
 beforeEach(() => {
-  docsById = {
-    [subscriptionDocId(ENDPOINT_A)]: UID_A,
-    [subscriptionDocId(ENDPOINT_B)]: UID_B,
+  docs = {
+    [subscriptionDocId(ENDPOINT_A)]: {
+      fields: { uid: { stringValue: UID_A } },
+      updateTime: "2026-11-18T00:00:00.000Z",
+    },
+    [subscriptionDocId(ENDPOINT_B)]: {
+      fields: { uid: { stringValue: UID_B } },
+      updateTime: "2026-11-18T00:00:00.000Z",
+    },
   };
+  createCalls = [];
   patchCalls = [];
   deleteCalls = [];
+  deleteAttempts = 0;
+  createFail = false;
   patchFail = false;
   getFail = false;
   deleteFail = false;
+  deleteFlipOwner = false;
+  updateCounter = 0;
   resetSharedLimiter();
   process.env.FIREBASE_SERVICE_ACCOUNT = SA_JSON;
   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "proyek-uji";
@@ -427,7 +539,7 @@ describe("POST /api/push/subscribe (T10)", () => {
     assert.equal(body.error.includes(UID_A), false);
   });
 
-  it("endpoint baru (belum ada dokumen): 200 + tulis", async () => {
+  it("endpoint baru (belum ada dokumen): 200 + dibuat lewat POST atomik, tanpa PATCH", async () => {
     const token = signJwt({ uid: UID_A });
     const res = await postSubscribe(
       subscribeRequest({
@@ -437,8 +549,21 @@ describe("POST /api/push/subscribe (T10)", () => {
     );
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { ok: true, subscribed: true });
-    assert.equal(patchCalls.length, 1);
-    assert.equal(patchCalls[0].body.fields.uid.stringValue, UID_A);
+    /* P-07/K4: dokumen baru dibuat lewat POST ?documentId
+     * (atomik), bukan PATCH. */
+    assert.equal(createCalls.length, 1);
+    assert.equal(patchCalls.length, 0);
+    assert.equal(createCalls[0].body.fields.uid.stringValue, UID_A);
+    assert.ok(
+      createCalls[0].url.includes(
+        `documentId=${subscriptionDocId(ENDPOINT_GHOST)}`,
+      ),
+    );
+    /* Dokumennya benar-benar ada di store tiruan. */
+    assert.equal(
+      docs[subscriptionDocId(ENDPOINT_GHOST)].fields.uid.stringValue,
+      UID_A,
+    );
   });
 
   it("subscribe ulang milik sendiri: tetap 200 idempotent (RENDAH-2)", async () => {
@@ -471,6 +596,173 @@ describe("POST /api/push/subscribe (T10)", () => {
     const body = await res.json();
     assert.equal(body.error.includes(UID_A), false);
   });
+
+  it("buat dokumen gagal (bukan 409): 500 generik, tanpa tulis", async () => {
+    createFail = true;
+    const token = signJwt({ uid: UID_A });
+    const res = await postSubscribe(
+      subscribeRequest({
+        token,
+        body: { subscription: validSubscription(ENDPOINT_GHOST) },
+      }),
+    );
+    assert.equal(res.status, 500);
+    assert.equal(createCalls.length, 0);
+    assert.equal(docs[subscriptionDocId(ENDPOINT_GHOST)], undefined);
+  });
+});
+
+describe("POST /api/push/subscribe — atomik + konkurensi (P-07/K4, P5)", () => {
+  const ENDPOINT_YATIM = "https://fcm.googleapis.com/fcm/send/langganan-yatim";
+  const ENDPOINT_RACE = "https://fcm.googleapis.com/fcm/send/langganan-balapan";
+
+  function seedYatim() {
+    docs[subscriptionDocId(ENDPOINT_YATIM)] = {
+      /* Dokumen yatim: field lengkap KECUALI uid (mis. dibuat
+       * sebelum field uid ada). */
+      fields: {
+        endpoint: { stringValue: ENDPOINT_YATIM },
+        p256dh: { stringValue: validKeys().p256dh },
+        auth: { stringValue: validKeys().auth },
+      },
+      updateTime: "2026-11-18T00:00:00.000Z",
+    };
+  }
+
+  it("dokumen tanpa UID bisa diklaim: 200, bukan 409 (P5)", async () => {
+    seedYatim();
+    const token = signJwt({ uid: UID_A });
+    const res = await postSubscribe(
+      subscribeRequest({
+        token,
+        body: { subscription: validSubscription(ENDPOINT_YATIM) },
+      }),
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true, subscribed: true });
+    /* Klaim lewat CAS PATCH (bukan create — dokumen sudah ada). */
+    assert.equal(createCalls.length, 0);
+    assert.equal(patchCalls.length, 1);
+    assert.match(
+      patchCalls[0].url,
+      /currentDocument\.updateTime=2026-11-18T00%3A00%3A00\.000Z/,
+    );
+    assert.equal(
+      docs[subscriptionDocId(ENDPOINT_YATIM)].fields.uid.stringValue,
+      UID_A,
+    );
+  });
+
+  it("dua subscribe bersamaan, UID sama, endpoint baru: dua-duanya 200, SATU dokumen", async () => {
+    const token = signJwt({ uid: UID_A });
+    const [res1, res2] = await Promise.all([
+      postSubscribe(
+        subscribeRequest({
+          token,
+          body: { subscription: validSubscription(ENDPOINT_RACE) },
+        }),
+      ),
+      postSubscribe(
+        subscribeRequest({
+          token,
+          body: { subscription: validSubscription(ENDPOINT_RACE) },
+        }),
+      ),
+    ]);
+    assert.equal(res1.status, 200);
+    assert.equal(res2.status, 200);
+    /* Satu pemenang create atomik; yang kalah me-refresh milik
+     * sendiri lewat PATCH — tetap satu dokumen, satu pemilik. */
+    assert.equal(createCalls.length, 1);
+    assert.equal(patchCalls.length, 1);
+    const doc = docs[subscriptionDocId(ENDPOINT_RACE)];
+    assert.ok(doc);
+    assert.equal(doc.fields.uid.stringValue, UID_A);
+  });
+
+  it("dua subscribe bersamaan, UID berbeda, endpoint baru: satu 200, satu 409, SATU dokumen satu pemilik", async () => {
+    const tokenA = signJwt({ uid: UID_A });
+    const tokenB = signJwt({ uid: UID_B });
+    const [resA, resB] = await Promise.all([
+      postSubscribe(
+        subscribeRequest({
+          token: tokenA,
+          body: { subscription: validSubscription(ENDPOINT_RACE) },
+        }),
+      ),
+      postSubscribe(
+        subscribeRequest({
+          token: tokenB,
+          body: { subscription: validSubscription(ENDPOINT_RACE) },
+        }),
+      ),
+    ]);
+    const statuses = [resA.status, resB.status].sort();
+    assert.deepEqual(statuses, [200, 409]);
+    assert.equal(createCalls.length, 1);
+    assert.equal(patchCalls.length, 0);
+    const doc = docs[subscriptionDocId(ENDPOINT_RACE)];
+    assert.ok(doc);
+    assert.ok(
+      doc.fields.uid.stringValue === UID_A ||
+        doc.fields.uid.stringValue === UID_B,
+    );
+  });
+
+  it("dua klaim bersamaan atas dokumen yatim, UID berbeda: satu 200, satu 409", async () => {
+    seedYatim();
+    const tokenA = signJwt({ uid: UID_A });
+    const tokenB = signJwt({ uid: UID_B });
+    const [resA, resB] = await Promise.all([
+      postSubscribe(
+        subscribeRequest({
+          token: tokenA,
+          body: { subscription: validSubscription(ENDPOINT_YATIM) },
+        }),
+      ),
+      postSubscribe(
+        subscribeRequest({
+          token: tokenB,
+          body: { subscription: validSubscription(ENDPOINT_YATIM) },
+        }),
+      ),
+    ]);
+    const statuses = [resA.status, resB.status].sort();
+    assert.deepEqual(statuses, [200, 409]);
+    /* Satu klaim CAS menang; yang kalah membaca ulang dan
+     * mendapat 409 — dokumen tetap satu, pemiliknya tunggal. */
+    const doc = docs[subscriptionDocId(ENDPOINT_YATIM)];
+    assert.ok(doc);
+    assert.ok(
+      doc.fields.uid.stringValue === UID_A ||
+        doc.fields.uid.stringValue === UID_B,
+    );
+  });
+
+  it("dua klaim bersamaan atas dokumen yatim, UID sama: dua-duanya 200", async () => {
+    seedYatim();
+    const token = signJwt({ uid: UID_A });
+    const [res1, res2] = await Promise.all([
+      postSubscribe(
+        subscribeRequest({
+          token,
+          body: { subscription: validSubscription(ENDPOINT_YATIM) },
+        }),
+      ),
+      postSubscribe(
+        subscribeRequest({
+          token,
+          body: { subscription: validSubscription(ENDPOINT_YATIM) },
+        }),
+      ),
+    ]);
+    assert.equal(res1.status, 200);
+    assert.equal(res2.status, 200);
+    assert.equal(
+      docs[subscriptionDocId(ENDPOINT_YATIM)].fields.uid.stringValue,
+      UID_A,
+    );
+  });
 });
 
 describe("DELETE /api/push/subscribe (T10)", () => {
@@ -490,11 +782,14 @@ describe("DELETE /api/push/subscribe (T10)", () => {
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { ok: true, subscribed: false });
     assert.equal(deleteCalls.length, 1);
+    /* URL DELETE kini membawa prasyarat updateTime (P-07/K4) —
+     * bandingkan path-nya saja. */
     assert.ok(
-      deleteCalls[0].endsWith(
-        `/push_subscriptions/${subscriptionDocId(ENDPOINT_A)}`,
-      ),
+      deleteCalls[0]
+        .split("?")[0]
+        .endsWith(`/push_subscriptions/${subscriptionDocId(ENDPOINT_A)}`),
     );
+    assert.match(deleteCalls[0], /currentDocument\.updateTime=/);
   });
 
   it("token pengguna A tidak bisa menghapus langganan pengguna B (200 yang sama, tanpa hapus)", async () => {
@@ -613,5 +908,51 @@ describe("DELETE /api/push/subscribe (T10)", () => {
       }),
     );
     assert.equal(res.status, 500);
+  });
+
+  it("dokumen yatim bisa dihapus pemegang endpoint: 200 + DELETE jalan (P-07/K4)", async () => {
+    const ENDPOINT_YATIM =
+      "https://fcm.googleapis.com/fcm/send/langganan-yatim-hapus";
+    docs[subscriptionDocId(ENDPOINT_YATIM)] = {
+      fields: {
+        endpoint: { stringValue: ENDPOINT_YATIM },
+        p256dh: { stringValue: validKeys().p256dh },
+        auth: { stringValue: validKeys().auth },
+      },
+      updateTime: "2026-11-18T00:00:00.000Z",
+    };
+    const token = signJwt({ uid: UID_A });
+    const res = await deleteSubscribe(
+      subscribeRequest({
+        token,
+        method: "DELETE",
+        body: { endpoint: ENDPOINT_YATIM },
+      }),
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true, subscribed: false });
+    assert.equal(deleteCalls.length, 1);
+    assert.equal(docs[subscriptionDocId(ENDPOINT_YATIM)], undefined);
+  });
+
+  it("dokumen berubah pemilik di tengah jalan: tidak terhapus, tetap 200 (P-07/K4)", async () => {
+    deleteFlipOwner = true;
+    const token = signJwt({ uid: UID_A });
+    const res = await deleteSubscribe(
+      subscribeRequest({
+        token,
+        method: "DELETE",
+        body: { endpoint: ENDPOINT_A },
+      }),
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true, subscribed: false });
+    /* Satu percobaan hapus ditolak 412; sesudah baca ulang,
+     * pemiliknya sudah B — tidak ada hapus yang jalan. */
+    assert.equal(deleteAttempts, 1);
+    assert.equal(deleteCalls.length, 0);
+    const doc = docs[subscriptionDocId(ENDPOINT_A)];
+    assert.ok(doc);
+    assert.equal(doc.fields.uid.stringValue, UID_B);
   });
 });

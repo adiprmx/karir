@@ -442,6 +442,9 @@ const DICT = {
     "settings.pushEnable": "Aktifkan notifikasi",
     "settings.pushDisable": "Matikan notifikasi",
     "settings.pushActive": "Notifikasi aktif di browser ini.",
+    "settings.pushStaleKey":
+      "Notifikasi perlu diaktifkan ulang supaya lowongan baru tetap sampai ke perangkat ini.",
+    "settings.pushReEnable": "Aktifkan ulang notifikasi",
     "settings.pushNeedSignIn":
       "Masuk dulu untuk mengaktifkan notifikasi.",
     "settings.pushUnsupported":
@@ -967,6 +970,9 @@ const DICT = {
     "settings.pushEnable": "Turn on notifications",
     "settings.pushDisable": "Turn off notifications",
     "settings.pushActive": "Notifications are on in this browser.",
+    "settings.pushStaleKey":
+      "Notifications need to be turned on again so new openings keep reaching this device.",
+    "settings.pushReEnable": "Turn notifications on again",
     "settings.pushNeedSignIn":
       "Sign in first to turn on notifications.",
     "settings.pushUnsupported":

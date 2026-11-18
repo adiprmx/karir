@@ -42,11 +42,15 @@
  *
  * Balasan: {status, alertsFound, alertsTotal, hasMore, push,
  * pushSent, pushFailed, pushPruned, pushTruncated, pushTotal,
- * pushHasMore, pushMalformed, pushedMarked, pushedFailed, trigger,
+ * pushHasMore, pushMalformed, pushConfigError, pushPages,
+ * pushStaleKey, pushUnknownKey, pushedMarked, pushedFailed, trigger,
  * heartbeatWritten} (200 bila run selesai,
  * 500 + error bila kueri alert gagal atau digest tidak terkirim
  * sama sekali — kunci dilepas failed supaya pemicu cadangan bisa
- * mencoba lagi). */
+ * mencoba lagi). `push` "none" berarti tidak ada alert yang belum
+ * pushed ATAU nol langganan (P-07/P3) — keduanya hasil normal,
+ * bukan kegagalan; alert ditandai pushed pada "none" karena
+ * tidak ada pelanggan yang perlu dikirimi ulang. */
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { authorizeCronRequest } from "@/lib/cron-auth";
@@ -213,6 +217,12 @@ async function runDigest(request) {
     pushTotal: 0,
     pushHasMore: false,
     pushMalformed: 0,
+    /* Konteks digest push (P-07): error konfigurasi VAPID, jumlah
+     * halaman daftar, langganan epoch kunci lama/tanpa sidik. */
+    pushConfigError: false,
+    pushPages: 0,
+    pushStaleKey: 0,
+    pushUnknownKey: 0,
     pushedMarked: 0,
     pushedFailed: 0,
     trigger: auth.trigger,
@@ -272,10 +282,19 @@ async function runDigest(request) {
     summary.pushTotal = pushResult.pushTotal;
     summary.pushHasMore = pushResult.pushHasMore;
     summary.pushMalformed = pushResult.pushMalformed;
+    summary.pushConfigError = pushResult.pushConfigError;
+    summary.pushPages = pushResult.pushPages;
+    summary.pushStaleKey = pushResult.pushStaleKey;
+    summary.pushUnknownKey = pushResult.pushUnknownKey;
     /* Penanda pushed — hanya bila digest terkirim penuh (tidak
      * terpotong): bila terpotong, sebagian langganan belum
-     * menerima dan run besok mencoba lagi. */
-    if (pushResult.push === "sent" && !pushResult.pushTruncated) {
+     * menerima dan run besok mencoba lagi. "none" ikut ditandai:
+     * nol langganan berarti tidak ada yang perlu dikirimi ulang
+     * (P-07/P3). */
+    if (
+      (pushResult.push === "sent" || pushResult.push === "none") &&
+      !pushResult.pushTruncated
+    ) {
       const marked = await markAlertsPushed({
         fsBase,
         token,

@@ -39,6 +39,7 @@ import {
 } from "@/app/analytics-track";
 import {
   getPushStatus,
+  resubscribePush,
   subscribePush,
   unsubscribePush,
 } from "@/app/push-client";
@@ -167,6 +168,9 @@ const DEFAULT_LABELS = {
   pushEnable: "Aktifkan notifikasi",
   pushDisable: "Matikan notifikasi",
   pushActive: "Notifikasi aktif di browser ini.",
+  pushStaleKey:
+    "Notifikasi perlu diaktifkan ulang supaya lowongan baru tetap sampai ke perangkat ini.",
+  pushReEnable: "Aktifkan ulang notifikasi",
   pushNeedSignIn: "Masuk dulu untuk mengaktifkan notifikasi.",
   pushUnsupported: "Browser ini tidak mendukung notifikasi.",
   pushDenied:
@@ -230,7 +234,9 @@ export default function Pengaturan() {
   const [accountMsg, setAccountMsg] = useState("");
   const [, setVerifyChecked] = useState(0);
   /* T10 (notifikasi web push): "memuat" | "unsupported" | "denied" |
-   * "active" | "inactive" (lihat app/push-client.js getPushStatus). */
+   * "active" | "stale-key" | "inactive" (lihat app/push-client.js
+   * getPushStatus; "stale-key" = kunci server sudah berganti dan
+   * langganan ini perlu diaktifkan ulang — P-07/K5). */
   const [pushStatus, setPushStatus] = useState("memuat");
   const [pushBusy, setPushBusy] = useState(false);
 
@@ -513,6 +519,27 @@ export default function Pengaturan() {
     setPushBusy(true);
     try {
       const result = await subscribePush();
+      const status = await getPushStatus().catch(() => "inactive");
+      setPushStatus(status);
+      if (result.ok) {
+        showToast(labels.pushEnabled);
+      } else if (result.code !== "ditolak") {
+        showToast(labels.pushFailed);
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  /* P-07/K5: aktifkan ulang sesudah kunci server berganti
+   * (status "stale-key") — pola yang sama dengan enablePush,
+   * memakai resubscribePush (batalkan langganan lama lalu
+   * subscribe baru dengan kunci saat ini). */
+  async function enablePushAgain() {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      const result = await resubscribePush();
       const status = await getPushStatus().catch(() => "inactive");
       setPushStatus(status);
       if (result.ok) {
@@ -869,6 +896,15 @@ export default function Pengaturan() {
               >
                 {pushBusy ? labels.pushBusy : labels.pushDisable}
               </button>
+            ) : user && pushStatus === "stale-key" ? (
+              <button
+                type="button"
+                className="btn small"
+                onClick={enablePushAgain}
+                disabled={pushBusy}
+              >
+                {pushBusy ? labels.pushBusy : labels.pushReEnable}
+              </button>
             ) : user && pushStatus === "inactive" ? (
               <button
                 type="button"
@@ -891,6 +927,8 @@ export default function Pengaturan() {
             <p className="hint">{labels.pushDenied}</p>
           ) : pushStatus === "active" ? (
             <p>{labels.pushActive}</p>
+          ) : pushStatus === "stale-key" ? (
+            <p>{labels.pushStaleKey}</p>
           ) : (
             <p className="hint">{labels.pushHint}</p>
           )}

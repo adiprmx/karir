@@ -155,6 +155,46 @@ Memberi token berumur 60 detik untuk `/api/index`. Responsnya `{ "token": "...",
 
 Satu event analitik pengunjung anonim (pageview, search, detail, portal_click, tracker_mark, filter, onboarding, report, channel_copy, share). IP mentah hanya dipakai untuk hash dan batas laju, lalu dibuang; yang disimpan hanya hash IP 64 heksa. Batas 30 permintaan per menit per hash IP (cakupan `analytics`); jawaban 429 berbentuk `{ "error": "Terlalu banyak permintaan. Coba lagi sebentar." }`. Jawaban 202 walau tulis ke Firestore gagal. Endpoint ini tidak menolak user agent otomatis karena ia alat ukur; request dengan user agent kosong atau berpola bot ditandai field `uaFlag` pada dokumen. Bila env `ANALYTICS_SALT` belum dipasang, event tidak disimpan dan jawabannya 200 `{ "skipped": true }`.
 
+## POST /api/push/subscribe
+
+Mendaftarkan langganan notifikasi push web milik pengguna yang
+masuk (dipakai halaman Pengaturan). Request wajib membawa
+header `Authorization: Bearer <ID token Firebase>` + body JSON
+`{ "subscription": { "endpoint", "keys": { "p256dh", "auth" } } }`;
+tanpa token yang valid jawabannya 401. UID peminta HANYA dari
+token terverifikasi — tidak ada parameter UID di body, jadi
+satu pengguna tidak bisa mendaftarkan langganan atas nama
+pengguna lain. Endpoint harus URL https maks 2000 karakter;
+`p256dh` harus 65 byte berawalan `0x04` dan `auth` 16 byte
+(sesudah decode base64url) — bila tidak, jawabannya 400.
+Batas laju 5/menit per hash IP (cakupan `push-subscribe`);
+selebihnya 429.
+
+Dokumen disimpan di `push_subscriptions` dengan id SHA-256
+endpoint, berisi `uid`, `endpoint`, `p256dh`, `auth`,
+`vapidKeyHash` (12 karakter awal SHA-256 kunci publik VAPID
+saat ini — sidik kunci untuk deteksi rotasi, P-07), `createdAt`,
+`updatedAt`. Sejak P-07, pembuatan memakai create atomik
+Firestore: dua permintaan bersamaan untuk endpoint yang sama
+hanya menghasilkan SATU dokumen yang konsisten. Bila endpoint
+sudah terdaftar atas UID lain, jawabannya 409 generik (tanpa
+membocorkan pemilik); bila terdaftar tanpa UID (dokumen lama),
+peminta bisa mengklaimnya lewat update CAS — dokumen tanpa UID
+tidak lagi terkunci 409. Bila sukses, jawabannya 200
+`{ "ok": true }`.
+
+## DELETE /api/push/subscribe
+
+Membatalkan langganan milik pengguna yang masuk. Request wajib
+membawa header `Authorization: Bearer <ID token Firebase>` +
+body JSON `{ "endpoint": "..." }`; tanpa token yang valid
+jawabannya 401. Dokumen yang hilang atau milik UID lain
+dijawab 200 tanpa penghapusan (tanpa membocorkan pemilik).
+Dokumen tanpa UID boleh dihapus pemegang endpointnya. Sejak
+P-07, penghapusan memakai prasyarat `updateTime` (CAS) supaya
+dokumen yang berpindah pemilik di tengah jalan tidak ikut
+terhapus. Jawaban sukses: 200 `{ "ok": true }`.
+
 ## Batas laju
 
 Tiap rute baca punya ember batas lajunya sendiri lewat `scopedKey()` (`web/lib/rate-limit.js`, BE-03), semuanya memakai satu limiter bersama (`getSharedLimiter()`). Batas dihitung per hash IP harian, per menit:
@@ -220,10 +260,10 @@ Cron adalah penulis, jadi ia tidak boleh berjalan dari seed: bila Firestore tida
 Bila cron berjalan, jawabannya 200 dengan bentuk:
 
 ```json
-{ "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "openSkipped": 0, "truncated": false, "alerts": 0, "alertsFailed": 0, "telegram": "none", "telegramMarked": 0, "alertPhaseTruncated": false, "snapshotKnown": true, "snapshotWritten": true, "queue": { "urgent": 1, "open": 237, "dead": 55, "total": 293 }, "markerBumped": true, "heartbeatWritten": true }
+{ "checked": 88, "changed": 3, "updated": 85, "skipped": 0, "openSkipped": 0, "truncated": false, "alerts": 0, "alertsFailed": 0, "telegram": "none", "telegramMarked": 0, "alertPhaseTruncated": false, "snapshotKnown": true, "snapshotWritten": true, "queue": { "urgent": 1, "open": 237, "dead": 55, "total": 293 }, "markerBumped": true, "heartbeatWritten": true, "push": "sent", "pushSent": 3, "pushFailed": 0, "pushPruned": 0, "pushTruncated": false, "pushTotal": 3, "pushHasMore": false, "pushMalformed": 0, "pushConfigError": false, "pushPages": 1, "pushStaleKey": 0, "pushUnknownKey": 0 }
 ```
 
-`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `openSkipped` adalah perusahaan tier mendesak/terbuka yang tidak sempat dicek karena terpotong, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, `alertsFailed` adalah alert yang gagal ditulis, `telegram` bernilai `sent`, `failed`, `skipped-no-token`, atau `none` (tidak ada alert baru), `telegramMarked` adalah alert yang berhasil ditandai terkirim sesudah kirim langsung, `alertPhaseTruncated` menandakan fase alert kehabisan anggarannya sendiri (15 detik), `snapshotKnown`/`snapshotWritten` menandakan snapshot target run sebelumnya dibaca/ditulis, `queue` adalah ukuran antrean per tier (`urgent` + `open` + `dead` = `total`), `markerBumped` menandakan marker kesegaran `meta/lastChange` dinaikkan di run ini (true bila ada status perusahaan yang berubah), dan `heartbeatWritten` menandakan ringkasan run tercatat di `cron-runs/{tanggal-WIB}`. Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
+`checked` adalah portal yang sempat dicek, `changed` adalah status yang berbalik dan tercatat di koleksi `changes`, `updated` adalah yang hanya diperbarui tanggal ceknya, `skipped` adalah yang tidak sempat dicek atau tidak punya tautan, `openSkipped` adalah perusahaan tier mendesak/terbuka yang tidak sempat dicek karena terpotong, `truncated` menandakan waktu 50 detik habis sebelum antrean selesai, `alerts` adalah jumlah alert baru yang dibuat di run ini, `alertsFailed` adalah alert yang gagal ditulis, `telegram` bernilai `sent`, `failed`, `skipped-no-token`, atau `none` (tidak ada alert baru), `telegramMarked` adalah alert yang berhasil ditandai terkirim sesudah kirim langsung, `alertPhaseTruncated` menandakan fase alert kehabisan anggarannya sendiri (15 detik), `snapshotKnown`/`snapshotWritten` menandakan snapshot target run sebelumnya dibaca/ditulis, `queue` adalah ukuran antrean per tier (`urgent` + `open` + `dead` = `total`), `markerBumped` menandakan marker kesegaran `meta/lastChange` dinaikkan di run ini (true bila ada status perusahaan yang berubah), dan `heartbeatWritten` menandakan ringkasan run tercatat di `cron-runs/{tanggal-WIB}`. Field push (P-06 + P-07): `push` bernilai `sent`, `failed`, `none` (tidak ada alert yang belum pushed ATAU nol langganan — sejak P-07 nol langganan tidak pernah dicatat `sent`), atau `skipped-no-vapid`; `pushTotal`/`pushSent`/`pushFailed`/`pushPruned` adalah langganan dibaca/terkirim/gagal/dihapus karena 404-410; `pushHasMore` + `pushTruncated` menandakan run terpotong (alert tidak ditandai pushed); `pushMalformed` adalah dokumen dilewati karena bentuknya tidak bisa dikirim; `pushPages` adalah halaman langganan yang dibaca (paginasi 500/halaman, tanpa batas total); `pushConfigError` menandakan kunci VAPID tidak berpasangan/ditolak; `pushStaleKey`/`pushUnknownKey` adalah langganan berkunci lama/tanpa sidik kunci. Angka di contoh hanya menunjukkan bentuk balasan; nilai sebenarnya mengikuti hasil cek hari itu.
 
 ### Notifikasi
 
@@ -231,7 +271,7 @@ Fase alert jalan DULU, sebelum loop cek portal (anggaran 15 detik, tulis paralel
 
 ## GET /api/cron/cleanup
 
-Hapus dokumen lama dari empat koleksi Firestore sesuai kebijakan retensi di bawah. Dijalankan Vercel Cron tiap Senin 02:00 WIB (`0 19 * * 0` UTC).
+Hapus dokumen lama dari sembilan koleksi Firestore sesuai kebijakan retensi di bawah. Dijalankan GitHub Actions tiap Senin 02:00 WIB (`scheduled-cleanup.yml`, P-05) dengan Vercel Cron sebagai pemicu cadangan.
 
 | Koleksi | Disimpan | Alasan | Maks per run |
 | --- | --- | --- | --- |
@@ -239,8 +279,13 @@ Hapus dokumen lama dari empat koleksi Firestore sesuai kebijakan retensi di bawa
 | `rate_limits` | 7 hari | Semua jendela batas laju adalah 60 detik; dokumen yang tidak disentuh 7 hari hanya berisi hit kedaluwarsa yang sudah diabaikan | 200 |
 | `alerts` | 90 hari | Alert deadline menyangkut batas lamar 0-3 hari dan alert baru basi dalam hitungan hari; alert 90 hari sudah tidak layak dikirim, dan watcher membaca seluruh koleksi tiap run | 100 |
 | `changes` | 180 hari | Umpan hanya menampilkan 10 terbaru (maks 50); 180 hari menyimpan riwayat setengah tahun sebagai jejak audit | 100 |
+| `reports` | 180 hari | Laporan tautan mati lama sudah tidak relevan sesudah ditindaklanjuti | 100 |
+| `audit_logs` | 365 hari | Jejak audit disimpan setahun penuh | 100 |
+| `cron-runs` | 90 hari | Heartbeat run lama tidak lagi dipakai pemantauan (nilai INTERIM, menunggu konfirmasi pemilik sebelum P-09) | 100 |
+| `incidents` | 90 hari | Insiden observabilitas (P-06) yang `lastSeen`-nya sudah lama tidak berulang | 100 |
+| `push_subscriptions` | (bukan retensi umur) | P-07: dokumen malformed — yang tidak bisa menerima push sama sekali (endpoint bukan https/valid, `p256dh`/`auth` tidak berbentuk benar) — dihapus maks 100/run; dokumen tanpa UID dan dokumen yang id-nya bukan SHA-256 endpoint SENGAJA dipertahankan. Fase ini DIPAGARI flag `PUSH_MALFORMED_CLEANUP_ENABLED=1` (tanpa flag, dilewati dan dicatat `skipped`); flag hanya diaktifkan sesudah cadangan `push_subscriptions` Fase B terverifikasi — lihat `docs/runbook-rotasi-vapid.md` bagian K3 | 100 |
 
-Anggaran hapus per run: maksimal 600 hapus (200 + 200 + 100 + 100), seminggu sekali — jauh di bawah batas hapus Firestore 20.000/hari. Tiap koleksi dihapus dalam satu panggilan batchWrite (maks 500 tulis/panggilan). Dokumen tanpa field penanda umur (`ts` untuk analitik, `updatedAt` untuk rate_limits, `createdAt` untuk alerts/changes) tidak pernah cocok dengan query dan dibiarkan.
+Anggaran hapus per run: maksimal 1.100 hapus (200 analitik + 200 rate_limits + 100 alerts + 100 changes + 100 reports + 100 audit_logs + 100 cron-runs + 100 incidents + 100 push_subscriptions), seminggu sekali — jauh di bawah batas hapus Firestore 20.000/hari. Tiap koleksi dihapus dalam satu panggilan batchWrite (maks 500 tulis/panggilan). Dokumen tanpa field penanda umur (`ts` untuk analitik, `updatedAt` untuk rate_limits, `createdAt` untuk alerts/changes) tidak pernah cocok dengan query dan dibiarkan.
 
 Request wajib membawa header `Authorization: Bearer <CRON_SECRET>`; tanpa header yang cocok jawabannya 401 `{ "error": "Tidak diizinkan." }`. Bila `CRON_SECRET` atau service account belum dipasang di env, jawabannya 503 dan rute tidak berjalan. Penghapusan hanya bisa lewat token service account, karena aturan Firestore menutup hapus dari klien.
 
@@ -296,6 +341,7 @@ Alert kuota: begitu `readsEstimate` mencapai 70% kuota harian (35.000 dari 50.00
 | `user_trackers` | Subkoleksi `user_trackers/{uid}/items`: satu dokumen per perusahaan yang ditandai pengunjung yang masuk | Hanya pemilik akun; bentuk divalidasi |
 | `user_profiles` | Profil akun: email dan nama tampilan | Hanya pemilik akun; tidak bisa dihapus |
 | `analytics_events` | Event analitik pengunjung anonim (pageview, pencarian, klik portal, dan sejenisnya) | Server saja yang menulis, lewat token service account; penulisan dari klien ditutup total; ubah dan hapus hanya admin |
+| `push_subscriptions` | Langganan notifikasi push web: `uid`, `endpoint`, `p256dh`, `auth`, `vapidKeyHash` (sidik kunci VAPID saat subscribe, P-07), `createdAt`, `updatedAt`; id dokumen = SHA-256 endpoint | Hanya lewat endpoint `/api/push/subscribe` (token Firebase terverifikasi); klien tidak bisa menulis langsung; hapus malformed hanya cron cleanup dengan flag (P-07) |
 
 ## GET /api/locale
 

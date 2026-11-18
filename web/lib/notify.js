@@ -550,6 +550,15 @@ export function buildCronRunRecord(summary, { date, startedAt, finishedAt }) {
     pushTotal: { integerValue: String(s.pushTotal || 0) },
     pushHasMore: { booleanValue: s.pushHasMore === true },
     pushMalformed: { integerValue: String(s.pushMalformed || 0) },
+    /* Konteks digest push (P-07): error konfigurasi VAPID (sinyal
+     * rotasi kunci — watcher memberi alarm), jumlah halaman daftar
+     * (bukti paginasi K1), langganan epoch kunci lama (belum
+     * subscribe ulang sesudah rotasi) dan tanpa sidik kunci
+     * (dokumen lama, dibuat sebelum P-07). */
+    pushConfigError: { booleanValue: s.pushConfigError === true },
+    pushPages: { integerValue: String(s.pushPages || 0) },
+    pushStaleKey: { integerValue: String(s.pushStaleKey || 0) },
+    pushUnknownKey: { integerValue: String(s.pushUnknownKey || 0) },
   };
 }
 
@@ -615,6 +624,12 @@ export function buildCleanupRunRecord(
   const cronRunsDeleted = Number(retention["cron-runs"]?.deleted) || 0;
   /* P-06: koleksi incidents ikut dibersihkan (retensi 90 hari). */
   const incidentsDeleted = Number(retention.incidents?.deleted) || 0;
+  /* P-07/K3: pembersihan dokumen langganan malformed (fase
+   * push_subscriptions di retention — lihat route cleanup).
+   * pushCleanupSkipped true bila flag env belum dinyalakan (fase
+   * dilewati, bukan gagal); skipReason menjelaskan alasannya. */
+  const pushCleanup = retention.push_subscriptions || {};
+  const pushCleanupCleaned = Number(pushCleanup.cleaned) || 0;
   return {
     date: { stringValue: date },
     job: { stringValue: "cleanup" },
@@ -633,7 +648,8 @@ export function buildCleanupRunRecord(
           reportsDeleted +
           auditLogsDeleted +
           cronRunsDeleted +
-          incidentsDeleted,
+          incidentsDeleted +
+          pushCleanupCleaned,
       ),
     },
     analyticsDeleted: { integerValue: String(analyticsDeleted) },
@@ -663,6 +679,29 @@ export function buildCleanupRunRecord(
     incidentsDeleted: { integerValue: String(incidentsDeleted) },
     incidentsHasMore: {
       booleanValue: retention.incidents?.hasMore === true,
+    },
+    /* P-07/K3: pembersihan langganan malformed (lihat di atas). */
+    pushCleanupExamined: {
+      integerValue: String(Number(pushCleanup.examined) || 0),
+    },
+    pushCleanupMalformed: {
+      integerValue: String(Number(pushCleanup.malformed) || 0),
+    },
+    pushCleanupCleaned: { integerValue: String(pushCleanupCleaned) },
+    pushCleanupFailed: {
+      integerValue: String(Number(pushCleanup.failed) || 0),
+    },
+    pushCleanupHasMore: {
+      booleanValue: pushCleanup.hasMore === true,
+    },
+    pushCleanupSkipped: {
+      booleanValue: pushCleanup.skipped === true,
+    },
+    pushCleanupSkipReason: {
+      stringValue:
+        typeof pushCleanup.skipReason === "string"
+          ? pushCleanup.skipReason
+          : "",
     },
     /* Durasi tiap fase (P-06/K4): "analytics" + satu entri per
      * koleksi retensi — dipakai watcher mendeteksi koleksi yang
@@ -721,6 +760,11 @@ export function buildDigestRunRecord(
     pushTotal: { integerValue: String(s.pushTotal || 0) },
     pushHasMore: { booleanValue: s.pushHasMore === true },
     pushMalformed: { integerValue: String(s.pushMalformed || 0) },
+    /* Konteks digest push (P-07) — lihat buildCronRunRecord. */
+    pushConfigError: { booleanValue: s.pushConfigError === true },
+    pushPages: { integerValue: String(s.pushPages || 0) },
+    pushStaleKey: { integerValue: String(s.pushStaleKey || 0) },
+    pushUnknownKey: { integerValue: String(s.pushUnknownKey || 0) },
     pushedMarked: { integerValue: String(s.pushedMarked || 0) },
     pushedFailed: { integerValue: String(s.pushedFailed || 0) },
     trigger: { stringValue: s.trigger || "" },

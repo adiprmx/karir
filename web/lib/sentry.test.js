@@ -94,6 +94,22 @@ describe("sentrySink (fail-safe)", () => {
     assert.equal(await sentrySink({ message: "tanpa kode" }), false);
     assert.equal(n, 0);
   });
+
+  it("event level info (P-07) diabaikan — kabar rutin bukan exception", async () => {
+    let n = 0;
+    __setSentryImpl({ captureException: () => { n += 1; } });
+    assert.equal(
+      await sentrySink({
+        code: "PUSH_DIGEST_PAGE",
+        level: "info",
+        component: "push",
+        message: "Digest push: halaman 1 — 500 langganan dibaca.",
+        meta: { page: 1 },
+      }),
+      false,
+    );
+    assert.equal(n, 0);
+  });
 });
 
 describe("checkInCron", () => {

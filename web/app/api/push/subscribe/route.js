@@ -23,16 +23,23 @@
  * POST menerima { subscription, userAgent? } dan menjawab 200
  * { ok: true, subscribed: true }. Bentuk langganan divalidasi
  * server-side (lib/push.js validateSubscription); bentuk salah
- * -> 400. Sebelum menulis, route membaca dokumen langganan bila
- * ada: bila dokumen sudah milik UID lain, subscribe ditolak 409
- * (pesan generik, tanpa menyebut pemilik) — satu pengguna tidak
- * bisa merebut langganan pengguna lain diam-diam (mis. perangkat
- * dipakai bersama). Subscribe ulang milik sendiri tetap
- * idempotent (200). DELETE menerima { endpoint }, memeriksa UID
+ * -> 400. Penyimpanan memakai pembuatan dokumen ATOMIK
+ * (P-07/K4, menutup TOCTOU P5): POST ?documentId=... dijamin
+ * satu pemenang oleh Firestore — dua subscribe bersamaan untuk
+ * endpoint yang sama tidak lagi saling menimpa diam-diam.
+ * Bila dokumen sudah ada: milik sendiri -> PATCH refresh
+ * (idempotent); milik UID lain -> 409 generik (tanpa menyebut
+ * pemilik); tanpa UID (dokumen yatim) -> diklaim lewat CAS
+ * PATCH dengan prasyarat updateTime (412 = kalah balapan, baca
+ * ulang lalu putuskan lagi) — dokumen yatim tidak lagi terkunci
+ * 409 selamanya. DELETE menerima { endpoint }, memeriksa UID
  * pemilik dokumen, dan menjawab 200 { ok: true, subscribed: false } —
  * termasuk bila dokumen tidak ada atau milik pengguna lain
  * (idempotent, dan tidak membocorkan keberadaan langganan
- * orang lain lewat status berbeda).
+ * orang lain lewat status berbeda). Hapus memakai prasyarat
+ * updateTime supaya dokumen yang berubah pemilik di tengah jalan
+ * tidak ikut terhapus; dokumen yatim boleh dihapus pemegang
+ * endpoint (tidak ada pemilik yang dirugikan).
  *
  * Bila service account tidak ada, rute menjawab 503 fail-closed.
  * Route ini tidak bergantung pada env VAPID: klien memakai kunci
@@ -43,8 +50,8 @@ import { getClientIp } from "@/lib/api-guard";
 import { getSharedLimiter, scopedKey } from "@/lib/rate-limit";
 import { hashVisitor, todayJakarta } from "@/lib/analytics-server";
 import {
-  firestoreDelete,
   firestoreFetch,
+  firestoreFetchStatus,
   firestoreGet,
   getAccessToken,
 } from "@/lib/firestore-server";
@@ -59,6 +66,10 @@ import {
 export const dynamic = "force-dynamic";
 
 const SUBSCRIBE_LIMIT_PER_MINUTE = 5;
+/* Batas putaran simpan/hapus atomik: dokumen yang berubah dua
+ * kali berturut-turut di tengah operasi menandakan kondisi tidak
+ * normal — fail-closed 500, pemanggil mencoba lagi. */
+const SUBSCRIBE_MAX_ATTEMPTS = 2;
 
 /* Baca service account dari env dan tukar menjadi access token
  * Firestore. Mengembalikan { fsBase, token } atau null bila env
@@ -140,6 +151,129 @@ async function readJsonBody(request) {
   }
 }
 
+/* Simpan langganan secara atomik (P-07/K4 — menutup TOCTOU P5).
+ * Alur:
+ * 1. Buat dokumen atomik (POST ?documentId=...): Firestore
+ *    menjamin satu pemenang — dua subscribe bersamaan untuk
+ *    endpoint yang sama, satu dapat 200, satunya 409. Tidak ada
+ *    lagi jendela "baca lalu tulis" tempat dua penulis saling
+ *    menimpa diam-diam.
+ * 2. Bila 409 (dokumen sudah ada): baca pemiliknya.
+ *    - Milik sendiri -> PATCH refresh (idempotent; dua subscribe
+ *      bersamaan milik UID yang sama menulis isi yang sama, jadi
+ *      balapan di sini tidak berbahaya).
+ *    - Milik UID lain -> "conflict" (409 generik, tanpa menyebut
+ *      pemilik) — satu pengguna tidak bisa merebut langganan
+ *      pengguna lain diam-diam (mis. perangkat dipakai bersama:
+ *      A keluar, B masuk di browser yang sama lalu menekan
+ *      "Aktifkan notifikasi").
+ *    - Tanpa UID (dokumen yatim — mis. dibuat sebelum field uid
+ *      ada) -> klaim lewat CAS PATCH dengan prasyarat updateTime:
+ *      hanya satu pengklaim yang menang (412 = kalah balapan,
+ *      baca ulang lalu putuskan sekali lagi). Dokumen yatim
+ *      tidak lagi terkunci 409 selamanya.
+ *    - Dokumen lenyap di antara 409 dan baca -> coba buat lagi
+ *      sekali.
+ * Kembalikan "ok" | "conflict" | "error". */
+async function claimSubscription({ ctx, docId, docUrl, fields, uid }) {
+  const collectionUrl = `${ctx.fsBase}/${PUSH_COLLECTION}`;
+  for (let attempt = 0; attempt < SUBSCRIBE_MAX_ATTEMPTS; attempt += 1) {
+    let created;
+    try {
+      created = await firestoreFetchStatus(
+        `${collectionUrl}?documentId=${encodeURIComponent(docId)}`,
+        ctx.token,
+        {
+          method: "POST",
+          body: JSON.stringify({ fields }),
+        },
+      );
+    } catch {
+      console.warn("Langganan push gagal: tulis dokumen gagal.");
+      return "error";
+    }
+    if (created.ok) return "ok";
+    if (created.status !== 409) {
+      console.warn("Langganan push gagal: tulis dokumen gagal.");
+      return "error";
+    }
+    /* 409: dokumen sudah ada — baca pemiliknya. */
+    let existing;
+    try {
+      existing = await firestoreGet(docUrl, ctx.token);
+    } catch {
+      console.warn("Langganan push gagal: baca dokumen gagal.");
+      return "error";
+    }
+    if (!existing) continue;
+    const ownerUid = existing?.fields?.uid?.stringValue;
+    if (ownerUid === uid) {
+      /* Milik sendiri: PATCH refresh (subscribe idempotent). */
+      try {
+        await firestoreFetch(docUrl, ctx.token, {
+          method: "PATCH",
+          body: JSON.stringify({ fields }),
+        });
+      } catch {
+        console.warn("Langganan push gagal: tulis dokumen gagal.");
+        return "error";
+      }
+      return "ok";
+    }
+    if (ownerUid) {
+      /* Milik UID lain: tolak tanpa menyebut pemilik. */
+      return "conflict";
+    }
+    /* Dokumen tanpa UID (yatim): klaim lewat compare-and-swap
+     * dengan prasyarat updateTime — dua pengklaim bersamaan,
+     * hanya satu yang menang. */
+    const updateTime =
+      typeof existing.updateTime === "string" ? existing.updateTime : "";
+    const mask = Object.keys(fields)
+      .map((k) => `updateMask.fieldPaths=${k}`)
+      .join("&");
+    const precondition = updateTime
+      ? `&currentDocument.updateTime=${encodeURIComponent(updateTime)}`
+      : "";
+    let claimed;
+    try {
+      claimed = await firestoreFetchStatus(
+        `${docUrl}?${mask}${precondition}`,
+        ctx.token,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ fields }),
+        },
+      );
+    } catch {
+      console.warn("Langganan push gagal: tulis dokumen gagal.");
+      return "error";
+    }
+    if (claimed.ok) return "ok";
+    if (claimed.status === 412) {
+      /* Kalah balapan klaim: baca ulang sekali — bila sekarang
+       * milik sendiri, sukses; milik orang lain, 409; masih
+       * yatim, putaran berikut mencoba klaim lagi. */
+      let reread;
+      try {
+        reread = await firestoreGet(docUrl, ctx.token);
+      } catch {
+        console.warn("Langganan push gagal: baca dokumen gagal.");
+        return "error";
+      }
+      if (!reread) continue;
+      const newOwner = reread?.fields?.uid?.stringValue;
+      if (newOwner === uid) return "ok";
+      if (newOwner) return "conflict";
+      continue;
+    }
+    console.warn("Langganan push gagal: tulis dokumen gagal.");
+    return "error";
+  }
+  console.warn("Langganan push gagal: dokumen tidak stabil.");
+  return "error";
+}
+
 export async function POST(request) {
   const auth = await authorize(request);
   if (auth.error) return errorResponse(auth);
@@ -175,50 +309,30 @@ export async function POST(request) {
   const nowIso = new Date().toISOString();
   const docId = subscriptionDocId(subscription.endpoint);
   const docUrl = `${ctx.fsBase}/${PUSH_COLLECTION}/${docId}`;
-  /* Bila dokumen langganan sudah ada milik pengguna lain, tolak
-   * (409) — subscribe tidak boleh merebut langganan orang lain
-   * diam-diam (mis. perangkat dipakai bersama: A keluar, B masuk
-   * di browser yang sama lalu menekan "Aktifkan notifikasi").
-   * Pesan generik, tanpa menyebut pemilik. Satu baca per subscribe
-   * adalah aksi langka; subscribe ulang milik sendiri tetap
-   * idempotent (lanjut ke PATCH di bawah). */
-  let existing;
-  try {
-    existing = await firestoreGet(docUrl, ctx.token);
-  } catch {
-    console.warn("Langganan push gagal: baca dokumen gagal.");
-    return NextResponse.json(
-      { error: "Langganan tidak bisa disimpan. Coba lagi nanti." },
-      { status: 500 },
-    );
-  }
-  const ownerUid = existing?.fields?.uid?.stringValue;
-  if (existing && ownerUid !== auth.uid) {
+  /* Sidik epoch kunci VAPID (P-07/K5) dicatat di dokumen supaya
+   * run digest bisa menghitung langganan yang belum subscribe
+   * ulang sesudah rotasi. */
+  const fields = subscriptionFields({
+    uid: auth.uid,
+    subscription,
+    userAgent,
+    nowIso,
+    vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
+  });
+  const outcome = await claimSubscription({
+    ctx,
+    docId,
+    docUrl,
+    fields,
+    uid: auth.uid,
+  });
+  if (outcome === "conflict") {
     return NextResponse.json(
       { error: "Langganan ini sudah dipakai akun lain di perangkat ini." },
       { status: 409 },
     );
   }
-  try {
-    /* PATCH tanpa updateMask: membuat dokumen bila belum ada,
-     * menimpa bila sudah ada (subscribe idempotent). */
-    await firestoreFetch(
-      docUrl,
-      ctx.token,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          fields: subscriptionFields({
-            uid: auth.uid,
-            subscription,
-            userAgent,
-            nowIso,
-          }),
-        }),
-      },
-    );
-  } catch {
-    console.warn("Langganan push gagal: tulis dokumen gagal.");
+  if (outcome === "error") {
     return NextResponse.json(
       { error: "Langganan tidak bisa disimpan. Coba lagi nanti." },
       { status: 500 },
@@ -256,35 +370,68 @@ export async function DELETE(request) {
   }
   const docId = subscriptionDocId(body.endpoint);
   const docUrl = `${ctx.fsBase}/${PUSH_COLLECTION}/${docId}`;
-  let doc;
-  try {
-    doc = await firestoreGet(docUrl, ctx.token);
-  } catch {
-    console.warn("Berhenti langganan push gagal: baca dokumen gagal.");
-    return NextResponse.json(
-      { error: "Langganan tidak bisa dihapus. Coba lagi nanti." },
-      { status: 500 },
-    );
-  }
   /* Dokumen tidak ada -> tetap 200 (idempotent: hasil akhirnya
    * sama — tidak ada langganan). Dokumen milik pengguna lain ->
    * 200 yang sama, tanpa menghapus dan tanpa membocorkan
-   * keberadaan langganan itu. */
-  if (!doc) {
-    return NextResponse.json({ ok: true, subscribed: false });
-  }
-  const ownerUid = doc.fields?.uid?.stringValue;
-  if (ownerUid !== auth.uid) {
-    return NextResponse.json({ ok: true, subscribed: false });
-  }
-  try {
-    await firestoreDelete(docUrl, ctx.token);
-  } catch {
+   * keberadaan langganan itu. Dokumen tanpa UID (yatim) BOLEH
+   * dihapus pemegang endpoint — tidak ada pemilik yang
+   * dirugikan, dan tanpanya dokumen yatim tidak pernah bisa
+   * dibersihkan pemilik perangkatnya (P-07/K4).
+   * Hapus memakai prasyarat updateTime (CAS): bila dokumen
+   * berubah pemilik di antara baca dan hapus, hapus ditolak 412
+   * dan dibaca ulang — dokumen orang lain tidak ikut terhapus. */
+  for (let attempt = 0; attempt < SUBSCRIBE_MAX_ATTEMPTS; attempt += 1) {
+    let doc;
+    try {
+      doc = await firestoreGet(docUrl, ctx.token);
+    } catch {
+      console.warn("Berhenti langganan push gagal: baca dokumen gagal.");
+      return NextResponse.json(
+        { error: "Langganan tidak bisa dihapus. Coba lagi nanti." },
+        { status: 500 },
+      );
+    }
+    if (!doc) {
+      return NextResponse.json({ ok: true, subscribed: false });
+    }
+    const ownerUid = doc.fields?.uid?.stringValue;
+    if (ownerUid && ownerUid !== auth.uid) {
+      return NextResponse.json({ ok: true, subscribed: false });
+    }
+    const updateTime =
+      typeof doc.updateTime === "string" ? doc.updateTime : "";
+    const precondition = updateTime
+      ? `?currentDocument.updateTime=${encodeURIComponent(updateTime)}`
+      : "";
+    let deleted;
+    try {
+      deleted = await firestoreFetchStatus(`${docUrl}${precondition}`, ctx.token, {
+        method: "DELETE",
+      });
+    } catch {
+      console.warn("Berhenti langganan push gagal: hapus dokumen gagal.");
+      return NextResponse.json(
+        { error: "Langganan tidak bisa dihapus. Coba lagi nanti." },
+        { status: 500 },
+      );
+    }
+    if (deleted.ok || deleted.status === 404) {
+      return NextResponse.json({ ok: true, subscribed: false });
+    }
+    if (deleted.status === 412) {
+      /* Dokumen berubah di tengah jalan: baca ulang dan putuskan
+       * lagi (putaran berikut). */
+      continue;
+    }
     console.warn("Berhenti langganan push gagal: hapus dokumen gagal.");
     return NextResponse.json(
       { error: "Langganan tidak bisa dihapus. Coba lagi nanti." },
       { status: 500 },
     );
   }
-  return NextResponse.json({ ok: true, subscribed: false });
+  console.warn("Berhenti langganan push gagal: dokumen tidak stabil.");
+  return NextResponse.json(
+    { error: "Langganan tidak bisa dihapus. Coba lagi nanti." },
+    { status: 500 },
+  );
 }

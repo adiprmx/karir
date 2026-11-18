@@ -39,6 +39,10 @@ export const OBS_CODES = Object.freeze({
   SA_TOKEN_FAILED: "SA_TOKEN_FAILED",
   CLIENT_ERROR: "CLIENT_ERROR",
   PUSH_DIGEST_FAILED: "PUSH_DIGEST_FAILED",
+  /* P-07: progres per halaman pengiriman digest (level "info" —
+   * BUKAN insiden; sink Sentry + incidents mengabaikan level
+   * ini). */
+  PUSH_DIGEST_PAGE: "PUSH_DIGEST_PAGE",
 });
 
 /* Jeda throttle console: 1 baris per menit per kode per instance. */
