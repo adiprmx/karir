@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="700" height="296" viewBox="0 0 700 296" role="img" aria-label="Sebaran status 685 kanal karir: 325 ada lowongan, 166 tidak ada lowongan, 134 tidak dapat diverifikasi, 60 portal tidak bisa dibuka">
-  <title>Sebaran status 685 kanal karir</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="296" viewBox="0 0 700 296" role="img" aria-label="Sebaran status 715 kanal karir: 345 ada lowongan, 171 tidak ada lowongan, 137 tidak dapat diverifikasi, 62 portal tidak bisa dibuka">
+  <title>Sebaran status 715 kanal karir</title>
   <style>
     text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
     .row { animation: rowin 0.6s cubic-bezier(0.16,1,0.3,1) both; }
@@ -22,21 +22,21 @@
   <g class="row r0">
     <text x="0" y="48" font-size="24" font-weight="600" fill="#111111">Ada lowongan</text>
     <rect class="bar b0" x="0" y="58" width="575.6" height="22" fill="#16a34a"/>
-    <text class="num n0" x="589.6" y="79" font-size="28" font-weight="800" fill="#16a34a">325</text>
+    <text class="num n0" x="589.6" y="79" font-size="28" font-weight="800" fill="#16a34a">345</text>
   </g>
   <g class="row r1">
     <text x="0" y="114" font-size="24" font-weight="600" fill="#111111">Tidak ada lowongan</text>
-    <rect class="bar b1" x="0" y="124" width="294.0" height="22" fill="#525252"/>
-    <text class="num n1" x="308.0" y="145" font-size="28" font-weight="800" fill="#525252">166</text>
+    <rect class="bar b1" x="0" y="124" width="285.3" height="22" fill="#525252"/>
+    <text class="num n1" x="299.3" y="145" font-size="28" font-weight="800" fill="#525252">171</text>
   </g>
   <g class="row r2">
     <text x="0" y="180" font-size="24" font-weight="600" fill="#111111">Tidak dapat diverifikasi</text>
-    <rect class="bar b2" x="0" y="190" width="237.3" height="22" fill="#a3a3a3"/>
-    <text class="num n2" x="251.3" y="211" font-size="28" font-weight="800" fill="#a3a3a3">134</text>
+    <rect class="bar b2" x="0" y="190" width="228.6" height="22" fill="#a3a3a3"/>
+    <text class="num n2" x="242.6" y="211" font-size="28" font-weight="800" fill="#a3a3a3">137</text>
   </g>
   <g class="row r3">
     <text x="0" y="246" font-size="24" font-weight="600" fill="#111111">Portal tidak bisa dibuka</text>
-    <rect class="bar b3" x="0" y="256" width="106.3" height="22" fill="#c9c9c9"/>
-    <text class="num n3" x="120.3" y="277" font-size="28" font-weight="800" fill="#c9c9c9">60</text>
+    <rect class="bar b3" x="0" y="256" width="103.4" height="22" fill="#c9c9c9"/>
+    <text class="num n3" x="117.4" y="277" font-size="28" font-weight="800" fill="#c9c9c9">62</text>
   </g>
 </svg>
