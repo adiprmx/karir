@@ -306,8 +306,15 @@ jobs:
         run: |
           git config user.name "karir-write-back[bot]"
           git config user.email "karir-write-back[bot]@users.noreply.github.com"
-          git pull --rebase origin main || git pull --rebase origin HEAD
+          # Urutan penting (D3, 18 Nov 2026): commit DULU, baru pull
+          # --rebase. Urutan lama (pull dulu) selalu gagal: pull --rebase
+          # menolak jalan saat tree kotor ("cannot pull with rebase: You
+          # have unstaged changes") — dan tree SELALU kotor di titik ini
+          # karena langkah sync+regen baru saja menulis CSV/seed/README/
+          # SVG. Dua run 18 Nov (44331884187, 44333116945) gagal persis
+          # di sini (exit 128).
           git add data/daftar-link-karir.csv web/data/companies.json README.md assets/status-bar.svg
           git commit -F write-back-summary.txt
+          git pull --rebase origin main || git pull --rebase origin HEAD
           git push origin HEAD:main
           rm -f write-back-summary.txt
