@@ -20,6 +20,15 @@
 # 511, 532). EMC Healthcare (382) TIDAK ada di sini: putusannya
 # MATI fungsional, status live "Portal tidak bisa dibuka" BENAR dan
 # CSV sudah mengikutinya lewat write-back 0248507e.
+#
+# 19 Nov 2026 (~01:20 WIB, koordinator merge): 511 Ricobana + 532 ANJ
+# DIKELUARKAN — cek live browser 18 Nov 22:56-22:59 WIB memastikan
+# keduanya MATI (511: sertifikat kedaluwarsa; 532: halaman kosong
+# fungsional). Status Portal ditulis ke CSV lewat write-back 03:00 WIB
+# (pola yang sama dengan 504). 444 Greenfields + 470 InJourney
+# TETAP DITAHAN: keduanya HIDUP (browser) dan menunggu restorasi ke
+# "Ada lowongan" sesudah kuota baca Firestore pulih (~15:00 WIB
+# 19 Nov; 429 hard-stop 01:12 WIB) + recheck 01:00 selesai.
 23 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 72 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 121 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
@@ -27,6 +36,4 @@
 414 | Flip 18 Nov DIBLOKIR 403 (Ciputra): portal aktif + rekrut Nov 2026, dipulihkan, tinjau mingguan | 2026-11-18
 444 | Flip 18 Nov TIDAK PASTI (Greenfields): fetch gagal, cek ulang 19 Nov | 2026-11-18
 470 | Flip 18 Nov TIDAK PASTI (InJourney Hospitality): fetch gagal, cek ulang 19 Nov | 2026-11-18
-511 | Flip 18 Nov TIDAK PASTI (Ricobana): bukti hanya salinan Mei 2026 + lowongan kedaluwarsa, cek ulang 19 Nov | 2026-11-18
 531 | Flip 18 Nov DIBLOKIR (DSN Group): portal resmi + rekrut Nov 2026, menolak cek otomatis, dipulihkan, tinjau mingguan | 2026-11-18
-532 | Flip 18 Nov TIDAK PASTI (ANJ): bukti hanya salinan Apr 2025, cek ulang 19 Nov | 2026-11-18
