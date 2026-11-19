@@ -230,7 +230,7 @@ describe("getStatsWithSource (DASH-06 / INFO-12)", () => {
     revalidateCompanies();
     const { stats, source } = await getStatsWithSource();
     assert.equal(source, "seed");
-    assert.equal(stats.total, 715);
+    assert.equal(stats.total, 743);
     assert.ok(stats.byStatus["Ada lowongan"] > 0);
   });
 
