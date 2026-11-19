@@ -29,11 +29,15 @@
 # TETAP DITAHAN: keduanya HIDUP (browser) dan menunggu restorasi ke
 # "Ada lowongan" sesudah kuota baca Firestore pulih (~15:00 WIB
 # 19 Nov; 429 hard-stop 01:12 WIB) + recheck 01:00 selesai.
+#
+# 19 Nov 2026 (17:10:24 WIB, restorasi D3): 444 Greenfields + 470 InJourney
+# DIKELUARKAN — cek live browser 18 Nov memastikan keduanya HIDUP
+# (444: 10 lowongan; 470: 3 magang aktif) dan statusnya sudah dipulihkan
+# ke "Ada lowongan" di Firestore (restore, marker rev naik). Sisa 6 nomor:
+# 23, 72, 121, 374, 414, 531.
 23 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 72 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 121 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 374 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 414 | Flip 18 Nov DIBLOKIR 403 (Ciputra): portal aktif + rekrut Nov 2026, dipulihkan, tinjau mingguan | 2026-11-18
-444 | Flip 18 Nov TIDAK PASTI (Greenfields): fetch gagal, cek ulang 19 Nov | 2026-11-18
-470 | Flip 18 Nov TIDAK PASTI (InJourney Hospitality): fetch gagal, cek ulang 19 Nov | 2026-11-18
 531 | Flip 18 Nov DIBLOKIR (DSN Group): portal resmi + rekrut Nov 2026, menolak cek otomatis, dipulihkan, tinjau mingguan | 2026-11-18
