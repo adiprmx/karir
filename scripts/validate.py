@@ -223,7 +223,10 @@ URL_RE = re.compile(r"^https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:\d+)?(/\S*)?$")
 # 406), career.astra.co.id/lowongan (no 88, 370),
 # karir.kawanlamagroup.com (no 237, 238). Duplikat baru di luar tiga
 # portal ini wajib ditinjau (kemungkinan perusahaan ganda).
-MAX_LINK_KARIR_DUPLIKAT = 3
+# Baseline naik 3 -> 4 pada 19 Nov 2026 (P-09): tautan baru no 13
+# (Tirta Investama) careers.danone.com sudah dipakai no 5 (Danone
+# Indonesia) — portal grup Danone yang sama, BUKAN kesalahan data.
+MAX_LINK_KARIR_DUPLIKAT = 4
 # (e) tanggal_cek masa depan (dibandingkan dengan tanggal hari ini
 # WIB): kesalahan keras.
 # (f) link_karir http:// (bukan https) dihitung + ratchet. Baseline

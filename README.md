@@ -2,7 +2,7 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Daftar ini berisi 743 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 355 perusahaan sedang ada lowongan.</p>
+<p align="center">Daftar ini berisi 743 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 482 perusahaan sedang ada lowongan.</p>
 
 Status tiap perusahaan netral: yang dicatat hanya apakah portalnya sedang ada lowongan, untuk peran apa pun.
 
@@ -32,7 +32,7 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 
 <h2 align="center">Hasil cek 743 kanal</h2>
 
-355 dari 743 kanal ada lowongan.
+482 dari 743 kanal ada lowongan.
 
 <p align="center">
   <img src="assets/status-bar.svg" alt="Sebaran status 743 perusahaan" width="100%">
@@ -40,12 +40,12 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 
 | Status | Jumlah |
 | --- | --- |
-| Ada lowongan | 355 |
-| Tidak ada lowongan | 174 |
-| Tidak dapat diverifikasi | 146 |
-| Portal tidak bisa dibuka | 68 |
+| Ada lowongan | 482 |
+| Tidak ada lowongan | 180 |
+| Tidak dapat diverifikasi | 33 |
+| Portal tidak bisa dibuka | 48 |
 
-111 perusahaan tidak punya tautan karir. 107 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 4 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: Olive Fried Chicken (204), PT Dwi Indah (315), PT Cintas Sentul Raya (321), PT Best Logistics Service Indonesia (355, BLSI).
+106 perusahaan tidak punya tautan karir. 105 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 1 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: PT Cintas Sentul Raya (321).
 
 <h2 align="center">Contoh lowongan yang sedang buka</h2>
 

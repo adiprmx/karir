@@ -35,9 +35,25 @@
 # (444: 10 lowongan; 470: 3 magang aktif) dan statusnya sudah dipulihkan
 # ke "Ada lowongan" di Firestore (restore, marker rev naik). Sisa 6 nomor:
 # 23, 72, 121, 374, 414, 531.
+#
+# 19 Nov 2026 (P-09, konsolidasator): 10 nomor DIBLOKIR-tetapi-aktif
+# DITAMBAHKAN — portal terbukti aktif merekrut (403 = bot-detection),
+# dipulihkan ke "Ada lowongan" di Firestore + ditahan di sini
+# (pola O-01, tinjau mingguan): 30, 33, 55, 277, 282, 283, 564,
+# 607, 630, 732.
 23 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
+30 | O-01 DIBLOKIR 403 (Manulife): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
+33 | O-01 DIBLOKIR 403 (Mandiri Tunas Finance): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
+55 | O-01 DIBLOKIR 403 (Indika Energy): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
 72 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 121 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
+277 | O-01 DIBLOKIR 403 (Lion Air): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
+282 | O-01 DIBLOKIR 403 (Daihatsu): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
+283 | O-01 DIBLOKIR 403 (MNC Group): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
 374 | O-01 DIBLOKIR 403: portal aktif, dipulihkan 18 Nov, tinjau mingguan | 2026-11-18
 414 | Flip 18 Nov DIBLOKIR 403 (Ciputra): portal aktif + rekrut Nov 2026, dipulihkan, tinjau mingguan | 2026-11-18
 531 | Flip 18 Nov DIBLOKIR (DSN Group): portal resmi + rekrut Nov 2026, menolak cek otomatis, dipulihkan, tinjau mingguan | 2026-11-18
+564 | O-01 DIBLOKIR 403 (Samudera Indonesia): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
+607 | O-01 DIBLOKIR 403 (Yogya Group): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
+630 | O-01 DIBLOKIR 403 (RS Kanker Dharmais): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
+732 | O-01 DIBLOKIR 403 (SENA): portal aktif + rekrut Nov 2026, dipulihkan 19 Nov (P-09), tinjau mingguan | 2026-11-19
