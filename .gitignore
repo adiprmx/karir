@@ -21,3 +21,6 @@ web/auth-exports/
 web/coverage/
 web/test-results/
 web/playwright-report/
+# Berkas SQL impor D1 per kelompok (d1/scripts/import.mjs --mode live):
+# dihasilkan ulang dari CSV/seed kapan saja, tidak perlu di-commit.
+d1/out/

@@ -1,0 +1,34 @@
+# Wrangler — Worker API "karir-data" (P-08, H1)
+#
+# BELUM AKTIF: akun Cloudflare KHUSUS Karir (O-02) belum dibuat.
+# `database_id` di bawah adalah placeholder — diisi sesudah O-02
+# dengan perintah:
+#   wrangler d1 create karir-data --location apac
+# lalu salin `database_id` dari output ke sini. JANGAN deploy
+# sebelum placeholder diganti dan Red Team meloloskan permukaan
+# baru (paket-fase-2.md P-08).
+#
+# account_id SENGAJA tidak ditulis: wrangler mengambilnya dari
+# login (`wrangler login`) pada akun khusus Karir. Jangan pernah
+# menulis account_id / token ke berkas ini.
+
+name = "karir-data"
+main = "src/index.js"
+compatibility_date = "2026-11-19"
+
+# Batas Workers Free yang mengikat desain ini (riset-database §4.1):
+# 100.000 requests/hari, CPU 10 ms/invokasi, 50 kueri D1/invokasi.
+# Handler di src/index.js memakai paling banyak 3 kueri per request.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "karir-data"
+database_id = "DIISI-SETELAH-O-02"
+
+# Lingkungan staging (database D1 terpisah, dibuat sesudah O-02):
+#   wrangler d1 create karir-data-staging --location apac
+[env.staging]
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "karir-data-staging"
+database_id = "DIISI-SETELAH-O-02"
