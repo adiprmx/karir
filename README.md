@@ -2,7 +2,7 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Daftar ini berisi 772 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 495 perusahaan sedang ada lowongan.</p>
+<p align="center">Daftar ini berisi 772 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 493 perusahaan sedang ada lowongan.</p>
 
 Status tiap perusahaan netral: yang dicatat hanya apakah portalnya sedang ada lowongan, untuk peran apa pun.
 
@@ -32,7 +32,7 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 
 <h2 align="center">Hasil cek 772 kanal</h2>
 
-495 dari 772 kanal ada lowongan.
+493 dari 772 kanal ada lowongan.
 
 <p align="center">
   <img src="assets/status-bar.svg" alt="Sebaran status 772 perusahaan" width="100%">
@@ -40,10 +40,10 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 
 | Status | Jumlah |
 | --- | --- |
-| Ada lowongan | 495 |
+| Ada lowongan | 493 |
 | Tidak ada lowongan | 189 |
 | Tidak dapat diverifikasi | 31 |
-| Portal tidak bisa dibuka | 57 |
+| Portal tidak bisa dibuka | 59 |
 
 116 perusahaan tidak punya tautan karir. 115 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 1 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: PT Cintas Sentul Raya (321).
 
