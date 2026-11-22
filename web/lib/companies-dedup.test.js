@@ -186,10 +186,10 @@ describe("deduplikasi getCompanies() (seed-first)", () => {
     assert.equal(rec.patch.length, 0);
     for (const h of [a, b, c]) {
       assert.equal(h.source, "seed");
-      /* Seed asli repo: 802 baris, baris pertama Unilever. */
-      assert.equal(h.companies.length, 802);
+      /* Seed asli repo: 830 baris, baris pertama Unilever. */
+      assert.equal(h.companies.length, 830);
       assert.equal(h.companies[0].perusahaan, "Unilever Indonesia");
-      assert.equal(h.seedDate, "2026-11-21");
+      assert.equal(h.seedDate, "2026-11-22");
     }
     /* Panggilan berikutnya mencoba lagi, bukan mendapat seed lama
      * yang tersimpan. */

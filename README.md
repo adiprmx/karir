@@ -2,7 +2,7 @@
   <img src="assets/banner.svg" alt="Karir" width="100%">
 </p>
 
-<p align="center">Daftar ini berisi 802 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 514 perusahaan sedang ada lowongan.</p>
+<p align="center">Daftar ini berisi 830 kanal karir resmi perusahaan. Setiap kanal dibuka dan diperiksa langsung di browser, dan dicek ulang berkala. Hasilnya: 537 perusahaan sedang ada lowongan.</p>
 
 Status tiap perusahaan netral: yang dicatat hanya apakah portalnya sedang ada lowongan, untuk peran apa pun.
 
@@ -30,22 +30,22 @@ Klik logo untuk membuka halaman perusahaan. Daftar lengkap yang terbaru ada di [
 <tr><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/330"><img src="https://www.google.com/s2/favicons?domain=fore.coffee&sz=64" width="48" height="48" alt="Fore Coffee"><br>Fore Coffee</a><br>Barista</td><td align="center" width="50%"><a href="https://karir-adiprmx.vercel.app/perusahaan/342"><img src="https://www.google.com/s2/favicons?domain=ranchmarket.jobseeker.software&sz=64" width="48" height="48" alt="Ranch Market &amp; Farmers Market"><br>Ranch Market &amp; Farmers Market</a><br>Operational Cashier</td></tr>
 </table>
 
-<h2 align="center">Hasil cek 802 kanal</h2>
+<h2 align="center">Hasil cek 830 kanal</h2>
 
-514 dari 802 kanal ada lowongan.
+537 dari 830 kanal ada lowongan.
 
 <p align="center">
-  <img src="assets/status-bar.svg" alt="Sebaran status 802 perusahaan" width="100%">
+  <img src="assets/status-bar.svg" alt="Sebaran status 830 perusahaan" width="100%">
 </p>
 
 | Status | Jumlah |
 | --- | --- |
-| Ada lowongan | 514 |
-| Tidak ada lowongan | 192 |
-| Tidak dapat diverifikasi | 37 |
-| Portal tidak bisa dibuka | 59 |
+| Ada lowongan | 537 |
+| Tidak ada lowongan | 195 |
+| Tidak dapat diverifikasi | 38 |
+| Portal tidak bisa dibuka | 60 |
 
-131 perusahaan tidak punya tautan karir. 130 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 1 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: PT Cintas Sentul Raya (321).
+136 perusahaan tidak punya tautan karir. 135 di antaranya masih bisa dilamar lewat kanal lain (email, WhatsApp, atau kontak lain dari sumber resmi). 1 perusahaan tidak punya kanal apa pun karena situs resminya tidak ketemu, dan tautannya tidak ditebak: PT Cintas Sentul Raya (321).
 
 <h2 align="center">Contoh lowongan yang sedang buka</h2>
 
